@@ -1,0 +1,317 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main-light: #ffffff;
+    --bg-card-light: #f4f4f6;
+    --border-light: #e2e2e8;
+    --text-primary-light: #0f0f12;
+    --text-secondary-light: #6b6e7b;
+
+    --bg-main-dark: #0b0b0d;
+    --bg-card-dark: #161619;
+    --border-dark: #26262d;
+    --text-primary-dark: #f0f0f4;
+    --text-secondary-dark: #8e8e9a;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background: #33333b;
+    border-radius: 9999px;
+  }
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background: #4a4a56;
+  }
+
+  /* Micro-interactions transition speed */
+  .transition-smooth {
+    transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin-slow {
+    animation: spinSlow 12s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+  }
+  .animate-shimmer {
+    animation: shimmer 1.8s infinite ease-in-out;
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.3; transform: scale(0.98); }
+    50% { opacity: 0.7; transform: scale(1.02); }
+  }
+  .animate-pulse-glow {
+    animation: pulseGlow 3s infinite ease-in-out;
+  }
+}
+
+/* ==========================================================================
+   IDE CodeBlock Syntax Highlighting (Neutral Premium Dark / Light)
+   ========================================================================== */
+
+.font-code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Dark Theme Syntax Highlighting */
+.code-theme-dark .hljs-keyword,
+.code-theme-dark .hljs-selector-tag {
+  color: #f47067;
+  font-weight: 500;
+}
+
+.code-theme-dark .hljs-built_in,
+.code-theme-dark .hljs-type {
+  color: #6cb6ff;
+}
+
+.code-theme-dark .hljs-number,
+.code-theme-dark .hljs-literal {
+  color: #6cb6ff;
+}
+
+.code-theme-dark .hljs-string,
+.code-theme-dark .hljs-regexp {
+  color: #96d0ff;
+}
+
+.code-theme-dark .hljs-title,
+.code-theme-dark .hljs-title.function_ {
+  color: #d2a8ff;
+}
+
+.code-theme-dark .hljs-title.class_ {
+  color: #f0883e;
+}
+
+.code-theme-dark .hljs-comment,
+.code-theme-dark .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.code-theme-dark .hljs-variable,
+.code-theme-dark .hljs-template-variable,
+.code-theme-dark .hljs-attribute,
+.code-theme-dark .hljs-attr {
+  color: #79c0ff;
+}
+
+.code-theme-dark .hljs-property {
+  color: #e6edf3;
+}
+
+.code-theme-dark .hljs-tag,
+.code-theme-dark .hljs-name {
+  color: #7ee787;
+}
+
+.code-theme-dark .hljs-symbol,
+.code-theme-dark .hljs-bullet,
+.code-theme-dark .hljs-link {
+  color: #6cb6ff;
+}
+
+.code-theme-dark .hljs-punctuation,
+.code-theme-dark .hljs-operator {
+  color: #c9d1d9;
+}
+
+.code-theme-dark .hljs-meta,
+.code-theme-dark .hljs-meta-keyword {
+  color: #f0883e;
+}
+
+.code-theme-dark .hljs-section {
+  color: #6cb6ff;
+  font-weight: bold;
+}
+
+/* Light Theme Syntax Highlighting */
+.code-theme-light .hljs-keyword,
+.code-theme-light .hljs-selector-tag {
+  color: #cf222e;
+  font-weight: 500;
+}
+
+.code-theme-light .hljs-built_in,
+.code-theme-light .hljs-type {
+  color: #0550ae;
+}
+
+.code-theme-light .hljs-number,
+.code-theme-light .hljs-literal {
+  color: #0550ae;
+}
+
+.code-theme-light .hljs-string,
+.code-theme-light .hljs-regexp {
+  color: #0a3069;
+}
+
+.code-theme-light .hljs-comment,
+.code-theme-light .hljs-quote {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.code-theme-light .hljs-title,
+.code-theme-light .hljs-title.function_ {
+  color: #8250df;
+}
+
+.code-theme-light .hljs-title.class_ {
+  color: #953800;
+}
+
+.code-theme-light .hljs-variable,
+.code-theme-light .hljs-attribute,
+.code-theme-light .hljs-attr {
+  color: #116329;
+}
+
+.code-theme-light .hljs-tag,
+.code-theme-light .hljs-name {
+  color: #116329;
+}
+
+.code-theme-light .hljs-punctuation,
+.code-theme-light .hljs-operator {
+  color: #24292f;
+}
+
+/* ==========================================================================
+   ZENO High-Readability Markdown Formatting
+   ========================================================================== */
+.markdown-body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.8;
+  font-size: 0.985rem;
+  letter-spacing: -0.01em;
+}
+
+.markdown-body p {
+  margin-bottom: 1.35rem;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body h1 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  margin-top: 1.85rem;
+  margin-bottom: 0.9rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.markdown-body h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-top: 1.6rem;
+  margin-bottom: 0.8rem;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.markdown-body h3 {
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin-top: 1.35rem;
+  margin-bottom: 0.55rem;
+  line-height: 1.4;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-top: 0.6rem;
+  margin-bottom: 1.35rem;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-top: 0.6rem;
+  margin-bottom: 1.35rem;
+}
+
+.markdown-body li {
+  margin-bottom: 0.55rem;
+  line-height: 1.75;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid currentColor;
+  padding-left: 1.1rem;
+  margin-top: 1.1rem;
+  margin-bottom: 1.35rem;
+  opacity: 0.85;
+  font-style: italic;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.1rem;
+  margin-bottom: 1.35rem;
+  font-size: 0.91rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(140, 140, 150, 0.2);
+  text-align: left;
+}
+
+.markdown-body th {
+  font-weight: 600;
+  background-color: rgba(140, 140, 150, 0.08);
+}
+
+.markdown-body hr {
+  border: 0;
+  height: 1px;
+  background-color: rgba(140, 140, 150, 0.2);
+  margin-top: 1.85rem;
+  margin-bottom: 1.85rem;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}

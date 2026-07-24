@@ -1,0 +1,251 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check } from 'lucide-react';
+import { downloadImage } from '../lib/downloadHelper';
+
+interface ImageWithLoaderProps {
+  src: string;
+  alt?: string;
+  className?: string;
+}
+
+// Global in-memory cache to track images that have already loaded in this session
+const loadedImagesCache = new Set<string>();
+
+export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt }) => {
+  const isAlreadyLoaded = loadedImagesCache.has(src);
+  const [isLoading, setIsLoading] = useState(!isAlreadyLoaded);
+  const [progress, setProgress] = useState(isAlreadyLoaded ? 100 : 12);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const prevSrcRef = useRef(src);
+
+  const handleDownload = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    const cleanFilename = `zeno-art-${Date.now()}.jpg`;
+    await downloadImage(currentSrc, cleanFilename);
+    setIsDownloading(false);
+    setDownloadSuccess(true);
+    setTimeout(() => setDownloadSuccess(false), 2500);
+  };
+
+  // Sync currentSrc only if parent prop src actually changes
+  useEffect(() => {
+    if (prevSrcRef.current !== src) {
+      prevSrcRef.current = src;
+      setCurrentSrc(src);
+      if (loadedImagesCache.has(src)) {
+        setIsLoading(false);
+        setProgress(100);
+      } else {
+        setIsLoading(true);
+        setProgress(12);
+      }
+      setHasError(false);
+    }
+  }, [src]);
+
+  // If browser already completed loading the image element before React attached onLoad
+  useEffect(() => {
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      if (currentSrc) loadedImagesCache.add(currentSrc);
+      setIsLoading(false);
+      setProgress(100);
+    }
+  }, [currentSrc]);
+
+  // Smooth simulated progress up to 93% while waiting for browser image load
+  useEffect(() => {
+    if (!isLoading) return;
+
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 93) {
+          clearInterval(interval);
+          return 93;
+        }
+        // Smooth logarithmic deceleration as it nears 90%
+        const diff = (95 - prev) * 0.08;
+        return Math.min(93, Math.round(prev + Math.max(1, diff)));
+      });
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  const handleImageLoad = () => {
+    if (currentSrc) {
+      loadedImagesCache.add(currentSrc);
+    }
+    setProgress(100);
+    setIsLoading(false);
+  };
+
+  const handleImageError = () => {
+    if (retryCount === 0) {
+      setRetryCount(1);
+      // Clean fallback URL
+      const cleanAlt = encodeURIComponent(alt || 'digital art masterpiece');
+      setCurrentSrc(`https://image.pollinations.ai/prompt/${cleanAlt}?width=1024&height=1024&nologo=true`);
+    } else {
+      setIsLoading(false);
+      setHasError(true);
+    }
+  };
+
+  const handleManualRetry = () => {
+    setIsLoading(true);
+    setHasError(false);
+    setProgress(15);
+    const cleanAlt = encodeURIComponent(alt || 'artistic digital artwork');
+    const randomSeed = Math.floor(Math.random() * 999999);
+    setCurrentSrc(`https://image.pollinations.ai/prompt/${cleanAlt}?width=1024&height=1024&seed=${randomSeed}&nologo=true`);
+  };
+
+  // Determine message according to progress
+  const getProgressStage = (p: number) => {
+    if (p < 30) return { title: 'Interpretando Prompt', detail: 'Analisando conceitos e composição...' };
+    if (p < 60) return { title: 'Sintetizando Pixels', detail: 'Criando formas, cores e iluminação...' };
+    if (p < 85) return { title: 'Refinando Texturas', detail: 'Aplicando detalhes em alta definição...' };
+    if (p < 100) return { title: 'Finalizando Imagem', detail: 'Renderizando nitidez e iluminação final...' };
+    return { title: 'Concluído!', detail: 'Imagem gerada com sucesso.' };
+  };
+
+  const currentStage = getProgressStage(progress);
+
+  return (
+    <span className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-neutral-700/60 shadow-2xl bg-[#171717]">
+      {/* Loading Container */}
+      {isLoading && (
+        <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative overflow-hidden select-none">
+          {/* Subtle Ambient Highlight */}
+          <span className="absolute inset-0 bg-neutral-800/20 animate-pulse blur-2xl" />
+
+          {/* Central AI Orb */}
+          <span className="relative z-10 flex flex-col items-center text-center space-y-4">
+            <span className="relative flex items-center justify-center">
+              {/* Neutral icon box */}
+              <span className="w-16 h-16 rounded-2xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-200 shadow-lg">
+                <Wand2 className="w-8 h-8 text-neutral-300 animate-pulse" />
+              </span>
+              <Sparkles className="w-4 h-4 text-neutral-400 absolute -top-1.5 -right-1.5" />
+            </span>
+
+            {/* Stage Info */}
+            <span className="space-y-1">
+              <span className="flex items-center justify-center gap-2 text-sm font-semibold text-neutral-200">
+                <Sparkles className="w-4 h-4 text-neutral-400" />
+                <span>{currentStage.title}</span>
+              </span>
+              <span className="text-xs text-neutral-400 block max-w-xs leading-relaxed">
+                {currentStage.detail}
+              </span>
+            </span>
+
+            {/* Progress Bar & Percentage */}
+            <span className="w-64 space-y-2 pt-1">
+              <span className="flex justify-between items-center text-[11px] font-semibold text-neutral-400 px-0.5">
+                <span className="text-neutral-400 font-mono flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin text-neutral-400" />
+                  Gerando Imagem
+                </span>
+                <span className="font-mono text-neutral-300">{progress}%</span>
+              </span>
+
+              {/* Progress Track */}
+              <span className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden relative border border-neutral-700 block">
+                <span
+                  className="h-full bg-neutral-200 rounded-full transition-all duration-300 ease-out block relative overflow-hidden"
+                  style={{ width: `${progress}%` }}
+                >
+                  <span className="absolute inset-0 bg-white/20 animate-shimmer block" />
+                </span>
+              </span>
+            </span>
+          </span>
+        </span>
+      )}
+
+      {/* Error State */}
+      {hasError && !isLoading && (
+        <span className="flex flex-col items-center justify-center p-8 min-h-[260px] text-center space-y-3 bg-[#1e1e1e]">
+          <AlertCircle className="w-10 h-10 text-neutral-400" />
+          <span className="text-sm font-semibold text-neutral-200">Não foi possível carregar a imagem</span>
+          <span className="text-xs text-neutral-400 max-w-xs">
+            O provedor de renderização pode estar ocupado. Tente gerar novamente.
+          </span>
+          <button
+            onClick={handleManualRetry}
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-semibold transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Tentar Novamente</span>
+          </button>
+        </span>
+      )}
+
+      {/* Rendered Image */}
+      {!hasError && (
+        <img
+          ref={imgRef}
+          src={currentSrc}
+          alt={alt || 'Imagem Gerada pelo ZENO'}
+          referrerPolicy="no-referrer"
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          className={`w-full h-auto object-cover rounded-2xl transition-all duration-700 ease-out ${
+            isLoading
+              ? 'opacity-0 absolute inset-0 pointer-events-none scale-95'
+              : 'opacity-100 scale-100 group-hover:scale-[1.01]'
+          }`}
+        />
+      )}
+
+      {/* Overlay Actions when Image is ready */}
+      {!isLoading && !hasError && (
+        <span className="absolute top-3 right-3 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#212121]/90 backdrop-blur-md border border-neutral-700 opacity-90 transition-opacity shadow-xl">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={isDownloading}
+            className={`p-1.5 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors flex items-center gap-1.5 text-xs font-semibold ${
+              downloadSuccess ? 'text-emerald-400 font-bold' : ''
+            }`}
+            title="Baixar em Alta Resolução"
+          >
+            {isDownloading ? (
+              <>
+                <RefreshCw className="w-4 h-4 text-neutral-300 animate-spin" />
+                <span className="hidden sm:inline">Baixando...</span>
+              </>
+            ) : downloadSuccess ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline text-emerald-400">Baixado!</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 text-neutral-300" />
+                <span className="hidden sm:inline">Baixar</span>
+              </>
+            )}
+          </button>
+          <a
+            href={currentSrc}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            title="Abrir imagem original em nova aba"
+          >
+            <Eye className="w-4 h-4 text-neutral-300" />
+          </a>
+        </span>
+      )}
+    </span>
+  );
+};

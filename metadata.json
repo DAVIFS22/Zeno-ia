@@ -1,0 +1,6 @@
+{
+  "name": "ZENO AI",
+  "description": "Uma inteligência artificial revolucionária de nova geração.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
