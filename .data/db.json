@@ -1,0 +1,242 @@
+{
+  "users": {
+    "user_f8vmc43pqmrz2o7we": {
+      "userId": "user_f8vmc43pqmrz2o7we",
+      "plan": "ZENO Pro",
+      "date": "2026-07-25",
+      "usage": {
+        "messages": 0,
+        "search": 0,
+        "image": 0,
+        "doc": 0,
+        "vision": 0
+      },
+      "lastActive": 1784944807949,
+      "ip": "127.0.0.1",
+      "browser": "Chrome",
+      "device": "Desktop"
+    },
+    "user_cu3uo9aazmrz2or8h": {
+      "userId": "user_cu3uo9aazmrz2or8h",
+      "plan": "ZENO Pro",
+      "date": "2026-07-25",
+      "usage": {
+        "messages": 0,
+        "search": 0,
+        "image": 0,
+        "doc": 0,
+        "vision": 0
+      }
+    },
+    "test-user-id-audit": {
+      "userId": "test-user-id-audit",
+      "plan": "ZENO Free",
+      "date": "2026-07-25",
+      "usage": {
+        "messages": 3,
+        "search": 0,
+        "image": 0,
+        "doc": 0,
+        "vision": 0
+      },
+      "lastActive": 1784944829519,
+      "email": "user-test-audit@zeno.ai",
+      "ip": "127.0.0.1",
+      "browser": "Chrome",
+      "device": "Desktop"
+    }
+  },
+  "config": {
+    "limits": {
+      "messages": 50,
+      "search": 20,
+      "image": 10,
+      "doc": 5,
+      "vision": 10
+    },
+    "proFeatures": {
+      "limitMultiplier": 10,
+      "priorityQueue": true,
+      "unlimitedImageGen": true,
+      "vectorMemoryAccess": true,
+      "exclusiveModelsAccess": true
+    },
+    "serverSettings": {
+      "maintenanceMode": false,
+      "defaultModel": "zeno",
+      "maxContextLength": 64000,
+      "logLevel": "info",
+      "requestTimeoutMs": 60000,
+      "enableVectorMemory": true
+    },
+    "models": [
+      {
+        "id": "zeno",
+        "name": "ZENO Inteligente",
+        "enabled": true,
+        "requiredPlan": "free",
+        "description": "Modelo equilibrado para raciocínio avançado e diálogos."
+      },
+      {
+        "id": "fast",
+        "name": "ZENO Rápido",
+        "enabled": true,
+        "requiredPlan": "free",
+        "description": "Respostas ultrarrápidas para tarefas simples."
+      },
+      {
+        "id": "mega",
+        "name": "ZENO Mega Sábio",
+        "enabled": true,
+        "requiredPlan": "pro",
+        "description": "Modelo de altíssima capacidade e análise complexa."
+      },
+      {
+        "id": "image",
+        "name": "ZENO Vision & Imagem",
+        "enabled": true,
+        "requiredPlan": "pro",
+        "description": "Geração e compreensão multimodal de imagens."
+      }
+    ],
+    "resetType": "midnight"
+  },
+  "auditLogs": [
+    {
+      "id": "audit-1784944829530-3531",
+      "adminEmail": "davifernandes0024509@gmail.com",
+      "timestamp": 1784944829530,
+      "date": "2026-07-25",
+      "time": "02:00:29",
+      "ip": "127.0.0.1",
+      "device": "Desktop",
+      "browser": "Chrome",
+      "action": "Alteração de Configurações do Sistema",
+      "oldValue": "{\"limits\":{\"messages\":50,\"search\":20,\"image\":10,\"doc\":5,\"vision\":10},\"proFeatures\":{\"limitMultiplier\":10,\"priorityQueue\":true,\"unlimitedImageGen\":true,\"vectorMemoryAccess\":true,\"exclusiveModelsAccess\":true},\"serverSettings\":{\"maintenanceMode\":false,\"defaultModel\":\"zeno\",\"maxContextLength\":32000,\"logLevel\":\"info\",\"requestTimeoutMs\":60000,\"enableVectorMemory\":true},\"models\":[{\"id\":\"zeno\",\"name\":\"ZENO Inteligente\",\"enabled\":true,\"requiredPlan\":\"free\",\"description\":\"Modelo equilibrado para raciocínio avançado e diálogos.\"},{\"id\":\"fast\",\"name\":\"ZENO Rápido\",\"enabled\":true,\"requiredPlan\":\"free\",\"description\":\"Respostas ultrarrápidas para tarefas simples.\"},{\"id\":\"mega\",\"name\":\"ZENO Mega Sábio\",\"enabled\":true,\"requiredPlan\":\"pro\",\"description\":\"Modelo de altíssima capacidade e análise complexa.\"},{\"id\":\"image\",\"name\":\"ZENO Vision & Imagem\",\"enabled\":true,\"requiredPlan\":\"pro\",\"description\":\"Geração e compreensão multimodal de imagens.\"}],\"resetType\":\"midnight\"}",
+      "newValue": "{\"limits\":{\"messages\":50,\"search\":20,\"image\":10,\"doc\":5,\"vision\":10},\"proFeatures\":{\"limitMultiplier\":10,\"priorityQueue\":true,\"unlimitedImageGen\":true,\"vectorMemoryAccess\":true,\"exclusiveModelsAccess\":true},\"serverSettings\":{\"maintenanceMode\":false,\"defaultModel\":\"zeno\",\"maxContextLength\":64000,\"logLevel\":\"info\",\"requestTimeoutMs\":60000,\"enableVectorMemory\":true},\"models\":[{\"id\":\"zeno\",\"name\":\"ZENO Inteligente\",\"enabled\":true,\"requiredPlan\":\"free\",\"description\":\"Modelo equilibrado para raciocínio avançado e diálogos.\"},{\"id\":\"fast\",\"name\":\"ZENO Rápido\",\"enabled\":true,\"requiredPlan\":\"free\",\"description\":\"Respostas ultrarrápidas para tarefas simples.\"},{\"id\":\"mega\",\"name\":\"ZENO Mega Sábio\",\"enabled\":true,\"requiredPlan\":\"pro\",\"description\":\"Modelo de altíssima capacidade e análise complexa.\"},{\"id\":\"image\",\"name\":\"ZENO Vision & Imagem\",\"enabled\":true,\"requiredPlan\":\"pro\",\"description\":\"Geração e compreensão multimodal de imagens.\"}],\"resetType\":\"midnight\"}",
+      "details": "• [Servidor] Contexto Máximo (Tokens): 32000 ➔ 64000"
+    }
+  ],
+  "systemLogs": [
+    {
+      "id": "sys-1784944829531-4096",
+      "timestamp": 1784944829531,
+      "date": "2026-07-25",
+      "time": "02:00:29",
+      "type": "info",
+      "userEmail": "davifernandes0024509@gmail.com",
+      "action": "Configurações Salvas",
+      "details": "As configurações globais do ZENO AI foram modificadas pelo administrador",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944829500-2615",
+      "timestamp": 1784944829500,
+      "date": "2026-07-25",
+      "time": "02:00:29",
+      "type": "ia",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Resposta de IA",
+      "details": "Uso do modelo: gemini-3.5-flash-lite (modo: zeno)",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944828918-8920",
+      "timestamp": 1784944828918,
+      "date": "2026-07-25",
+      "time": "02:00:28",
+      "type": "auth",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Teste de Login",
+      "details": "Executado via script de auditoria",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944807443-1817",
+      "timestamp": 1784944807443,
+      "date": "2026-07-25",
+      "time": "02:00:07",
+      "type": "ia",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Resposta de IA",
+      "details": "Uso do modelo: gemini-3.5-flash-lite (modo: zeno)",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944806792-8719",
+      "timestamp": 1784944806792,
+      "date": "2026-07-25",
+      "time": "02:00:06",
+      "type": "auth",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Teste de Login",
+      "details": "Executado via script de auditoria",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944735527-4036",
+      "timestamp": 1784944735527,
+      "date": "2026-07-25",
+      "time": "01:58:55",
+      "type": "ia",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Resposta de IA",
+      "details": "Uso do modelo: gemini-3.5-flash-lite (modo: zeno)",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784944734919-2636",
+      "timestamp": 1784944734919,
+      "date": "2026-07-25",
+      "time": "01:58:54",
+      "type": "auth",
+      "userEmail": "user-test-audit@zeno.ai",
+      "action": "Teste de Login",
+      "details": "Executado via script de auditoria",
+      "ip": "127.0.0.1",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784943904656-8664",
+      "timestamp": 1784943904656,
+      "date": "2026-07-25",
+      "time": "01:45:04",
+      "type": "ia",
+      "userEmail": "Anônimo",
+      "action": "Resposta de IA",
+      "details": "Uso do modelo: gemini-3.5-flash-lite (modo: zeno)",
+      "ip": "2804:d59:8b1c:7200:1209:3ea9:5840:7540",
+      "browser": "Chrome"
+    },
+    {
+      "id": "sys-1784943898245-8259",
+      "timestamp": 1784943898245,
+      "date": "2026-07-25",
+      "time": "01:44:58",
+      "type": "ia",
+      "userEmail": "Anônimo",
+      "action": "Resposta de IA",
+      "details": "Uso do modelo: gemini-3.5-flash-lite (modo: zeno)",
+      "ip": "2804:d59:8b1c:7200:1209:3ea9:5840:7540",
+      "browser": "Chrome"
+    }
+  ],
+  "stats": {
+    "totalMessagesSent": 47,
+    "totalImagesGenerated": 18,
+    "totalWebSearches": 15,
+    "totalPdfsAnalyzed": 8,
+    "totalVisionUses": 12,
+    "totalCodeUses": 21,
+    "modelUsage": {
+      "gemini-3.5-flash-lite": 47
+    },
+    "totalRevenue": 39.9
+  }
+}

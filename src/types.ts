@@ -7,7 +7,7 @@ export type FileAttachment = {
   content?: string;
 };
 
-export type ModelType = 'zeno' | 'think' | 'search' | 'vision' | 'smart' | 'fast' | 'mega' | 'image';
+export type ModelType = 'zeno' | 'think' | 'search' | 'vision' | 'smart' | 'fast' | 'mega' | 'image' | 'code' | 'strategy' | 'summary' | 'pdf';
 
 export type Message = {
   id: string;
@@ -34,15 +34,51 @@ export type ChatSession = {
 
 export type GeneratedImage = {
   id: string;
+  userId?: string;
+  conversationId?: string;
+  conversationTitle?: string;
   imageUrl: string;
+  thumbnailUrl?: string;
   prompt: string;
-  originalPrompt: string;
+  originalPrompt?: string;
+  optimizedPrompt?: string;
+  model?: string;
+  provider?: string;
+  width?: number;
+  height?: number;
   aspectRatio: string;
   style: string;
+  seed?: number;
+  isFavorite?: boolean;
+  collection?: string;
   timestamp: number;
 };
 
+export type ImageCollection = {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+};
+
 export type UserPlan = 'ZENO Free' | 'ZENO Pro';
+
+export interface ConnectedAccount {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: number; // Timestamp em ms
+  role: 'user' | 'admin';
+  isAdmin: boolean;
+}
+
+export interface MultiAccountSession {
+  accounts: ConnectedAccount[];
+  activeUid: string | null;
+}
 
 export type StripeSubscriptionInfo = {
   subscriptionId: string;
@@ -74,7 +110,7 @@ export type UserSettings = {
   subscriptionRenewalDate?: string;
   paymentMethod?: 'stripe' | 'google_play' | 'apple_pay';
   // Aparência
-  theme: 'dark' | 'light';
+  theme: 'dark' | 'light' | 'auto';
   logoVariant: 'monochrome' | 'gradient';
   fontSize: 'normal' | 'large' | 'compact';
   // IA
@@ -91,6 +127,7 @@ export type UserSettings = {
   // Privacidade
   saveHistory: boolean;
   anonymousMode: boolean;
+  rememberDevice: boolean;
   // Personalização & Idioma
   language: 'pt-BR' | 'en-US' | 'es-ES';
   groupByDate?: boolean;

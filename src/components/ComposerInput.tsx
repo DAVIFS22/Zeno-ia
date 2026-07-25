@@ -26,7 +26,7 @@ interface ComposerInputProps {
   dailyUsage?: DailyUsage;
 }
 
-export function ComposerInput({
+export const ComposerInput = React.memo<ComposerInputProps>(({
   input,
   setInput,
   isLoading,
@@ -45,7 +45,7 @@ export function ComposerInput({
   plan = 'ZENO Free',
   onOpenSubscriptionModal,
   dailyUsage
-}: ComposerInputProps) {
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -88,21 +88,22 @@ export function ComposerInput({
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       const isImg = file.type.startsWith('image/');
-      const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md)$/i);
+      const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md|csv|txt)$/i);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
       reader.onload = (event) => {
         const newAttachment: FileAttachment = {
           id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
           name: file.name,
           size: file.size,
-          type: isImg ? 'image' : isCode ? 'code' : 'document',
-          url: isImg ? (event.target?.result as string) : undefined,
-          content: !isImg ? (event.target?.result as string) : undefined,
+          type: isImg ? 'image' : isPdf ? 'document' : isCode ? 'code' : 'document',
+          url: (isImg || isPdf) ? (event.target?.result as string) : undefined,
+          content: !(isImg || isPdf) ? (event.target?.result as string) : undefined,
         };
         onAddAttachment(newAttachment);
       };
 
-      if (isImg) {
+      if (isImg || isPdf) {
         reader.readAsDataURL(file);
       } else {
         reader.readAsText(file);
@@ -151,10 +152,14 @@ export function ComposerInput({
             <button
               type="button"
               onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-              className="text-[11px] text-neutral-400 hover:text-neutral-200 transition-colors flex items-center gap-1.5 font-medium"
+              className={`text-[11px] transition-colors flex items-center gap-1.5 font-medium ${
+                isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
+              }`}
             >
               <span>Modelo:</span>
-              <span className="font-bold text-neutral-200 flex items-center gap-1">
+              <span className={`font-bold flex items-center gap-1 ${
+                isDark ? 'text-neutral-200' : 'text-neutral-800'
+              }`}>
                 {currentModel.name}
                 {currentModel.isPro && !isPro && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
@@ -171,7 +176,9 @@ export function ComposerInput({
                 <div className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-2xl border shadow-2xl z-40 animate-fadeIn ${
                   isDark ? 'bg-[#1e1e24] border-neutral-800 text-white' : 'bg-white border-neutral-200 text-black'
                 }`}>
-                  <div className="px-2.5 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-800 flex justify-between items-center">
+                  <div className={`px-2.5 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
+                    isDark ? 'text-neutral-400 border-neutral-800' : 'text-neutral-500 border-neutral-100'
+                  }`}>
                     <span>Modelos ZENO</span>
                     <span className="text-neutral-500">{isPro ? 'Plano Pro' : 'Plano Free'}</span>
                   </div>
@@ -195,7 +202,9 @@ export function ComposerInput({
                           <div className="text-xs font-semibold flex items-center gap-1.5">
                             <span>{m.name}</span>
                             {m.badge && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-neutral-800 text-neutral-400 border border-neutral-700">
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium border ${
+                                isDark ? 'bg-neutral-800 text-neutral-400 border-neutral-700' : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                              }`}>
                                 {m.badge}
                               </span>
                             )}
@@ -204,12 +213,16 @@ export function ComposerInput({
                         </div>
 
                         {isLocked ? (
-                          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-[10px] font-bold flex-shrink-0">
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 border ${
+                            isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-300' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
+                          }`}>
                             <Lock className="w-3 h-3 text-neutral-400" />
                             <span>PRO</span>
                           </div>
                         ) : isSelected ? (
-                          <div className="w-2 h-2 rounded-full bg-neutral-200 flex-shrink-0" />
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            isDark ? 'bg-neutral-200' : 'bg-neutral-800'
+                          }`} />
                         ) : null}
                       </button>
                     );
@@ -222,7 +235,9 @@ export function ComposerInput({
           <button
             type="button"
             onClick={onOpenImageStudio}
-            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-neutral-400 hover:text-neutral-200 transition-colors"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
+              isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
+            }`}
           >
             <Wand2 className="w-3.5 h-3.5 text-neutral-400" />
             <span>Estúdio ZENO Vision</span>
@@ -317,13 +332,15 @@ export function ComposerInput({
               onSubmit(e);
             }
           }}
-          className={`relative flex items-center gap-2 rounded-[9999px] min-h-[56px] max-h-[180px] px-4 py-2 transition-all duration-200 border shadow-lg ${
+          className={`relative flex items-center gap-2 rounded-[9999px] min-h-[56px] max-h-[180px] px-4 py-2 transition-all duration-300 border ${
             isDragging 
-              ? 'ring-2 ring-blue-500 border-blue-500/80 bg-[#2F2F2F]' 
+              ? isDark 
+                ? 'ring-2 ring-neutral-700 border-neutral-600 bg-[#252529]'
+                : 'ring-2 ring-neutral-450 border-neutral-400 bg-neutral-50' 
               : isDark
-                ? 'bg-[#2F2F2F] border-[#3F3F46] focus-within:ring-1 focus-within:ring-[#52525b] focus-within:border-[#52525b]'
-                : 'bg-[#F4F4F6] border-[#E4E4E7] focus-within:ring-1 focus-within:ring-neutral-400 focus-within:border-neutral-400'
-          } ${isListening ? 'ring-2 ring-blue-500/50' : ''}`}
+                ? 'bg-[#1e1e24] border-neutral-800/80 focus-within:ring-1 focus-within:ring-neutral-700 focus-within:border-neutral-700 shadow-none'
+                : 'bg-white border-neutral-200/90 focus-within:ring-1 focus-within:ring-neutral-400 focus-within:border-neutral-400 shadow-md shadow-neutral-100/50'
+          } ${isListening ? 'ring-2 ring-neutral-500/30' : ''}`}
         >
           {/* Paperclip Button (Far Left) */}
           <button
@@ -331,10 +348,10 @@ export function ComposerInput({
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
             title="Anexar arquivo"
-            className={`p-2 rounded-full transition-colors flex items-center justify-center flex-shrink-0 ${
+            className={`p-2 rounded-full transition-colors duration-200 flex items-center justify-center flex-shrink-0 ${
               isDark
-                ? 'text-[#9CA3AF] hover:text-white hover:bg-[#3F3F46]/50'
-                : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200'
+                ? 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60'
+                : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
             <Paperclip className="w-5 h-5" />
@@ -370,7 +387,7 @@ export function ComposerInput({
             rows={1}
             className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-[15px] sm:text-base leading-snug py-1.5 px-1 font-normal ${
               isDark 
-                ? 'text-white placeholder-[#9CA3AF]' 
+                ? 'text-white placeholder-[#8e8e9a]' 
                 : 'text-neutral-900 placeholder-neutral-400'
             }`}
           />
@@ -381,12 +398,14 @@ export function ComposerInput({
             onClick={onToggleListening}
             disabled={isLoading}
             title={isListening ? "Parar de ouvir" : "Falar com ZENO"}
-            className={`p-2 rounded-full transition-colors flex items-center justify-center flex-shrink-0 ${
+            className={`p-2 rounded-full transition-colors duration-200 flex items-center justify-center flex-shrink-0 ${
               isListening
-                ? 'bg-blue-600 text-white animate-pulse'
+                ? isDark
+                  ? 'bg-neutral-100 text-neutral-950 animate-pulse'
+                  : 'bg-neutral-900 text-white animate-pulse'
                 : isDark
-                  ? 'text-[#9CA3AF] hover:text-white hover:bg-[#3F3F46]/50'
-                  : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200'
+                  ? 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60'
+                  : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -398,21 +417,25 @@ export function ComposerInput({
               type="button"
               onClick={onStopGeneration}
               title="Parar geração"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white text-black hover:bg-neutral-200 transition-all flex items-center justify-center flex-shrink-0 shadow-xs"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-200 flex items-center justify-center flex-shrink-0 shadow-xs ${
+                isDark ? 'bg-neutral-100 hover:bg-white text-neutral-950' : 'bg-neutral-900 hover:bg-neutral-950 text-white'
+              }`}
             >
-              <Square className="w-4 h-4 fill-current text-black" />
+              <Square className={`w-4 h-4 fill-current ${isDark ? 'text-neutral-950' : 'text-white'}`} />
             </button>
           ) : (
             <button
               type="submit"
               disabled={!hasContent}
               title="Enviar mensagem"
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all flex items-center justify-center flex-shrink-0 ${
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-200 flex items-center justify-center flex-shrink-0 ${
                 hasContent
-                  ? 'bg-[#3B82F6] hover:bg-blue-600 text-white shadow-md cursor-pointer scale-100'
+                  ? isDark
+                    ? 'bg-neutral-100 hover:bg-white text-neutral-950 shadow-sm cursor-pointer hover:scale-102 active:scale-98'
+                    : 'bg-neutral-900 hover:bg-neutral-950 text-white shadow-sm cursor-pointer hover:scale-102 active:scale-98'
                   : isDark
-                    ? 'bg-[#38383E] text-[#9CA3AF] cursor-not-allowed opacity-80'
-                    : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed opacity-60'
+                    : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
               }`}
             >
               <ArrowUp className="w-5 h-5 stroke-[2.5]" />
@@ -426,5 +449,7 @@ export function ComposerInput({
       </div>
     </div>
   );
-}
+});
+
+ComposerInput.displayName = 'ComposerInput';
 

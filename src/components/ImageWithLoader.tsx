@@ -1,17 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check } from 'lucide-react';
+import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check, Share2, Edit3, RotateCcw, Heart } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 
 interface ImageWithLoaderProps {
   src: string;
   alt?: string;
   className?: string;
+  onRegenerate?: () => void;
+  onVary?: () => void;
+  onEdit?: () => void;
+  onShare?: () => void;
 }
 
 // Global in-memory cache to track images that have already loaded in this session
 const loadedImagesCache = new Set<string>();
 
-export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt }) => {
+export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ 
+  src, 
+  alt,
+  onRegenerate,
+  onVary,
+  onEdit,
+  onShare
+}) => {
   const isAlreadyLoaded = loadedImagesCache.has(src);
   const [isLoading, setIsLoading] = useState(!isAlreadyLoaded);
   const [progress, setProgress] = useState(isAlreadyLoaded ? 100 : 12);
@@ -20,9 +31,60 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt }) =>
   const [retryCount, setRetryCount] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const prevSrcRef = useRef(src);
+
+  // Check favorite status from library on mount / src change
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('zeno_image_library');
+      if (saved) {
+        const list = JSON.parse(saved);
+        const found = list.find((img: any) => img.imageUrl === currentSrc);
+        if (found) {
+          setIsFavorite(!!found.isFavorite);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [currentSrc]);
+
+  const handleToggleFavorite = () => {
+    try {
+      const saved = localStorage.getItem('zeno_image_library');
+      const list = saved ? JSON.parse(saved) : [];
+      let updated = false;
+      const newList = list.map((img: any) => {
+        if (img.imageUrl === currentSrc) {
+          updated = true;
+          return { ...img, isFavorite: !isFavorite };
+        }
+        return img;
+      });
+
+      if (!updated && currentSrc) {
+        newList.unshift({
+          id: 'img-' + Date.now(),
+          imageUrl: currentSrc,
+          prompt: alt || 'Imagem Gerada pelo ZENO',
+          originalPrompt: alt || 'Imagem Gerada pelo ZENO',
+          aspectRatio: '1:1',
+          style: 'photorealistic',
+          timestamp: Date.now(),
+          isFavorite: true
+        });
+      }
+
+      localStorage.setItem('zeno_image_library', JSON.stringify(newList));
+      setIsFavorite(!isFavorite);
+    } catch (e) {
+      console.error('Error toggling favorite:', e);
+    }
+  };
 
   const handleDownload = async () => {
     if (isDownloading) return;
@@ -81,6 +143,24 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt }) =>
   const handleImageLoad = () => {
     if (currentSrc) {
       loadedImagesCache.add(currentSrc);
+      try {
+        const saved = localStorage.getItem('zeno_image_library');
+        const list = saved ? JSON.parse(saved) : [];
+        if (!list.some((img: any) => img.imageUrl === currentSrc)) {
+          const newImg = {
+            id: 'img-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+            imageUrl: currentSrc,
+            prompt: alt || 'Imagem Gerada pelo ZENO',
+            originalPrompt: alt || 'Imagem Gerada pelo ZENO',
+            aspectRatio: '1:1',
+            style: 'photorealistic',
+            timestamp: Date.now()
+          };
+          localStorage.setItem('zeno_image_library', JSON.stringify([newImg, ...list]));
+        }
+      } catch (e) {
+        console.error('Failed to save to image library:', e);
+      }
     }
     setProgress(100);
     setIsLoading(false);
@@ -206,44 +286,113 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt }) =>
         />
       )}
 
-      {/* Overlay Actions when Image is ready */}
+      {/* Action Buttons Row */}
       {!isLoading && !hasError && (
-        <span className="absolute top-3 right-3 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#212121]/90 backdrop-blur-md border border-neutral-700 opacity-90 transition-opacity shadow-xl">
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={isDownloading}
-            className={`p-1.5 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors flex items-center gap-1.5 text-xs font-semibold ${
-              downloadSuccess ? 'text-emerald-400 font-bold' : ''
-            }`}
-            title="Baixar em Alta Resolução"
-          >
-            {isDownloading ? (
-              <>
-                <RefreshCw className="w-4 h-4 text-neutral-300 animate-spin" />
-                <span className="hidden sm:inline">Baixando...</span>
-              </>
-            ) : downloadSuccess ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-400" />
-                <span className="hidden sm:inline text-emerald-400">Baixado!</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4 text-neutral-300" />
-                <span className="hidden sm:inline">Baixar</span>
-              </>
+        <span className="block border-t border-neutral-800 bg-[#16161a] p-2 flex flex-wrap items-center justify-between gap-1.5">
+          <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className={`p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                downloadSuccess ? 'text-emerald-400 font-bold' : ''
+              }`}
+              title="Baixar imagem em alta resolução"
+            >
+              {isDownloading ? (
+                <RefreshCw className="w-3.5 h-3.5 text-neutral-300 animate-spin" />
+              ) : downloadSuccess ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Download className="w-3.5 h-3.5 text-neutral-400" />
+              )}
+              <span className="hidden sm:inline">{downloadSuccess ? "Baixado" : "Download"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onShare) {
+                  onShare();
+                } else {
+                  navigator.clipboard.writeText(currentSrc);
+                  setShareSuccess(true);
+                  setTimeout(() => setShareSuccess(false), 2000);
+                }
+              }}
+              className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+              title="Compartilhar imagem (copiar link)"
+            >
+              {shareSuccess ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Share2 className="w-3.5 h-3.5 text-neutral-400" />
+              )}
+              <span className="hidden sm:inline">{shareSuccess ? "Link Copiado" : "Compartilhar"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleFavorite}
+              className={`p-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                isFavorite 
+                  ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' 
+                  : 'text-neutral-200 hover:bg-neutral-800 hover:text-white'
+              }`}
+              title={isFavorite ? "Remover dos Favoritos" : "Favoritar Imagem"}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-rose-400 text-rose-400' : 'text-neutral-400'}`} />
+              <span className="hidden sm:inline">{isFavorite ? "Favorito" : "Favoritar"}</span>
+            </button>
+          </span>
+
+          <span className="flex items-center gap-1.5">
+            {onRegenerate && (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+                title="Regenerar imagem com o mesmo prompt"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="hidden sm:inline">Regenerar</span>
+              </button>
             )}
-          </button>
-          <a
-            href={currentSrc}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors flex items-center gap-1.5 text-xs font-semibold"
-            title="Abrir imagem original em nova aba"
-          >
-            <Eye className="w-4 h-4 text-neutral-300" />
-          </a>
+
+            {onVary && (
+              <button
+                type="button"
+                onClick={onVary}
+                className="p-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 text-sky-400 transition-all flex items-center gap-1.5 text-xs font-semibold"
+                title="Criar uma variação desta imagem"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden sm:inline">Variar</span>
+              </button>
+            )}
+
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+                title="Editar prompt"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="hidden sm:inline">Editar</span>
+              </button>
+            )}
+
+            <a
+              href={currentSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center justify-center text-xs font-semibold"
+              title="Abrir imagem em nova aba"
+            >
+              <Eye className="w-4 h-4 text-neutral-300" />
+            </a>
+          </span>
         </span>
       )}
     </span>

@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface ZenoLogoProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
   className?: string;
-  theme?: 'dark' | 'light';
+  theme?: 'dark' | 'light' | 'auto';
   variant?: 'monochrome' | 'gradient';
 }
 
@@ -26,6 +26,32 @@ export const ZenoLogo: React.FC<ZenoLogoProps> = ({
   // Proportional font size and corner radius
   const fontSize = Math.max(11, Math.round(pxSize * 0.58));
   const borderRadius = Math.max(6, Math.round(pxSize * 0.28));
+
+  const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const resolvedTheme = useMemo(() => {
+    if (theme === 'auto') {
+      return systemTheme;
+    }
+    return theme || 'dark';
+  }, [theme, systemTheme]);
+
+  const isDark = resolvedTheme === 'dark';
 
   if (variant === 'gradient') {
     return (
@@ -56,7 +82,7 @@ export const ZenoLogo: React.FC<ZenoLogoProps> = ({
         borderRadius: `${borderRadius}px`,
       }}
       className={`inline-flex items-center justify-center font-extrabold select-none flex-shrink-0 shadow-xs transition-all duration-150 ${
-        theme === 'dark'
+        isDark
           ? 'bg-white text-neutral-950 border border-white/20'
           : 'bg-neutral-900 text-white border border-neutral-800'
       } ${className}`}
@@ -65,3 +91,4 @@ export const ZenoLogo: React.FC<ZenoLogoProps> = ({
     </div>
   );
 };
+

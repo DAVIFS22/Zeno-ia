@@ -1,0 +1,37 @@
+{
+  "collections": {
+    "users": {
+      "description": "Store user profile information",
+      "fields": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's full name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL to user's profile picture"
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the user first signed in"
+        },
+        "lastLogin": {
+          "type": "timestamp",
+          "description": "Last time the user signed in"
+        },
+        "rememberDevice": {
+          "type": "boolean",
+          "description": "Whether the user wants to stay logged in"
+        }
+      }
+    }
+  }
+}

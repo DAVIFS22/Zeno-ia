@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { getOrCreateUserId } from './lib/userId';
 import { 
   Copy, Check, Plus, MessageSquare, 
   Sparkles, ThumbsUp, ThumbsDown, Settings, X, Moon, Sun, Zap, Brain, 
@@ -13,12 +14,23 @@ import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
 import { CodeBlock } from './components/CodeBlock';
 import { ZenoLogo } from './components/ZenoLogo';
 import { ImageStudioModal } from './components/ImageStudioModal';
+import { ImageLibraryModal } from './components/ImageLibraryModal';
+import { ProjectsModal } from './components/ProjectsModal';
+import { PluginsModal } from './components/PluginsModal';
+import { MoreModal } from './components/MoreModal';
 import { ImageWithLoader } from './components/ImageWithLoader';
+import { syncLibraryWithBackend, scanAndSaveImagesFromText } from './lib/imageLibraryStorage';
 import { SettingsModal } from './components/SettingsModal';
 import { ErrorBanner } from './components/ErrorBanner';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { LimitReachedScreen } from './components/LimitReachedScreen';
+import { PlanUsageCard } from './components/PlanUsageCard';
 import { ComposerInput } from './components/ComposerInput';
 import { SubscriptionModal } from './components/SubscriptionModal';
+import { SidebarNav } from './components/SidebarNav';
+import { useAuth } from './hooks/useAuth';
+import { MessageList } from './components/MessageList';
+import { AppHeader } from './components/AppHeader';
 import { 
   getTodayString, 
   getInitialUsage, 
@@ -27,6 +39,8 @@ import {
   FREE_LIMITS,
   getModelDef
 } from './lib/subscription';
+import { syncUserProfile } from './lib/firebase';
+import { LogIn, LogOut, User as UserIcon, Shield } from 'lucide-react';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
 const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
@@ -66,22 +80,79 @@ export default function App() {
       memoryEnabled: true,
       saveHistory: true,
       anonymousMode: false,
+      rememberDevice: true,
       language: 'pt-BR',
       soundEnabled: true,
       notificationsEnabled: true,
     };
   });
 
+  // Auth State
+  const { 
+    user, 
+    profile, 
+    loading: authLoading, 
+    login: signInWithGoogle, 
+    logout, 
+    switchAccount, 
+    session 
+  } = useAuth();
+
+  // Sync user profile data to settings when logged in
+  useEffect(() => {
+    if (profile) {
+      setUserSettings(prev => ({
+        ...prev,
+        userName: profile.displayName || prev.userName,
+        userEmail: profile.email || prev.userEmail,
+        userAvatar: profile.photoURL || prev.userAvatar,
+      }));
+    }
+  }, [profile]);
+
   // Subscription System State
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [subscriptionReasonMessage, setSubscriptionReasonMessage] = useState<string | undefined>(undefined);
 
-  const handleOpenSubscriptionModal = (reasonMessage?: string) => {
+  const handleOpenSubscriptionModal = useCallback((reasonMessage?: string) => {
     setSubscriptionReasonMessage(reasonMessage);
     setIsSubscriptionModalOpen(true);
-  };
+  }, []);
 
   // Daily Usage Tracker State
+  
+  const userId = getOrCreateUserId();
+  const [backendLimits, setBackendLimits] = useState<any>(null);
+  const [adminConfig, setAdminConfig] = useState<any>({
+    messages: 50,
+    search: 20,
+    image: 10,
+    doc: 5,
+    vision: 10,
+  });
+  const [limitReachedScreen, setLimitReachedScreen] = useState<string | null>(null);
+  const [showUsageCard, setShowUsageCard] = useState(true); // 'messages', 'image', etc
+
+  const fetchLimits = async () => {
+    try {
+      const res = await fetch(`/api/limits?userId=${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.usage?.usage) setBackendLimits(data.usage.usage);
+        if (data.config?.limits) setAdminConfig(data.config.limits);
+      }
+    } catch (e) {
+      console.warn("Could not fetch limits from server, using local defaults:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchLimits();
+    // Poll every 30s to keep countdown/limits fresh if needed, but fetch on mount is enough
+    const interval = setInterval(fetchLimits, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [dailyUsage, setDailyUsage] = useState<DailyUsage>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USAGE);
@@ -105,23 +176,48 @@ export default function App() {
     }
   }, [dailyUsage]);
 
-  const theme = userSettings.theme;
+  const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const theme = useMemo(() => {
+    if (userSettings.theme === 'auto') {
+      return systemTheme;
+    }
+    return userSettings.theme || 'dark';
+  }, [userSettings.theme, systemTheme]);
+
   const logoVariant = userSettings.logoVariant;
 
-  const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
+  const handleUpdateSettings = useCallback((newSettings: Partial<UserSettings>) => {
     setUserSettings(prev => {
       const updated = { ...prev, ...newSettings };
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(updated));
       return updated;
     });
-  };
+  }, []);
 
   // Sync theme to HTML root
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
   }, [theme]);
 
@@ -136,30 +232,15 @@ export default function App() {
     } catch (e) {
       console.error('Error loading chat sessions:', e);
     }
-    // Default initial session
-    const defaultSession: ChatSession = {
-      id: 'session-' + Date.now(),
-      title: 'Novo Chat',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messages: [
-        {
-          id: 'welcome',
-          role: 'model',
-          text: 'Olá! Eu sou **ZENO**, sua inteligência artificial avançada. Como posso ajudá-lo hoje?\n\n*Zeno Inc. — O futuro da inteligência começa agora.*',
-        },
-      ],
-      speed: 'smart',
-    };
-    return [defaultSession];
+    return [];
   });
 
-  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
     const savedId = localStorage.getItem(STORAGE_KEY_CURRENT_ID);
-    if (savedId && sessions.some(s => s.id === savedId)) {
+    if (savedId && savedId !== 'null' && sessions.some(s => s.id === savedId)) {
       return savedId;
     }
-    return sessions[0]?.id || '';
+    return null;
   });
 
   // UI State
@@ -173,8 +254,18 @@ export default function App() {
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isImageStudioOpen, setIsImageStudioOpen] = useState(false);
+  const [isImageLibraryOpen, setIsImageLibraryOpen] = useState(false);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
+  const [isPluginsOpen, setIsPluginsOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [speed, setSpeed] = useState<ModelType>('zeno');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync image library from backend on start
+  useEffect(() => {
+    syncLibraryWithBackend().catch(() => {});
+  }, []);
 
   // Session renaming/deleting
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -195,7 +286,7 @@ export default function App() {
 
   // Active Session helper
   const activeSession = useMemo(() => {
-    return sessions.find(s => s.id === currentSessionId) || sessions[0];
+    return currentSessionId ? sessions.find(s => s.id === currentSessionId) || null : null;
   }, [sessions, currentSessionId]);
 
   const messages = activeSession?.messages || [];
@@ -207,7 +298,18 @@ export default function App() {
     }
   }, [currentSessionId, activeSession?.speed]);
 
-  const handleSelectSpeed = (newSpeed: any) => {
+  // Scan active chat messages for generated images to populate library automatically
+  useEffect(() => {
+    if (messages && messages.length > 0 && currentSessionId) {
+      messages.forEach(msg => {
+        if (msg.role === 'model' && msg.text && msg.text.includes('![')) {
+          scanAndSaveImagesFromText(msg.text, currentSessionId, activeSession?.title || 'Conversa', speed);
+        }
+      });
+    }
+  }, [messages, currentSessionId, activeSession?.title, speed]);
+
+  const handleSelectSpeed = useCallback((newSpeed: any) => {
     if (isModelPro(newSpeed) && userSettings.plan !== 'ZENO Pro') {
       handleOpenSubscriptionModal(`O modelo ${getModelDef(newSpeed).name} é exclusivo para assinantes do plano ZENO Pro.`);
       return;
@@ -216,13 +318,17 @@ export default function App() {
     setSessions(prev =>
       prev.map(s => (s.id === currentSessionId ? { ...s, speed: newSpeed } : s))
     );
-  };
+  }, [userSettings.plan, currentSessionId, handleOpenSubscriptionModal]);
 
   // Sync sessions & current id to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
-      localStorage.setItem(STORAGE_KEY_CURRENT_ID, currentSessionId);
+      if (currentSessionId) {
+        localStorage.setItem(STORAGE_KEY_CURRENT_ID, currentSessionId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_CURRENT_ID);
+      }
     } catch (e) {
       console.error('Failed to save state to localStorage:', e);
     }
@@ -455,10 +561,15 @@ export default function App() {
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       const codeStr = String(children).replace(/\n$/, '');
-      const isBlock = !inline || codeStr.includes('\n') || !!match;
-      return isBlock ? (
-        <CodeBlock language={match ? match[1] : ''} value={codeStr} theme={theme} />
-      ) : (
+      
+      // Defensively check for block content to avoid hydration errors
+      const hasNewline = codeStr.includes('\n');
+      
+      if (!inline || hasNewline || !!match) {
+        return <CodeBlock language={match ? match[1] : ''} value={codeStr} theme={theme} />;
+      }
+      
+      return (
         <code className={`px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono ${
           theme === 'dark' ? 'bg-[#282832] text-sky-300 border border-neutral-700/50' : 'bg-neutral-200 text-sky-800 border border-neutral-300'
         }`} {...props}>
@@ -474,7 +585,25 @@ export default function App() {
       );
     },
     img({ node, src, alt }: any) {
-      return <ImageWithLoader src={src || ''} alt={alt} />;
+      return (
+        <ImageWithLoader
+          src={src || ''}
+          alt={alt}
+          onRegenerate={() => {
+            handleSubmit(undefined, alt || "Gere uma imagem");
+          }}
+          onVary={() => {
+            handleSubmit(undefined, `Crie uma variação da imagem: ${alt || "imagem"}`);
+          }}
+          onEdit={() => {
+            setInput(alt || "");
+            const textarea = document.getElementById("composer-textarea");
+            if (textarea) {
+              textarea.focus();
+            }
+          }}
+        />
+      );
     },
     table({ node, children, ...props }: any) {
       return (
@@ -484,67 +613,45 @@ export default function App() {
           </table>
         </div>
       );
+    },
+    p({ children }: any) {
+      // Rendering as div to avoid hydration errors when AI generates block elements inside paragraphs
+      return <div className="mb-4 last:mb-0 leading-relaxed">{children}</div>;
+    },
+    li({ children, ...props }: any) {
+      return <li className="mb-1" {...props}>{children}</li>;
     }
   }), [theme]);
 
-  const copyToClipboard = (id: string, text: string) => {
+  const copyToClipboard = useCallback((id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
   // Chat Sessions Operations
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
+    setShowUsageCard(true);
     if (isLoading) handleStopGeneration();
 
-    const newSession: ChatSession = {
-      id: 'session-' + Date.now(),
-      title: 'Novo Chat',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messages: [
-        {
-          id: 'welcome-' + Date.now(),
-          role: 'model',
-          text: 'Olá! Eu sou **ZENO**, sua inteligência artificial avançada. Como posso ajudá-lo hoje?\n\n*Zeno Inc. — O futuro da inteligência começa agora.*',
-        },
-      ],
-      speed: speed,
-    };
-
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
+    setCurrentSessionId(null);
     setIsSidebarOpen(false);
     setInput('');
     setAttachments([]);
-  };
+  }, [isLoading]);
 
-  const handleSelectSession = (id: string) => {
+  const handleSelectSession = useCallback((id: string) => {
     if (isLoading) handleStopGeneration();
     setCurrentSessionId(id);
     setIsSidebarOpen(false);
-  };
+  }, [isLoading]);
 
-  const handleDeleteSession = (id: string) => {
+  const handleDeleteSession = useCallback((id: string) => {
     setSessions(prev => {
       const filtered = prev.filter(s => s.id !== id);
       if (filtered.length === 0) {
-        const fresh: ChatSession = {
-          id: 'session-' + Date.now(),
-          title: 'Novo Chat',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          messages: [
-            {
-              id: 'welcome-' + Date.now(),
-              role: 'model',
-              text: 'Olá! Eu sou **ZENO**, sua inteligência artificial avançada. Como posso ajudá-lo hoje?',
-            },
-          ],
-          speed: speed,
-        };
-        setCurrentSessionId(fresh.id);
-        return [fresh];
+        setCurrentSessionId(null);
+        return [];
       } else {
         if (currentSessionId === id) {
           setCurrentSessionId(filtered[0].id);
@@ -553,29 +660,29 @@ export default function App() {
       }
     });
     setDeletingSessionId(null);
-  };
+  }, [currentSessionId]);
 
-  const togglePinSession = (id: string, e: React.MouseEvent) => {
+  const togglePinSession = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSessions(prev =>
       prev.map(s => (s.id === id ? { ...s, isPinned: !s.isPinned } : s))
     );
-  };
+  }, []);
 
-  const toggleFavoriteSession = (id: string, e: React.MouseEvent) => {
+  const toggleFavoriteSession = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSessions(prev =>
       prev.map(s => (s.id === id ? { ...s, isFavorite: !s.isFavorite } : s))
     );
-  };
+  }, []);
 
-  const startRenameSession = (session: ChatSession, e: React.MouseEvent) => {
+  const startRenameSession = useCallback((session: ChatSession, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingSessionId(session.id);
     setEditingTitle(session.title);
-  };
+  }, []);
 
-  const saveRenameSession = (id: string) => {
+  const saveRenameSession = useCallback((id: string) => {
     const trimmed = editingTitle.trim();
     if (trimmed) {
       setSessions(prev =>
@@ -584,7 +691,7 @@ export default function App() {
     }
     setEditingSessionId(null);
     setEditingTitle('');
-  };
+  }, [editingTitle]);
 
   const handleExportSession = (session: ChatSession, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -614,22 +721,8 @@ export default function App() {
   };
 
   const handleClearAllHistory = () => {
-    const fresh: ChatSession = {
-      id: 'session-' + Date.now(),
-      title: 'Novo Chat',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messages: [
-        {
-          id: 'welcome-' + Date.now(),
-          role: 'model',
-          text: 'Olá! Eu sou **ZENO**, sua inteligência artificial avançada. Como posso ajudá-lo hoje?',
-        },
-      ],
-      speed: speed,
-    };
-    setSessions([fresh]);
-    setCurrentSessionId(fresh.id);
+    setSessions([]);
+    setCurrentSessionId(null);
     setIsSettingsOpen(false);
   };
 
@@ -653,23 +746,6 @@ export default function App() {
       return;
     }
 
-    // 2. Subscription & Usage Check: Daily Message Limit for ZENO Free
-    if (userSettings.plan === 'ZENO Free') {
-      const msgCheck = checkUsageLimit(userSettings.plan, dailyUsage, 'message');
-      if (!msgCheck.allowed) {
-        handleOpenSubscriptionModal(`Você atingiu o limite de ${FREE_LIMITS.MESSAGES_PER_DAY} mensagens diárias do plano ZENO Free. Faça upgrade para ZENO Pro e continue conversando sem limites.`);
-        return;
-      }
-
-      if (attachments.length > 0) {
-        const docCheck = checkUsageLimit(userSettings.plan, dailyUsage, 'doc');
-        if (!docCheck.allowed) {
-          handleOpenSubscriptionModal(`Você atingiu o limite de upload do plano Free (${FREE_LIMITS.DOCS_PER_DAY} documentos/dia). Assine o ZENO Pro para análises ilimitadas.`);
-          return;
-        }
-      }
-    }
-
     let textToSend = customText || input;
     if (attachments.length > 0 && !customText) {
       const attachSummary = attachments.map(a => {
@@ -684,19 +760,6 @@ export default function App() {
     }
 
     if (!textToSend.trim() || isLoading) return;
-
-    // Increment Usage Stats for Free Users
-    setDailyUsage(prev => {
-      const today = getTodayString();
-      const base = prev.date === today ? prev : getInitialUsage();
-      return {
-        ...base,
-        messagesCount: base.messagesCount + 1,
-        imageGenCount: (speed === 'vision' || speed === 'image') ? base.imageGenCount + 1 : base.imageGenCount,
-        webSearchCount: (speed === 'search' || speed === 'mega') ? base.webSearchCount + 1 : base.webSearchCount,
-        docUploadCount: attachments.length > 0 ? base.docUploadCount + attachments.length : base.docUploadCount
-      };
-    });
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -715,27 +778,48 @@ export default function App() {
       modelSpeed: speed,
     };
 
-    const targetSession = sessions.find(s => s.id === currentSessionId);
-    const isDefaultTitle = !targetSession || targetSession.title === 'Novo Chat' || targetSession.title === 'Exploração Neural';
-    const fallbackTitle = isDefaultTitle ? generateTitleFromMessage(userMessage.text) : (targetSession?.title || 'Novo Chat');
+    let activeId = currentSessionId;
+    let targetSession = sessions.find(s => s.id === activeId);
 
-    setSessions(prev =>
-      prev.map(s => {
-        if (s.id === currentSessionId) {
-          return {
-            ...s,
-            title: isDefaultTitle ? fallbackTitle : s.title,
-            updatedAt: Date.now(),
-            messages: [...s.messages, userMessage, placeholderMessage],
-          };
-        }
-        return s;
-      })
-    );
+    let isDefaultTitle = false;
+    let fallbackTitle = 'Novo Chat';
+
+    if (!targetSession) {
+      const newSession: ChatSession = {
+        id: 'session-' + Date.now(),
+        title: generateTitleFromMessage(userMessage.text),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: [userMessage, placeholderMessage],
+        speed: speed,
+      };
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSessionId(newSession.id);
+      activeId = newSession.id;
+      targetSession = newSession;
+      isDefaultTitle = true; // Needs LLM title gen
+    } else {
+      isDefaultTitle = targetSession.title === 'Novo Chat' || targetSession.title === 'Exploração Neural';
+      fallbackTitle = isDefaultTitle ? generateTitleFromMessage(userMessage.text) : targetSession.title;
+
+      setSessions(prev =>
+        prev.map(s => {
+          if (s.id === activeId) {
+            return {
+              ...s,
+              title: isDefaultTitle ? fallbackTitle : s.title,
+              updatedAt: Date.now(),
+              messages: [...s.messages, userMessage, placeholderMessage],
+            };
+          }
+          return s;
+        })
+      );
+    }
 
     // Asynchronously call small LLM to generate concise title summary
     if (isDefaultTitle) {
-      const sessionIdToUpdate = currentSessionId;
+      const sessionIdToUpdate = activeId;
       fetch('/api/generate-title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -777,10 +861,41 @@ export default function App() {
           history: messages.map(m => ({ role: m.role, text: m.text })),
           speed: speed,
           customInstructions: userSettings.customInstructions,
+          attachments: attachments,
+          userId: userId,
+          plan: userSettings.plan
         }),
         signal: abortController.signal,
       });
 
+      if (response.status === 403) {
+        const errorData = await response.json();
+        setIsLoading(false);
+        setSessions(prev => prev.map(s => {
+          if (s.id === activeId) {
+            return { ...s, messages: s.messages.slice(0, -2) };
+          }
+          return s;
+        }));
+        setSubscriptionReasonMessage(errorData.error || 'Este modelo é exclusivo para assinantes ZENO Pro.');
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+
+      if (response.status === 429) {
+        const errorData = await response.json();
+        setLimitReachedScreen(errorData.actionType || 'messages');
+        fetchLimits(); // refresh to get the latest usage
+        setIsLoading(false);
+        // We must remove the placeholder message and user message from the session
+        setSessions(prev => prev.map(s => {
+          if (s.id === activeId) {
+            return { ...s, messages: s.messages.slice(0, -2) };
+          }
+          return s;
+        }));
+        return;
+      }
       if (!response.body) throw new Error('Servidor não retornou dados de resposta');
 
       const reader = response.body.getReader();
@@ -805,7 +920,7 @@ export default function App() {
                 if (parsed.text) {
                   setSessions(prev =>
                     prev.map(s => {
-                      if (s.id === currentSessionId) {
+                      if (s.id === activeId) {
                         return {
                           ...s,
                           updatedAt: Date.now(),
@@ -820,7 +935,7 @@ export default function App() {
                 } else if (parsed.error) {
                   setSessions(prev =>
                     prev.map(s => {
-                      if (s.id === currentSessionId) {
+                      if (s.id === activeId) {
                         return {
                           ...s,
                           messages: s.messages.map(msg =>
@@ -851,7 +966,7 @@ export default function App() {
         console.error('Erro no fluxo de mensagens:', error);
         setSessions(prev =>
           prev.map(s => {
-            if (s.id === currentSessionId) {
+            if (s.id === activeId) {
               return {
                 ...s,
                 messages: s.messages.map(msg =>
@@ -896,7 +1011,17 @@ export default function App() {
   };
 
   // Edit User Message
-  const handleSaveEditMessage = (msgId: string) => {
+  const handleStartEditMessage = useCallback((id: string, text: string) => {
+    setEditingMessageId(id);
+    setEditingMessageText(text);
+  }, []);
+
+  const handleCancelEditMessage = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingMessageText('');
+  }, []);
+
+  const handleSaveEditMessage = useCallback((msgId: string) => {
     if (!editingMessageText.trim() || isLoading) return;
     const msgIndex = messages.findIndex(m => m.id === msgId);
     if (msgIndex === -1) return;
@@ -913,7 +1038,29 @@ export default function App() {
     setEditingMessageId(null);
     setEditingMessageText('');
     handleSubmit(undefined, textToSubmit);
-  };
+  }, [editingMessageText, isLoading, messages, currentSessionId]);
+
+  const handleSetFeedback = useCallback((msgId: string, value: 'up' | 'down') => {
+    setFeedback(prev => ({ ...prev, [msgId]: value }));
+  }, []);
+
+  const handleToggleSearchVisible = useCallback(() => {
+    setIsSearchVisible(prev => !prev);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+    setIsSidebarCollapsed(true);
+  }, []);
+
+  const handleOpenSidebar = useCallback(() => {
+    if (window.innerWidth < 768) setIsSidebarOpen(true);
+    else setIsSidebarCollapsed(false);
+  }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    handleUpdateSettings({ theme: theme === 'dark' ? 'light' : 'dark' });
+  }, [theme, handleUpdateSettings]);
 
   // Filter & Group Sessions
   const filteredSessions = useMemo(() => {
@@ -929,8 +1076,8 @@ export default function App() {
   }, [filteredSessions, userSettings.groupByDate]);
 
   return (
-    <div className={`flex h-[100dvh] font-sans overflow-hidden relative transition-colors duration-200 ${
-      theme === 'dark' ? 'bg-[#0b0b0d] text-neutral-100' : 'bg-white text-neutral-900'
+    <div className={`flex h-[100dvh] font-sans overflow-hidden relative transition-colors duration-150 ${
+      theme === 'dark' ? 'bg-[#0D0D0D] text-white' : 'bg-white text-neutral-900'
     }`}>
       {/* Mobile Overlay */}
       {isSidebarOpen && (
@@ -941,494 +1088,148 @@ export default function App() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed md:relative top-0 left-0 h-full flex-col z-40 flex-shrink-0 transform transition-all duration-[220ms] ease-out border-r ${
-        theme === 'dark'
-          ? 'bg-[#171717] border-[#2A2A2A] text-neutral-100'
-          : 'bg-[#f7f7f8] border-neutral-200 text-neutral-900'
-      } ${
-        isSidebarOpen ? 'translate-x-0 w-[300px]' : '-translate-x-full md:translate-x-0'
-      } ${
-        isSidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden md:border-r-0' : 'md:w-[300px] md:opacity-100'
-      } flex`}>
-        
-        {/* Sidebar Header & Nova conversa */}
-        <div className="p-3.5 space-y-3">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleNewChat}
-              className={`flex items-center gap-3 px-3.5 h-[52px] rounded-2xl transition-all duration-150 w-full text-left text-sm font-medium group ${
-                theme === 'dark'
-                  ? 'bg-[#232323] hover:bg-[#2C2C2C] text-neutral-100 border border-[#303030]'
-                  : 'bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-200 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center justify-center flex-shrink-0">
-                <ZenoLogo size={20} variant={logoVariant} theme={theme} />
-              </div>
-              <span className="flex-1 font-medium truncate">Nova conversa</span>
-              <span className="text-xs text-neutral-500 font-mono hidden sm:inline">⌘K</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setIsSidebarOpen(false);
-                setIsSidebarCollapsed(true);
-              }}
-              className="p-2.5 rounded-xl text-neutral-400 hover:text-white hover:bg-[#232323] transition-colors flex-shrink-0"
-              title="Fechar barra lateral"
-            >
-              <PanelLeftClose className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Search Input */}
-          <div className={`flex items-center gap-2.5 px-3.5 h-[44px] rounded-xl text-sm border transition-all duration-150 ${
-            theme === 'dark' 
-              ? 'bg-[#202020] border-[#2E2E2E] text-neutral-200 focus-within:border-[#3B82F6] focus-within:shadow-sm' 
-              : 'bg-white border-neutral-200 text-neutral-800 focus-within:border-neutral-400 focus-within:shadow-2xs'
-          }`}>
-            <Search className="w-5 h-5 text-[#9CA3AF] flex-shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar conversas..."
-              className="bg-transparent border-none focus:outline-none w-full text-sm placeholder-[#9CA3AF] font-normal"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="p-1 hover:text-white transition-colors">
-                <X className="w-4 h-4 text-neutral-400" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Sessions Group List */}
-        <div className="flex-1 overflow-y-auto px-3 py-1 space-y-4 scrollbar-custom">
-          {groupedSessions.length === 0 ? (
-            <div className="text-center py-8 px-4 text-sm text-[#9CA3AF]">
-              Nenhuma conversa encontrada.
-            </div>
-          ) : (
-            groupedSessions.map(group => (
-              <div key={group.label || 'all'} className="space-y-1">
-                {group.label && (
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF] px-3 py-1.5">
-                    {group.label}
-                  </div>
-                )}
-                {group.sessions.map(session => {
-                  const isActive = session.id === currentSessionId;
-                  const isEditing = editingSessionId === session.id;
-
-                  return (
-                    <div
-                      key={session.id}
-                      onClick={() => handleSelectSession(session.id)}
-                      className={`group relative flex items-center gap-3 px-3 h-[46px] rounded-xl text-sm transition-all duration-150 cursor-pointer ${
-                        isActive
-                          ? theme === 'dark'
-                            ? 'bg-[#2A2A2A] text-white font-medium'
-                            : 'bg-white text-neutral-900 font-medium border border-neutral-200 shadow-2xs'
-                          : theme === 'dark'
-                            ? 'text-neutral-300 hover:text-white hover:bg-[#232323]'
-                            : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-200/60'
-                      }`}
-                    >
-                      <MessageSquare className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-[#9CA3AF] group-hover:text-white'}`} />
-                      
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveRenameSession(session.id);
-                            if (e.key === 'Escape') setEditingSessionId(null);
-                          }}
-                          onBlur={() => saveRenameSession(session.id)}
-                          autoFocus
-                          onClick={(e) => e.stopPropagation()}
-                          className={`w-full bg-transparent border-b border-neutral-500 focus:outline-none text-sm px-1 py-0.5 ${
-                            theme === 'dark' ? 'text-white' : 'text-black'
-                          }`}
-                        />
-                      ) : (
-                        <span className="truncate flex-1 text-sm font-normal">
-                          {session.title}
-                        </span>
-                      )}
-
-                      {/* Quick Action Icons */}
-                      {!isEditing && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => togglePinSession(session.id, e)}
-                            className={`p-1.5 rounded-lg ${session.isPinned ? 'text-amber-400' : 'text-neutral-400 hover:text-white hover:bg-[#333333]'}`}
-                            title={session.isPinned ? "Desfixar" : "Fixar no topo"}
-                          >
-                            <Pin className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => startRenameSession(session, e)}
-                            className="p-1.5 hover:bg-[#333333] rounded-lg text-neutral-400 hover:text-white"
-                            title="Renomear"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => handleExportSession(session, e)}
-                            className="p-1.5 hover:bg-[#333333] rounded-lg text-neutral-400 hover:text-white"
-                            title="Exportar Markdown"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingSessionId(session.id);
-                            }}
-                            className="p-1.5 hover:bg-rose-500/20 rounded-lg text-neutral-400 hover:text-rose-400"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className={`p-3 space-y-1 border-t ${theme === 'dark' ? 'border-[#2A2A2A] bg-[#171717]' : 'border-neutral-200 bg-[#f7f7f8]'}`}>
-          <button 
-            onClick={() => setIsSettingsOpen(true)} 
-            className={`flex items-center gap-3 px-3 h-[42px] rounded-xl transition-colors duration-150 w-full text-left text-sm font-normal ${
-              theme === 'dark' ? 'hover:bg-[#232323] text-neutral-200 hover:text-white' : 'hover:bg-white text-neutral-700'
-            }`}
-          >
-            <Settings className="w-5 h-5 text-[#9CA3AF]" />
-            <span>Configurações</span>
-          </button>
-
-          <button 
-            onClick={() => setIsSettingsOpen(true)} 
-            className={`flex items-center gap-3 px-3 h-[42px] rounded-xl transition-colors duration-150 w-full text-left text-sm font-normal ${
-              theme === 'dark' ? 'hover:bg-[#232323] text-neutral-200 hover:text-white' : 'hover:bg-white text-neutral-700'
-            }`}
-          >
-            <HelpCircle className="w-5 h-5 text-[#9CA3AF]" />
-            <span>Ajuda e Suporte</span>
-          </button>
-
-          <button 
-            onClick={() => handleOpenSubscriptionModal()} 
-            className={`flex items-center justify-between px-3 h-[42px] rounded-xl transition-colors duration-150 w-full text-left text-sm font-normal ${
-              theme === 'dark' ? 'hover:bg-[#232323] text-neutral-200 hover:text-white' : 'hover:bg-white text-neutral-700'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-5 h-5 text-amber-400" />
-              <span>Atualizações / Pro</span>
-            </div>
-            <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">
-              {userSettings.plan === 'ZENO Pro' ? 'Ativo' : 'Upgrade'}
-            </span>
-          </button>
-          
-          <div className="flex items-center justify-between px-3 pt-2 text-xs text-[#9CA3AF] font-normal">
-            <div className="flex items-center gap-2 truncate">
-              <ZenoLogo size={18} variant={logoVariant} theme={theme} />
-              <span className="truncate font-medium text-xs text-neutral-400">ZENO v3.6.0</span>
-            </div>
-            <span className="text-[11px] text-neutral-500 font-normal">Zeno Inc.</span>
-          </div>
-        </div>
-      </aside>
+      <SidebarNav
+        theme={theme}
+        logoVariant={logoVariant}
+        isSidebarOpen={isSidebarOpen}
+        isSidebarCollapsed={isSidebarCollapsed}
+        isSearchVisible={isSearchVisible}
+        searchQuery={searchQuery}
+        groupedSessions={groupedSessions}
+        currentSessionId={currentSessionId}
+        editingSessionId={editingSessionId}
+        editingTitle={editingTitle}
+        userSettings={userSettings}
+        onCloseSidebar={handleCloseSidebar}
+        onNewChat={handleNewChat}
+        onToggleSearchVisible={handleToggleSearchVisible}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenImageLibrary={() => setIsImageLibraryOpen(true)}
+        onOpenProjects={() => setIsProjectsOpen(true)}
+        onOpenPlugins={() => setIsPluginsOpen(true)}
+        onOpenMore={() => setIsMoreOpen(true)}
+        onSearchQueryChange={setSearchQuery}
+        onSelectSession={handleSelectSession}
+        onSetEditingTitle={setEditingTitle}
+        onSetEditingSessionId={setEditingSessionId}
+        onSaveRenameSession={saveRenameSession}
+        onTogglePinSession={togglePinSession}
+        onStartRenameSession={startRenameSession}
+        onSetDeletingSessionId={setDeletingSessionId}
+        onOpenSubscriptionModal={handleOpenSubscriptionModal}
+        user={profile}
+        session={session}
+        onSwitchAccount={switchAccount}
+      />
 
       {/* Main Container */}
-      <main className="flex-1 flex flex-col min-w-0 relative h-full">
+      <main className={`flex-1 flex flex-col min-w-0 relative h-full transition-colors duration-150 ${
+        theme === 'dark' ? 'bg-[#0D0D0D]' : 'bg-[#F9F9FA]'
+      }`}>
         {/* Top Header */}
-        <header className={`h-12 flex items-center justify-between px-3 sm:px-4 border-b flex-shrink-0 z-20 ${
-          theme === 'dark' 
-            ? 'bg-[#0b0b0d]/90 border-neutral-800/60 backdrop-blur-md text-neutral-200' 
-            : 'bg-white/90 border-neutral-200 backdrop-blur-md text-neutral-800'
-        }`}>
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button 
-              className={`p-1.5 hover:bg-neutral-800/20 rounded-lg transition-colors ${
-                isSidebarCollapsed ? 'block' : 'md:hidden'
-              }`}
-              onClick={() => {
-                if (window.innerWidth < 768) setIsSidebarOpen(true);
-                else setIsSidebarCollapsed(false);
-              }}
-              title="Abrir barra lateral"
-            >
-              <PanelLeftOpen className="w-4.5 h-4.5 text-neutral-400" />
-            </button>
-
-            {/* Header Title / Brand Indicator */}
-            <div className="flex items-center gap-2">
-              <ZenoLogo size={20} variant={logoVariant} theme={theme} />
-              <span className="font-extrabold text-xs sm:text-sm tracking-tight">ZENO</span>
-              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-neutral-800/60 text-neutral-400 border border-neutral-800 hidden sm:inline-block">
-                Zeno Inc.
-              </span>
-            </div>
-          </div>
-
-          {/* Right Header Controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* ZENO Pro Badge Button */}
-            <button
-              onClick={() => handleOpenSubscriptionModal()}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                userSettings.plan === 'ZENO Pro'
-                  ? 'bg-neutral-800 text-neutral-200 border border-neutral-700 hover:bg-neutral-700'
-                  : 'bg-neutral-100 text-neutral-950 hover:bg-white border border-neutral-300 font-extrabold'
-              }`}
-            >
-              <Sparkles className="w-3 h-3 text-neutral-400" />
-              <span>{userSettings.plan === 'ZENO Pro' ? 'ZENO Pro' : 'Upgrade Pro'}</span>
-            </button>
-
-            <button
-              onClick={() => handleUpdateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
-              className={`p-1.5 rounded-lg transition-colors ${
-                theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-600 hover:text-black'
-              }`}
-              title="Alternar Tema Claro/Escuro"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-neutral-300" /> : <Moon className="w-4 h-4 text-neutral-700" />}
-            </button>
-
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={`p-1.5 rounded-lg transition-colors ${
-                theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-600 hover:text-black'
-              }`}
-              title="Configurações"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={handleNewChat}
-              className={`p-1.5 rounded-lg transition-colors ${
-                theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-600 hover:text-black'
-              }`}
-              title="Nova conversa"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
+        <AppHeader
+          theme={theme}
+          logoVariant={logoVariant}
+          userSettings={userSettings}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onOpenSidebar={handleOpenSidebar}
+          onOpenSubscriptionModal={handleOpenSubscriptionModal}
+          onToggleTheme={handleToggleTheme}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onNewChat={handleNewChat}
+          user={profile}
+        />
 
         {/* Main Conversation Feed */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-custom">
           <div className="flex flex-col items-center min-h-full pb-36 pt-4">
             
+            {/* Limit Reached Screen */}
+            {limitReachedScreen && (
+              <LimitReachedScreen 
+                actionType={limitReachedScreen} 
+                onUpgrade={() => { setLimitReachedScreen(null); handleOpenSubscriptionModal('Faça upgrade para o ZENO Pro para utilizar sem limites.'); }} 
+                onBack={() => setLimitReachedScreen(null)} 
+              />
+            )}
+            
+            {/* Warning Banner */}
+            {userSettings.plan === 'ZENO Free' && backendLimits && adminConfig && (
+              (() => {
+                const limit = adminConfig.messages;
+                const used = backendLimits.messages;
+                const remaining = Math.max(0, limit - used);
+                if (remaining <= 10 && remaining > 0) {
+                  return (
+                    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mb-2">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm py-2.5 px-4 rounded-xl flex items-center justify-between border border-amber-200 dark:border-amber-800/50">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium">Restam apenas {remaining} mensage{remaining === 1 ? 'm' : 'ns'} hoje.</span>
+                          <span className="hidden sm:inline opacity-80">Faça upgrade para o ZENO Pro para continuar sem interrupções.</span>
+                        </div>
+                        <button onClick={() => handleOpenSubscriptionModal()} className="font-semibold underline underline-offset-2 hover:opacity-80">
+                          Upgrade
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
+
+            {/* Plan Usage Card */}
+            {!limitReachedScreen && showUsageCard && userSettings.plan === 'ZENO Free' && (messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
+              <div className="w-full max-w-4xl px-4 sm:px-6 flex flex-col pt-4">
+                <PlanUsageCard 
+                  plan={userSettings.plan} 
+                  limits={adminConfig} 
+                  usage={backendLimits} 
+                  onClose={() => setShowUsageCard(false)} 
+                  onUpgrade={() => handleOpenSubscriptionModal()} 
+                />
+              </div>
+            )}
+            
             {/* Home / Welcome Screen if no user messages */}
-            {(messages.length === 0 || (messages.length === 1 && messages[0].id === 'welcome')) && (
-              <WelcomeScreen
+            {!limitReachedScreen && (messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
+        <WelcomeScreen
                 theme={theme}
                 logoVariant={logoVariant}
                 userName={userSettings.userName}
                 onSelectPrompt={(prompt) => handleSubmit(undefined, prompt)}
                 onOpenImageStudio={() => setIsImageStudioOpen(true)}
                 onSelectSpeed={handleSelectSpeed}
+                user={profile}
+                onLogin={(remember) => signInWithGoogle(remember)}
+                authLoading={authLoading}
               />
             )}
 
             {/* Conversation Messages Container - Max Width 4xl for comfortable line lengths */}
-            {messages.filter(msg => !(msg.id === 'welcome' && messages.length === 1)).length > 0 && (
-              <div className="w-full max-w-4xl px-4 sm:px-6 flex flex-col space-y-8">
-                {messages.filter(msg => !(msg.id === 'welcome' && messages.length === 1)).map((msg) => (
-                  <div key={msg.id} className={`group flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'user' ? (
-                      <div className="flex flex-col items-end max-w-[88%] sm:max-w-[82%]">
-                        {editingMessageId === msg.id ? (
-                          <div className={`w-full p-3 rounded-2xl border flex flex-col gap-2.5 ${
-                            theme === 'dark' ? 'bg-[#18181c] border-neutral-700' : 'bg-white border-neutral-300 shadow-md'
-                          }`}>
-                            <textarea
-                              value={editingMessageText}
-                              onChange={(e) => setEditingMessageText(e.target.value)}
-                              rows={3}
-                              className={`w-full bg-transparent border-none focus:outline-none resize-none text-[15px] leading-relaxed ${
-                                theme === 'dark' ? 'text-white' : 'text-neutral-900'
-                              }`}
-                              autoFocus
-                            />
-                            <div className="flex justify-end gap-2 pt-1 border-t border-neutral-700/30">
-                              <button
-                                onClick={() => {
-                                  setEditingMessageId(null);
-                                  setEditingMessageText('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-400 hover:text-neutral-200"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                onClick={() => handleSaveEditMessage(msg.id)}
-                                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-neutral-200 hover:bg-white text-neutral-900 shadow-xs"
-                              >
-                                Salvar e Enviar
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className={`px-4 sm:px-5 py-3 rounded-2xl rounded-tr-xs text-[15px] leading-relaxed break-words shadow-2xs ${
-                              theme === 'dark'
-                                ? 'bg-[#1e1e24] text-neutral-100 border border-neutral-800'
-                                : 'bg-[#f2f2f5] text-neutral-900 border border-neutral-200'
-                            }`}>
-                              {msg.text}
-                            </div>
-                            <div className="mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingMessageId(msg.id);
-                                  setEditingMessageText(msg.text);
-                                }}
-                                className="p-1 hover:bg-neutral-800/40 rounded-md text-neutral-500 hover:text-neutral-300 text-xs"
-                                title="Editar mensagem"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => copyToClipboard(msg.id, msg.text)}
-                                className="p-1 hover:bg-neutral-800/40 rounded-md text-neutral-500 hover:text-neutral-300 text-xs"
-                                title="Copiar mensagem"
-                              >
-                                {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex gap-3 sm:gap-4 w-full max-w-4xl">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <ZenoLogo size={28} variant={logoVariant} theme={theme} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className={`text-xs font-bold ${
-                              theme === 'dark' ? 'text-neutral-200' : 'text-neutral-800'
-                            }`}>
-                              {(msg.modelSpeed || speed) === 'image' ? 'ZENO Vision' :
-                               (msg.modelSpeed || speed) === 'mega' ? 'ZENO Mega Sábio' :
-                               (msg.modelSpeed || speed) === 'fast' ? 'ZENO Rápido' :
-                               'ZENO Inteligente'}
-                            </span>
-                          </div>
-
-                          {/* Error Banner or Streamed Text */}
-                          {msg.hasError ? (
-                            <ErrorBanner
-                              errorMessage={msg.errorMessage || msg.text}
-                              rawDetails={msg.rawErrorDetails}
-                              onRetry={handleRegenerate}
-                              theme={theme}
-                            />
-                          ) : (
-                            <div className={`markdown-body max-w-none text-[15px] sm:text-[16px] leading-[1.8] ${
-                              theme === 'dark' ? 'text-neutral-200' : 'text-neutral-800'
-                            }`}>
-                              {(!msg.text && isLoading && msg.role === 'model') ? (
-                                <div className="flex items-center gap-2 py-1 text-neutral-400 text-sm animate-pulse">
-                                  <Sparkles className="w-4 h-4 text-neutral-400" />
-                                  <span>ZENO está sintetizando a resposta...</span>
-                                </div>
-                              ) : (
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkGfm]}
-                                  components={markdownComponents}
-                                >
-                                  {msg.text}
-                                </ReactMarkdown>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Message Actions */}
-                          {msg.role === 'model' && msg.text && !msg.hasError && (
-                            <div className="mt-3 flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => copyToClipboard(msg.id, msg.text)}
-                                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                                  theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                                }`}
-                                title="Copiar resposta"
-                              >
-                                {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                              </button>
-
-                              <button
-                                onClick={() => toggleSpeech(msg.id, msg.text)}
-                                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                                  speakingMessageId === msg.id ? 'text-neutral-100 animate-pulse bg-neutral-800' : (
-                                    theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                                  )
-                                }`}
-                                title={speakingMessageId === msg.id ? "Parar áudio" : "Ouvir em Voz Alta"}
-                              >
-                                {speakingMessageId === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                              </button>
-
-                              <button
-                                onClick={() => setFeedback(prev => ({ ...prev, [msg.id]: 'up' }))}
-                                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                                  feedback[msg.id] === 'up' ? 'text-neutral-100 bg-neutral-800' : (
-                                    theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                                  )
-                                }`}
-                                title="Gostei"
-                              >
-                                <ThumbsUp className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                onClick={() => setFeedback(prev => ({ ...prev, [msg.id]: 'down' }))}
-                                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                                  feedback[msg.id] === 'down' ? 'text-rose-400 bg-rose-500/10' : (
-                                    theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                                  )
-                                }`}
-                                title="Não gostei"
-                              >
-                                <ThumbsDown className="w-3.5 h-3.5" />
-                              </button>
-
-                              {messages[messages.length - 1].id === msg.id && !isLoading && (
-                                <button
-                                  onClick={handleRegenerate}
-                                  className={`ml-1 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                                    theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                                  }`}
-                                  title="Regenerar resposta"
-                                >
-                                  <RefreshCw className="w-3 h-3" />
-                                  <span>Regenerar</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div ref={messagesEndRef} className="h-2" />
-              </div>
+            {!limitReachedScreen && (
+              <MessageList
+                messages={messages}
+                theme={theme}
+                logoVariant={logoVariant}
+                speed={speed}
+                isLoading={isLoading}
+                copiedId={copiedId}
+                speakingMessageId={speakingMessageId}
+                feedback={feedback}
+                editingMessageId={editingMessageId}
+                editingMessageText={editingMessageText}
+                markdownComponents={markdownComponents}
+                messagesEndRef={messagesEndRef}
+                onCopy={copyToClipboard}
+                onToggleSpeech={toggleSpeech}
+                onSetFeedback={handleSetFeedback}
+                onRegenerate={handleRegenerate}
+                onStartEditMessage={handleStartEditMessage}
+                onCancelEditMessage={handleCancelEditMessage}
+                onSaveEditMessage={handleSaveEditMessage}
+                onEditingTextChange={setEditingMessageText}
+              />
             )}
           </div>
         </div>
@@ -1496,7 +1297,7 @@ export default function App() {
       />
 
       {/* Tabbed Settings Modal */}
-      <SettingsModal
+      <SettingsModal backendLimits={backendLimits} adminConfig={adminConfig}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={userSettings}
@@ -1504,6 +1305,12 @@ export default function App() {
         onClearHistory={handleClearAllHistory}
         onExportAllData={handleExportAllData}
         onOpenSubscriptionModal={() => handleOpenSubscriptionModal()}
+        user={profile}
+        session={session}
+        onLogout={logout}
+        onLogin={(remember) => signInWithGoogle(remember)}
+        onSwitchAccount={switchAccount}
+        authLoading={authLoading}
       />
 
       {/* Image Generation Studio Modal */}
@@ -1511,9 +1318,52 @@ export default function App() {
         isOpen={isImageStudioOpen}
         onClose={() => setIsImageStudioOpen(false)}
         theme={theme}
+        userEmail={userSettings.userEmail}
+        userId={userId}
+        plan={userSettings.plan}
         onSendToChat={(imageUrl, promptText) => {
           handleSubmit(undefined, `Criei esta imagem com o ZENO Vision:\n\n![${promptText}](${imageUrl})`);
         }}
+      />
+
+      {/* ZENO Image Library Modal */}
+      <ImageLibraryModal
+        isOpen={isImageLibraryOpen}
+        onClose={() => setIsImageLibraryOpen(false)}
+        userPlan={userSettings.plan}
+        theme={theme}
+        onOpenConversation={(sessionId) => {
+          if (sessions.some(s => s.id === sessionId)) {
+            setCurrentSessionId(sessionId);
+          }
+        }}
+        onOpenStudioWithPrompt={(prompt) => {
+          setIsImageStudioOpen(true);
+        }}
+        onUpgradeClick={() => {
+          setIsImageLibraryOpen(false);
+          handleOpenSubscriptionModal('Faça upgrade para o Plano Pro para ter armazenamento de imagens ilimitado.');
+        }}
+      />
+
+      {/* Projects Modal */}
+      <ProjectsModal
+        isOpen={isProjectsOpen}
+        onClose={() => setIsProjectsOpen(false)}
+      />
+
+      {/* Plugins Modal */}
+      <PluginsModal
+        isOpen={isPluginsOpen}
+        onClose={() => setIsPluginsOpen(false)}
+      />
+
+      {/* More Modal */}
+      <MoreModal
+        isOpen={isMoreOpen}
+        onClose={() => setIsMoreOpen(false)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSubscription={() => handleOpenSubscriptionModal()}
       />
     </div>
   );

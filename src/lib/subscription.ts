@@ -1,4 +1,5 @@
 import { UserPlan, DailyUsage, ModelType } from '../types';
+import { ZENO_MODELS_CONFIG, getModelConfig } from './models';
 
 export interface ModelDef {
   id: ModelType;
@@ -9,40 +10,16 @@ export interface ModelDef {
   category: 'general' | 'think' | 'search' | 'vision';
 }
 
-export const ZENO_MODELS: ModelDef[] = [
-  {
-    id: 'zeno',
-    name: 'ZENO',
-    badge: 'Essencial',
-    description: 'Conversas gerais, escrita e tarefas do dia a dia.',
-    isPro: false,
-    category: 'general'
-  },
-  {
-    id: 'think',
-    name: 'ZENO Think',
-    badge: 'Raciocínio',
-    description: 'Raciocínio avançado, matemática, código e problemas complexos.',
-    isPro: true,
-    category: 'think'
-  },
-  {
-    id: 'search',
-    name: 'ZENO Search',
-    badge: 'Pesquisa Web',
-    description: 'Navegação na web em tempo real com síntese e análise de fontes.',
-    isPro: true,
-    category: 'search'
-  },
-  {
-    id: 'vision',
-    name: 'ZENO Vision',
-    badge: 'Visão & Artes',
-    description: 'Geração de imagens em alta resolução e análise de arquivos visuais.',
-    isPro: true,
-    category: 'vision'
-  }
-];
+export const ZENO_MODELS: ModelDef[] = Object.values(ZENO_MODELS_CONFIG)
+  .filter(m => ['zeno', 'think', 'search', 'vision', 'code', 'strategy', 'summary', 'pdf'].includes(m.id))
+  .map(m => ({
+    id: m.id,
+    name: m.name,
+    badge: m.badge,
+    description: m.description,
+    isPro: m.isPro,
+    category: m.category
+  }));
 
 export const FREE_LIMITS = {
   MESSAGES_PER_DAY: 15,
@@ -67,26 +44,37 @@ export function getInitialUsage(): DailyUsage {
 }
 
 export function normalizeModelId(model: ModelType | string): ModelType {
-  if (model === 'smart' || model === 'fast' || model === 'zeno') return 'zeno';
-  if (model === 'think') return 'think';
-  if (model === 'mega' || model === 'search') return 'search';
-  if (model === 'image' || model === 'vision') return 'vision';
+  const m = (model || 'zeno') as ModelType;
+  if (ZENO_MODELS_CONFIG[m]) return m;
+  if (m === 'smart' || m === 'fast') return 'zeno';
+  if (m === 'mega') return 'search';
+  if (m === 'image') return 'vision';
   return 'zeno';
 }
 
 export function isModelPro(model: ModelType | string): boolean {
   const norm = normalizeModelId(model);
-  const m = ZENO_MODELS.find(x => x.id === norm);
-  return m ? m.isPro : false;
+  const cfg = getModelConfig(norm);
+  return cfg ? (cfg.requiredPlan === 'pro' || cfg.isPro) : false;
 }
 
 export function getModelDef(model: ModelType | string): ModelDef {
   const norm = normalizeModelId(model);
-  return ZENO_MODELS.find(x => x.id === norm) || ZENO_MODELS[0];
+  const cfg = getModelConfig(norm);
+  return {
+    id: cfg.id,
+    name: cfg.name,
+    badge: cfg.badge,
+    description: cfg.description,
+    isPro: cfg.requiredPlan === 'pro' || cfg.isPro,
+    category: cfg.category
+  };
 }
 
 export function checkModelAccess(plan: UserPlan, model: ModelType | string): { allowed: boolean; needsPro: boolean } {
-  const isProRequired = isModelPro(model);
+  const norm = normalizeModelId(model);
+  const cfg = getModelConfig(norm);
+  const isProRequired = cfg ? (cfg.requiredPlan === 'pro' || cfg.isPro) : false;
   if (isProRequired && plan !== 'ZENO Pro') {
     return { allowed: false, needsPro: true };
   }

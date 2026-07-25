@@ -51,7 +51,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isDark = settings.theme === 'dark';
+  const systemTheme = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const resolvedTheme = settings.theme === 'auto' ? systemTheme : settings.theme;
+  const isDark = resolvedTheme === 'dark';
   const isPro = settings.plan === 'ZENO Pro';
 
   const handleCheckout = async (plan: 'monthly' | 'annual') => {
@@ -104,7 +106,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           isDark ? 'border-neutral-800/80 bg-[#17171c]' : 'border-neutral-200/80 bg-neutral-50/80'
         }`}>
           <div className="flex items-center gap-3">
-            <ZenoLogo size={24} variant={settings.logoVariant} theme={settings.theme} />
+            <ZenoLogo size={24} variant={settings.logoVariant} theme={resolvedTheme} />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-sm sm:text-base tracking-tight">ZENO Pro</span>
