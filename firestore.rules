@@ -2,8 +2,89 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Global Safety Net: Deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDataOwner() {
+      return isSignedIn() && (
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.userId == request.auth.uid)
+      );
+    }
+
+    // User Profile & Settings Documents
     match /users/{userId} {
-      allow read, write: if true; // Migration to GIS: Access control managed at application level
+      allow read, write, create, update, delete: if isOwner(userId);
+    }
+
+    match /settings/{userId} {
+      allow read, write, create, update, delete: if isOwner(userId);
+    }
+
+    match /subscriptions/{userId} {
+      allow read, write, create, update, delete: if isOwner(userId);
+    }
+
+    // User-specific Chats / Conversations
+    match /chats/{chatId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /sessions/{sessionId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // User-specific Generated Images Library
+    match /images/{imageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // User Long-term AI Memory Store
+    match /memory/{memoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Payment Methods & Subscription Logs (Isolated per User)
+    match /payment_methods/{methodId} {
+      allow read, write: if isSignedIn() && (
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.userId == request.auth.uid)
+      );
+    }
+
+    match /notification_history/{notifId} {
+      allow read, write: if isSignedIn() && (
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.userId == request.auth.uid)
+      );
+    }
+
+    // Read-only system configs
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.token.admin == true;
+    }
+
+    match /stats/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.token.admin == true;
     }
   }
 }
+
+

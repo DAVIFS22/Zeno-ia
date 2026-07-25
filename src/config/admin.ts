@@ -31,6 +31,7 @@ export interface ServerSettings {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   requestTimeoutMs: number;
   enableVectorMemory: boolean;
+  enforceImageQueue?: boolean;
 }
 
 export interface ModelConfigSetting {
@@ -144,4 +145,16 @@ export function getUserRole(email?: string | null): UserRole {
  */
 export function isAdminUser(email?: string | null): boolean {
   return getUserRole(email) === 'admin';
+}
+
+/**
+ * Middleware-like helper to verify admin role in API routes
+ */
+export function verifyAdminRole(req: any, res: any): boolean {
+  const userEmail = (req.body?.userEmail || req.headers['x-user-email'] || '') as string;
+  if (!isAdminUser(userEmail)) {
+    res.status(403).json({ error: "Acesso negado. Requer privilégios de administrador." });
+    return false;
+  }
+  return true;
 }

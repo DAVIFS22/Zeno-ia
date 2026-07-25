@@ -15,6 +15,7 @@ export interface ModelCapabilities {
 export interface ModelConfig {
   id: ModelType;
   name: string;
+  apiModel: string;
   badge?: string;
   description: string;
   category: 'general' | 'think' | 'search' | 'vision';
@@ -43,6 +44,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   zeno: {
     id: 'zeno',
     name: 'ZENO',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Essencial',
     description: 'Especialista em conversas gerais, escrita, explicações, traduções e tarefas do dia a dia.',
     category: 'general',
@@ -79,6 +81,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   think: {
     id: 'think',
     name: 'ZENO Pense',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Raciocínio',
     description: 'Especialista em raciocínio profundo, matemática, física, lógica e problemas complexos.',
     category: 'think',
@@ -115,6 +118,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   search: {
     id: 'search',
     name: 'Busca ZENO',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Pesquisa Web',
     description: 'Especialista em pesquisa em tempo real, grounding web, notícias, citações e fontes.',
     category: 'search',
@@ -151,6 +155,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   vision: {
     id: 'vision',
     name: 'Estúdio ZENO Vision',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Visão & Artes',
     description: 'Especialista em IA visual, geração direta de imagens, edição, variações, OCR e análise visual.',
     category: 'vision',
@@ -187,6 +192,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   code: {
     id: 'code',
     name: 'ZENO Código',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Programação',
     description: 'Especialista em React, Next, TypeScript, Python, Node, SQL, Flutter, Java, C#, HTML, CSS e arquitetura.',
     category: 'think',
@@ -223,6 +229,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   pdf: {
     id: 'pdf',
     name: 'PDF',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Análise Documental',
     description: 'Especialista em leitura, interpretação, resumo e extração de tabelas de documentos PDF.',
     category: 'search',
@@ -259,6 +266,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   strategy: {
     id: 'strategy',
     name: 'Plano Estratégico',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Planejamento',
     description: 'Especialista em planejamento de negócios, marketing, roadmaps, produtos e cronogramas executivos.',
     category: 'general',
@@ -295,6 +303,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   summary: {
     id: 'summary',
     name: 'Resumo Executivo',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Síntese',
     description: 'Especialista em síntese profissional, relatórios executivos, resumos de alto impacto e documentos.',
     category: 'general',
@@ -331,6 +340,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   smart: {
     id: 'smart',
     name: 'ZENO Smart',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Autônomo',
     description: 'Roteamento inteligente automático para o melhor modelo conforme a tarefa.',
     category: 'general',
@@ -367,6 +377,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   fast: {
     id: 'fast',
     name: 'ZENO Fast',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Velocidade',
     description: 'Respostas instantâneas de alta velocidade para conversas rápidas.',
     category: 'general',
@@ -403,6 +414,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   mega: {
     id: 'mega',
     name: 'ZENO Mega',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Avançado',
     description: 'Potência máxima analítica e criativa.',
     category: 'think',
@@ -439,6 +451,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   image: {
     id: 'image',
     name: 'Gerador de Imagens',
+    apiModel: 'gemini-3.6-flash',
     badge: 'Visual',
     description: 'Criação especializada de imagens por IA.',
     category: 'vision',

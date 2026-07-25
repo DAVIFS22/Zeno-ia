@@ -19,6 +19,7 @@ export type Message = {
   hasError?: boolean;
   errorMessage?: string;
   rawErrorDetails?: string;
+  isLimitWarning?: boolean;
 };
 
 export type ChatSession = {
@@ -80,14 +81,35 @@ export interface MultiAccountSession {
   activeUid: string | null;
 }
 
+export type BillingHistoryItem = {
+  id: string;
+  date: number; // timestamp
+  amount: number;
+  currency: string;
+  status: 'succeeded' | 'failed' | 'pending';
+  description: string;
+  invoiceUrl?: string;
+};
+
+export type PaymentMethodInfo = {
+  brand: string; // e.g. 'visa', 'mastercard', 'stripe'
+  last4: string;
+  expMonth?: number;
+  expYear?: number;
+};
+
 export type StripeSubscriptionInfo = {
   subscriptionId: string;
-  status: string; // 'trialing', 'active', 'canceled'
+  status: string; // 'trialing', 'active', 'canceled', 'past_due', 'unpaid'
   trialEnd: number | null;
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: number;
   amount: number;
   currency: string;
+  paymentMethod?: PaymentMethodInfo;
+  billingHistory?: BillingHistoryItem[];
+  remindersSent?: Record<string, number>;
+  lastRenewalStatus?: 'success' | 'failed' | 'pending';
 };
 
 export type DailyUsage = {

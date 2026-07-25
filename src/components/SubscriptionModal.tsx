@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Check, Lock, Shield, CheckCircle2, Star, Sparkles, Loader2 } from 'lucide-react';
 import { UserSettings } from '../types';
 import { ZenoLogo } from './ZenoLogo';
+import { getOrCreateUserId } from '../lib/userId';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -19,35 +20,33 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   reasonMessage
 }) => {
   const [isLoading, setIsLoading] = useState<'monthly' | 'annual' | null>(null);
+  const [backendSubDetails, setBackendSubDetails] = useState<any>(null);
 
-  React.useEffect(() => {
-    if (isOpen && settings.stripeSubscription?.subscriptionId) {
-      // Sync subscription status with Stripe whenever the modal opens
-      fetch(`/api/subscription/retrieve?subscription_id=${settings.stripeSubscription.subscriptionId}`)
-        .then(res => res.json())
+  useEffect(() => {
+    if (isOpen) {
+      const userId = getOrCreateUserId();
+      fetch(`/api/subscription/details?userId=${userId}`)
+        .then(res => {
+          if (!res.ok) return null;
+          return res.json();
+        })
         .then(data => {
-          if (data.subscriptionId) {
-            onUpdateSettings({
-              stripeSubscription: {
-                ...settings.stripeSubscription!,
-                status: data.status,
-                trialEnd: data.trialEnd,
-                cancelAtPeriodEnd: data.cancelAtPeriodEnd,
-                currentPeriodEnd: data.currentPeriodEnd,
-              }
-            });
-            // If trial expired and canceled, downgrade plan
-            if (data.status === 'canceled' || data.status === 'past_due' || data.status === 'unpaid') {
+          if (data) {
+            setBackendSubDetails(data);
+            if (data.isPro) {
               onUpdateSettings({
-                plan: 'ZENO Free',
-                stripeSubscription: undefined
+                plan: data.subscriptionPlan === 'Anual' ? 'ZENO Pro' : 'ZENO Pro',
               });
             }
           }
         })
-        .catch(err => console.error("Error syncing subscription", err));
+        .catch(err => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn("Could not fetch subscription details:", err?.message || err);
+          }
+        });
     }
-  }, [isOpen, settings.stripeSubscription?.subscriptionId]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -195,29 +194,25 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                       </div>
                     )}
                     
-                    {settings.stripeSubscription?.status === 'active' && settings.stripeSubscription.currentPeriodEnd && (
+                    {backendSubDetails?.renewDate && (
                       <div className="text-neutral-400">
-                        Data de expiração: <strong className="text-neutral-200">
-                          {new Date(settings.stripeSubscription.currentPeriodEnd * 1000).toLocaleDateString('pt-BR')}
-                        </strong>
-                      </div>
-                    )}
-
-                    {!settings.stripeSubscription?.cancelAtPeriodEnd && (
-                      <div className="text-neutral-400">
-                        {settings.stripeSubscription?.status === 'trialing' ? 'Primeira cobrança' : 'Próxima cobrança'}: <strong className="text-neutral-200">
-                          {settings.stripeSubscription?.currentPeriodEnd
-                            ? new Date(settings.stripeSubscription.currentPeriodEnd * 1000).toLocaleDateString('pt-BR')
-                            : settings.subscriptionRenewalDate || '23/08/2026'}
-                          {' — '}
-                          {settings.stripeSubscription?.amount ? (settings.stripeSubscription.amount / 100).toLocaleString('pt-BR', { style: 'currency', currency: settings.stripeSubscription.currency?.toUpperCase() || 'BRL' }) : 'R$ 0,00'}
+                        Próxima renovação: <strong className="text-neutral-200">
+                          {new Date(backendSubDetails.renewDate).toLocaleDateString('pt-BR')} ({Math.max(0, Math.ceil((new Date(backendSubDetails.renewDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} dias restantes)
                         </strong>
                       </div>
                     )}
                     
+                    {backendSubDetails?.expirationDate && (
+                      <div className="text-neutral-400">
+                        Data de expiração: <strong className="text-neutral-200">
+                          {new Date(backendSubDetails.expirationDate).toLocaleDateString('pt-BR')}
+                        </strong>
+                      </div>
+                    )}
+
                     <div className="text-neutral-400">
-                      Renovação automática: <strong className={settings.stripeSubscription?.cancelAtPeriodEnd ? "text-amber-400" : "text-emerald-400"}>
-                        {settings.stripeSubscription?.cancelAtPeriodEnd ? 'Cancelada' : 'Ativada'}
+                      Renovação automática: <strong className={backendSubDetails?.autoRenew === false ? "text-amber-400" : "text-emerald-400"}>
+                        {backendSubDetails?.autoRenew === false ? 'Cancelada' : 'Ativada'}
                       </strong>
                     </div>
                   </div>

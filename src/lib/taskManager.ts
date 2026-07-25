@@ -16,9 +16,9 @@ export function registerImageGenerator(callback: (options: any) => Promise<any>)
  * Calculates the dynamic average wait time of completed tasks in seconds.
  * Defaults to 10 seconds if no history exists.
  */
-export function getAverageWaitTimeSeconds(): number {
+export async function getAverageWaitTimeSeconds(): Promise<number> {
   try {
-    const db = readDb();
+    const db = await readDb();
     const tasks = Object.values(db.tasks || {});
     
     // Filter last 10 completed tasks
@@ -76,13 +76,13 @@ export async function createQueuedTask(options: {
   };
 
   // Save to persistent db.json
-  const db = readDb();
+  const db = await readDb();
   if (!db.tasks) db.tasks = {};
   db.tasks[taskId] = task;
-  writeDb(db);
+  await writeDb(db);
 
   console.log(`[TASK MANAGER] Tarefa persistida no banco: ${taskId} (${options.plan})`);
-  addSystemLog('ia', options.userEmail, 'Enfileiramento de Tarefa', `Tarefa ${taskId} adicionada com plano ${options.plan}`, options.req);
+  await addSystemLog('ia', options.userEmail, 'Enfileiramento de Tarefa', `Tarefa ${taskId} adicionada com plano ${options.plan}`, options.req);
 
   return task;
 }
@@ -90,15 +90,15 @@ export async function createQueuedTask(options: {
 /**
  * Retrieves the status of a specific task and computes queue metrics
  */
-export function getTaskStatusDetails(taskId: string): {
+export async function getTaskStatusDetails(taskId: string): Promise<{
   task: QueuedTask | null;
   position: number | null;
   estimatedTimeSeconds: number | null;
   averageWaitTimeSeconds: number;
-} {
-  const db = readDb();
+}> {
+  const db = await readDb();
   const task = db.tasks?.[taskId] || null;
-  const avgWait = getAverageWaitTimeSeconds();
+  const avgWait = await getAverageWaitTimeSeconds();
 
   if (!task) {
     return { task: null, position: null, estimatedTimeSeconds: null, averageWaitTimeSeconds: avgWait };
@@ -139,8 +139,8 @@ export function getTaskStatusDetails(taskId: string): {
 /**
  * Cancels a queued or processing task
  */
-export function cancelQueuedTask(taskId: string, userEmail: string, req?: any): boolean {
-  const db = readDb();
+export async function cancelQueuedTask(taskId: string, userEmail: string, req?: any): Promise<boolean> {
+  const db = await readDb();
   const task = db.tasks?.[taskId];
 
   if (!task) {
@@ -157,10 +157,10 @@ export function cancelQueuedTask(taskId: string, userEmail: string, req?: any): 
   task.status = 'cancelled';
   task.finishedAt = Date.now();
   db.tasks[taskId] = task;
-  writeDb(db);
+  await writeDb(db);
 
   console.log(`[TASK MANAGER] Tarefa ${taskId} cancelada pelo usuário de ${oldStatus}.`);
-  addSystemLog('info', userEmail, 'Cancelamento de Tarefa', `Tarefa ${taskId} cancelada de status: ${oldStatus}`, req);
+  await addSystemLog('info', userEmail, 'Cancelamento de Tarefa', `Tarefa ${taskId} cancelada de status: ${oldStatus}`, req);
   return true;
 }
 
@@ -168,7 +168,7 @@ export function cancelQueuedTask(taskId: string, userEmail: string, req?: any): 
  * Processes a task securely, invoking the image generator and updating states
  */
 export async function executeAndProcessTask(taskId: string, req?: any): Promise<any> {
-  const db = readDb();
+  const db = await readDb();
   const task = db.tasks?.[taskId];
 
   if (!task) {
@@ -190,7 +190,7 @@ export async function executeAndProcessTask(taskId: string, req?: any): Promise<
   task.status = 'processing';
   task.startedAt = Date.now();
   db.tasks[taskId] = task;
-  writeDb(db);
+  await writeDb(db);
 
   console.log(`[TASK MANAGER] Iniciando processamento da tarefa ${taskId}...`);
 
@@ -214,7 +214,7 @@ export async function executeAndProcessTask(taskId: string, req?: any): Promise<
     });
 
     // Mark completed
-    const reloadDb = readDb();
+    const reloadDb = await readDb();
     const currentTask = reloadDb.tasks?.[taskId] || task;
     
     if (currentTask.status === 'cancelled') {
@@ -226,15 +226,15 @@ export async function executeAndProcessTask(taskId: string, req?: any): Promise<
     currentTask.finishedAt = Date.now();
     currentTask.result = result;
     reloadDb.tasks[taskId] = currentTask;
-    writeDb(reloadDb);
+    await writeDb(reloadDb);
 
     console.log(`[TASK MANAGER] Tarefa ${taskId} concluída com sucesso.`);
-    addSystemLog('ia', task.userEmail, 'Tarefa Concluída', `Imagem gerada com sucesso para a tarefa ${taskId}`, req);
+    await addSystemLog('ia', task.userEmail, 'Tarefa Concluída', `Imagem gerada com sucesso para a tarefa ${taskId}`, req);
     return currentTask;
   } catch (err: any) {
     console.error(`[TASK MANAGER] Erro ao processar tarefa ${taskId}:`, err?.message || err);
     
-    const reloadDb = readDb();
+    const reloadDb = await readDb();
     const currentTask = reloadDb.tasks?.[taskId] || task;
 
     if (currentTask.status === 'cancelled') {
@@ -246,10 +246,10 @@ export async function executeAndProcessTask(taskId: string, req?: any): Promise<
       currentTask.retryCount += 1;
       currentTask.status = 'queued'; // Keep as queued so it can be re-run
       reloadDb.tasks[taskId] = currentTask;
-      writeDb(reloadDb);
+      await writeDb(reloadDb);
       
       console.log(`[TASK MANAGER] Agendando reprocessamento automático para a tarefa ${taskId}. Tentativa: ${currentTask.retryCount}/3`);
-      addSystemLog('error', task.userEmail, 'Erro de Processamento', `Erro na tarefa ${taskId}, reagendando tentativa ${currentTask.retryCount}: ${err?.message || err}`, req);
+      await addSystemLog('error', task.userEmail, 'Erro de Processamento', `Erro na tarefa ${taskId}, reagendando tentativa ${currentTask.retryCount}: ${err?.message || err}`, req);
       
       // Propagate error to let the scheduler or caller handle retry state
       throw err;
@@ -258,10 +258,10 @@ export async function executeAndProcessTask(taskId: string, req?: any): Promise<
       currentTask.finishedAt = Date.now();
       currentTask.error = err?.message || 'Erro desconhecido durante o processamento';
       reloadDb.tasks[taskId] = currentTask;
-      writeDb(reloadDb);
+      await writeDb(reloadDb);
 
       console.error(`[TASK MANAGER] Tarefa ${taskId} falhou definitivamente após reprocessamento.`);
-      addSystemLog('error', task.userEmail, 'Falha de Tarefa', `Tarefa ${taskId} falhou após limite de tentativas: ${err?.message || err}`, req);
+      await addSystemLog('error', task.userEmail, 'Falha de Tarefa', `Tarefa ${taskId} falhou após limite de tentativas: ${err?.message || err}`, req);
       return currentTask;
     }
   }
@@ -276,7 +276,7 @@ export function initFallbackQueueRunner() {
     isProcessingLocalQueue = true;
 
     try {
-      const db = readDb();
+      const db = await readDb();
       const allTasks = Object.values(db.tasks || {});
       
       // Find all queued tasks
@@ -320,7 +320,7 @@ export function initFallbackQueueRunner() {
 /**
  * Returns comprehensive system stats for task queues
  */
-export function getQueueDiagnosticStats(): {
+export async function getQueueDiagnosticStats(): Promise<{
   totalQueued: number;
   adminQueued: number;
   proQueued: number;
@@ -329,8 +329,8 @@ export function getQueueDiagnosticStats(): {
   totalFailed: number;
   totalCancelled: number;
   averageWaitTimeSeconds: number;
-} {
-  const db = readDb();
+}> {
+  const db = await readDb();
   const tasks = Object.values(db.tasks || {});
 
   const adminQueued = tasks.filter(t => t.status === 'queued' && t.plan === 'ADMIN').length;
@@ -345,6 +345,6 @@ export function getQueueDiagnosticStats(): {
     totalCompleted: tasks.filter(t => t.status === 'completed').length,
     totalFailed: tasks.filter(t => t.status === 'failed').length,
     totalCancelled: tasks.filter(t => t.status === 'cancelled').length,
-    averageWaitTimeSeconds: getAverageWaitTimeSeconds()
+    averageWaitTimeSeconds: await getAverageWaitTimeSeconds()
   };
 }

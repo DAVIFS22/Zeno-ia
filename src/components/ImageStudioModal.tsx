@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 import { GeneratedImage } from '../types';
-import { addImageToLibrary } from '../lib/imageLibraryStorage';
+import { addImageToLibrary, getStoredImages, saveStoredImages } from '../lib/imageLibraryStorage';
 
 interface ImageStudioModalProps {
   isOpen: boolean;
@@ -16,6 +16,8 @@ interface ImageStudioModalProps {
   userEmail?: string;
   userId?: string;
   plan?: 'ZENO Free' | 'ZENO Pro';
+  onOpenProFeatureModal?: () => void;
+  onLimitReached?: () => void;
 }
 
 const STYLES = [
@@ -54,7 +56,9 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   onSendToChat,
   userEmail,
   userId,
-  plan
+  plan,
+  onOpenProFeatureModal,
+  onLimitReached
 }) => {
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('photorealistic');
@@ -69,29 +73,26 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       try {
-        const saved = localStorage.getItem('zeno_image_library');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setHistory(parsed);
-          if (parsed.length > 0 && !currentImage) {
-            setCurrentImage(parsed[0]);
-          }
+        const stored = getStoredImages(userId);
+        setHistory(stored);
+        if (stored.length > 0 && !currentImage) {
+          setCurrentImage(stored[0]);
         }
       } catch (e) {
         console.error(e);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, userId]);
 
   useEffect(() => {
     if (history.length > 0) {
       try {
-        localStorage.setItem('zeno_image_library', JSON.stringify(history));
+        saveStoredImages(history, userId);
       } catch (e) {
         console.error(e);
       }
     }
-  }, [history]);
+  }, [history, userId]);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
@@ -210,6 +211,18 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
           plan
         }),
       });
+
+      if (res.status === 403 || res.status === 429) {
+        setIsGenerating(false);
+        onClose(); // Close studio
+        if (res.status === 429) {
+          if (onLimitReached) onLimitReached();
+        } else if (plan === 'ZENO Free') {
+          // Pro gate
+          if (onOpenProFeatureModal) onOpenProFeatureModal();
+        }
+        return;
+      }
 
       if (!res.ok) throw new Error('Erro na geração da imagem');
 

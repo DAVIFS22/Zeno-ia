@@ -1,4 +1,5 @@
-import { useGoogleAuth } from './useGoogleAuth';
+import { useMemo } from 'react';
+import { useFirebaseAuth } from './useFirebaseAuth';
 import { UserRole } from '../config/admin';
 
 export interface UserProfile {
@@ -21,9 +22,9 @@ export function useAuth() {
     logout, 
     switchAccount, 
     session 
-  } = useGoogleAuth();
+  } = useFirebaseAuth();
 
-  const profile: UserProfile | null = activeAccount ? {
+  const profile: UserProfile | null = useMemo(() => activeAccount ? {
     uid: activeAccount.uid,
     displayName: activeAccount.displayName,
     email: activeAccount.email,
@@ -31,18 +32,18 @@ export function useAuth() {
     role: activeAccount.role as UserRole,
     isAdmin: activeAccount.isAdmin,
     rememberDevice: true,
-  } : null;
+  } : null, [activeAccount]);
 
   // For compatibility with code expecting a Firebase User object
-  const user = activeAccount ? {
+  const user = useMemo(() => activeAccount ? {
     uid: activeAccount.uid,
     email: activeAccount.email,
     displayName: activeAccount.displayName,
     photoURL: activeAccount.photoURL,
     // Add other properties if needed by components
-  } : null;
+  } : null, [activeAccount]);
 
-  return { 
+  return useMemo(() => ({ 
     user, 
     profile, 
     loading, 
@@ -50,5 +51,5 @@ export function useAuth() {
     logout, 
     switchAccount, 
     session 
-  };
+  }), [user, profile, loading, login, logout, switchAccount, session]);
 }

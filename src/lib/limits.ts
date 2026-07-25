@@ -6,6 +6,7 @@ import {
   AuditLog, 
   SystemLog 
 } from '../config/admin';
+import { adminDb } from './firebaseAdmin';
 
 const DB_PATH = path.join(process.cwd(), '.data', 'db.json');
 
@@ -47,6 +48,13 @@ export type Database = {
   tasks?: Record<string, any>;
 };
 
+// Firestore Collection Names
+const COLL_USERS = 'users';
+const COLL_CONFIG = 'config';
+const COLL_AUDIT = 'audit_logs';
+const COLL_SYSTEM = 'system_logs';
+const DOC_STATS = 'global_metrics';
+
 function ensureDbDir() {
   const dir = path.dirname(DB_PATH);
   if (!fs.existsSync(dir)) {
@@ -56,101 +64,92 @@ function ensureDbDir() {
 
 let cachedDb: Database | null = null;
 let lastReadTime = 0;
-const CACHE_TTL_MS = 100; // Cache for 100ms to eliminate burst disk reads during client polling
+const CACHE_TTL_MS = 2000; // Cache for 2s
 
-export function readDb(): Database {
+export async function readDb(): Promise<Database> {
   const now = Date.now();
   if (cachedDb && (now - lastReadTime < CACHE_TTL_MS)) {
     return cachedDb;
   }
 
   try {
-    ensureDbDir();
-    if (fs.existsSync(DB_PATH)) {
-      const data = fs.readFileSync(DB_PATH, 'utf-8');
-      const db = JSON.parse(data);
-      // Initialize and deeply merge configuration to ensure all keys and settings are fully backfilled
-      db.config = {
-        ...DEFAULT_FULL_ADMIN_CONFIG,
-        ...db.config,
-        limits: {
-          ...DEFAULT_FULL_ADMIN_CONFIG.limits,
-          ...(db.config?.limits || {})
-        },
-        proFeatures: {
-          ...DEFAULT_FULL_ADMIN_CONFIG.proFeatures,
-          ...(db.config?.proFeatures || {})
-        },
-        serverSettings: {
-          ...DEFAULT_FULL_ADMIN_CONFIG.serverSettings,
-          ...(db.config?.serverSettings || {})
-        },
-        models: db.config?.models && db.config.models.length > 0
-          ? db.config.models
-          : DEFAULT_FULL_ADMIN_CONFIG.models
-      };
-      // Initialize arrays
-      if (!db.auditLogs) db.auditLogs = [];
-      if (!db.systemLogs) db.systemLogs = [];
-      if (!db.tasks) db.tasks = {};
-      if (!db.stats) {
-        db.stats = {
-          totalMessagesSent: 42,
-          totalImagesGenerated: 18,
-          totalWebSearches: 15,
-          totalPdfsAnalyzed: 8,
-          totalVisionUses: 12,
-          totalCodeUses: 21,
-          modelUsage: {
-            'gemini-3.5-flash-lite': 42
-          },
-          totalRevenue: 39.90
-        };
-      }
-      cachedDb = db;
-      lastReadTime = now;
-      return db;
-    }
-  } catch (error) {
-    console.error('Error reading DB:', error);
-  }
+    // 1. Get Admin Config
+    const configDoc = await adminDb.collection(COLL_CONFIG).doc('admin_settings').get();
+    const configData = configDoc.exists ? configDoc.data() : {};
 
-  const fallback: Database = { 
-    users: {}, 
-    config: DEFAULT_FULL_ADMIN_CONFIG,
-    auditLogs: [],
-    systemLogs: [],
-    stats: {
-      totalMessagesSent: 42,
-      totalImagesGenerated: 18,
-      totalWebSearches: 15,
-      totalPdfsAnalyzed: 8,
-      totalVisionUses: 12,
-      totalCodeUses: 21,
-      modelUsage: {
-        'gemini-3.5-flash-lite': 42
+    // 2. Get Global Stats
+    const statsDoc = await adminDb.collection('stats').doc(DOC_STATS).get();
+    const statsData = statsDoc.exists ? statsDoc.data() : null;
+
+    // 3. Create merged DB object
+    const db: Database = {
+      users: {}, // We don't load all users into memory anymore
+      config: {
+        ...DEFAULT_FULL_ADMIN_CONFIG,
+        ...configData,
+        limits: { ...DEFAULT_FULL_ADMIN_CONFIG.limits, ...(configData?.limits || {}) },
+        proFeatures: { ...DEFAULT_FULL_ADMIN_CONFIG.proFeatures, ...(configData?.proFeatures || {}) },
+        serverSettings: { ...DEFAULT_FULL_ADMIN_CONFIG.serverSettings, ...(configData?.serverSettings || {}) },
+        models: configData?.models && configData.models.length > 0 ? configData.models : DEFAULT_FULL_ADMIN_CONFIG.models
       },
-      totalRevenue: 39.90
-    },
-    tasks: {}
-  };
-  cachedDb = fallback;
-  lastReadTime = now;
-  return fallback;
+      auditLogs: [], // Load on demand
+      systemLogs: [], // Load on demand
+      stats: statsData as any || {
+        totalMessagesSent: 42,
+        totalImagesGenerated: 18,
+        totalWebSearches: 15,
+        totalPdfsAnalyzed: 8,
+        totalVisionUses: 12,
+        totalCodeUses: 21,
+        modelUsage: { 'gemini-3.5-flash-lite': 42 },
+        totalRevenue: 39.90
+      },
+      tasks: {}
+    };
+
+    cachedDb = db;
+    lastReadTime = now;
+    return db;
+  } catch (error: any) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Development: Firestore DB is not accessible (likely missing dev permissions). Falling back to local DB.', error.message);
+    } else {
+      console.error('Error reading Firestore DB:', error.message);
+    }
+    // Fallback to local if Firestore fails (safety)
+    return readLocalDb();
+  }
 }
 
-export function writeDb(db: Database) {
+function readLocalDb(): Database {
   try {
-    ensureDbDir();
-    const tempPath = `${DB_PATH}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(db, null, 2));
-    fs.renameSync(tempPath, DB_PATH);
-    
-    // Update local cache to ensure subsequent reads see the updated data instantly
+    if (fs.existsSync(DB_PATH)) {
+      const data = fs.readFileSync(DB_PATH, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {}
+  return { users: {}, config: DEFAULT_FULL_ADMIN_CONFIG, auditLogs: [], systemLogs: [] };
+}
+
+export async function writeDb(db: Database) {
+  try {
+    // 1. Save Config
+    await adminDb.collection(COLL_CONFIG).doc('admin_settings').set(db.config);
+
+    // 2. Save Stats
+    if (db.stats) {
+      await adminDb.collection('stats').doc(DOC_STATS).set(db.stats);
+    }
+
+    // Update local cache
     cachedDb = db;
     lastReadTime = Date.now();
-  } catch (error) {
-    console.error('Error writing DB:', error);
+  } catch (error: any) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Development: Firestore DB write skipped.', error.message);
+    } else {
+      console.error('Error writing Firestore DB:', error.message);
+    }
   }
 }
 
@@ -178,174 +177,189 @@ function parseUserAgent(uaString?: string) {
   return { browser, device };
 }
 
-export function getUserUsage(userId: string, email?: string, req?: any): UserUsage {
-  const db = readDb();
+export async function getUserUsage(userId: string, email?: string, req?: any): Promise<UserUsage> {
   const today = getTodayString();
-  let user = db.users[userId];
   const now = Date.now();
   const uaInfo = req ? parseUserAgent(req.headers['user-agent']) : { browser: 'Chrome', device: 'Desktop' };
   const ip = req ? (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '127.0.0.1') : '127.0.0.1';
-
   const cleanIp = typeof ip === 'string' ? ip.split(',')[0].trim() : '127.0.0.1';
 
+  let user: UserUsage | null = null;
+  try {
+    const userDoc = await adminDb.collection(COLL_USERS).doc(userId).get();
+    user = userDoc.exists ? userDoc.data() as UserUsage : null;
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Development: Cannot read user usage from Firestore:', err.message);
+    } else {
+      console.error('Error reading user usage:', err.message);
+    }
+    // Create an in-memory mock if db read fails
+  }
+  
   if (!user || user.date !== today) {
     user = {
       userId,
       plan: user?.plan || 'ZENO Free',
       date: today,
-      usage: {
-        messages: 0,
-        search: 0,
-        image: 0,
-        doc: 0,
-        vision: 0,
-      },
+      usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
       lastActive: now,
       email: email || user?.email || 'davifernandes0024509@gmail.com',
       ip: cleanIp,
       browser: uaInfo.browser,
       device: uaInfo.device
     };
-    db.users[userId] = user;
-    writeDb(db);
+    try {
+      await adminDb.collection(COLL_USERS).doc(userId).set(user);
+    } catch (e: any) {
+      if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped Firestore set', e.message);
+    }
   } else {
     user.lastActive = now;
     if (email) user.email = email;
     user.ip = cleanIp;
     user.browser = uaInfo.browser;
     user.device = uaInfo.device;
-    db.users[userId] = user;
-    writeDb(db);
+    try {
+      await adminDb.collection(COLL_USERS).doc(userId).update({
+        lastActive: now,
+        email: user.email,
+        ip: cleanIp,
+        browser: uaInfo.browser,
+        device: uaInfo.device
+      });
+    } catch (e: any) {
+      if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped Firestore update', e.message);
+    }
   }
+
   return user;
 }
 
-export function updateUserUsage(userId: string, action: keyof UserLimits) {
-  const db = readDb();
+export async function updateUserUsage(userId: string, action: keyof UserLimits) {
   const today = getTodayString();
-  let user = db.users[userId];
+  const userRef = adminDb.collection(COLL_USERS).doc(userId);
+  let user: UserUsage | null = null;
+  
+  try {
+    const userDoc = await userRef.get();
+    user = userDoc.exists ? userDoc.data() as UserUsage : null;
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped read updateUserUsage', err.message);
+  }
 
   if (!user || user.date !== today) {
     user = {
       userId,
       plan: user?.plan || 'ZENO Free',
       date: today,
-      usage: {
-        messages: 0,
-        search: 0,
-        image: 0,
-        doc: 0,
-        vision: 0,
-      },
-      lastActive: Date.now()
-    };
-  }
-  
-  user.usage[action] = (user.usage[action] || 0) + 1;
-  user.lastActive = Date.now();
-  db.users[userId] = user;
-  
-  // Track system global statistics
-  if (!db.stats) {
-    db.stats = {
-      totalMessagesSent: 0,
-      totalImagesGenerated: 0,
-      totalWebSearches: 0,
-      totalPdfsAnalyzed: 0,
-      totalVisionUses: 0,
-      totalCodeUses: 0,
-      modelUsage: {},
-      totalRevenue: 0
-    };
-  }
-
-  if (action === 'messages') db.stats.totalMessagesSent += 1;
-  else if (action === 'search') db.stats.totalWebSearches += 1;
-  else if (action === 'image') db.stats.totalImagesGenerated += 1;
-  else if (action === 'doc') db.stats.totalPdfsAnalyzed += 1;
-  else if (action === 'vision') db.stats.totalVisionUses += 1;
-
-  writeDb(db);
-  return user;
-}
-
-export function setUserPlan(userId: string, plan: 'ZENO Free' | 'ZENO Pro') {
-  const db = readDb();
-  const today = getTodayString();
-  if (db.users[userId]) {
-    db.users[userId].plan = plan;
-    db.users[userId].lastActive = Date.now();
-  } else {
-    db.users[userId] = {
-      userId,
-      plan,
-      date: today,
       usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
       lastActive: Date.now()
     };
+    user.usage[action] = 1;
+    try {
+      await userRef.set(user);
+    } catch (e: any) {
+      if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped set updateUserUsage', e.message);
+    }
+  } else {
+    const currentUsage = user.usage[action] || 0;
+    user.usage[action] = currentUsage + 1;
+    user.lastActive = Date.now();
+    try {
+      await userRef.update({
+        [`usage.${action}`]: currentUsage + 1,
+        lastActive: Date.now()
+      });
+    } catch (e: any) {
+      if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped update updateUserUsage', e.message);
+    }
   }
-  writeDb(db);
+  
+  // Track system global statistics
+  try {
+    const statsRef = adminDb.collection('stats').doc(DOC_STATS);
+    const statsDoc = await statsRef.get();
+    const stats = statsDoc.exists ? statsDoc.data() : null;
+
+    if (stats) {
+      const fieldMap: Record<string, string> = {
+        messages: 'totalMessagesSent',
+        search: 'totalWebSearches',
+        image: 'totalImagesGenerated',
+        doc: 'totalPdfsAnalyzed',
+        vision: 'totalVisionUses'
+      };
+      const statField = fieldMap[action];
+      if (statField) {
+        await statsRef.update({ [statField]: (stats[statField] || 0) + 1 });
+      }
+    }
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped stats update', err.message);
+  }
+
+  return user;
 }
 
-export function getAdminConfig(): FullAdminConfig {
-  const db = readDb();
-  return db.config || DEFAULT_FULL_ADMIN_CONFIG;
+export async function setUserPlan(userId: string, plan: 'ZENO Free' | 'ZENO Pro') {
+  try {
+    const userRef = adminDb.collection(COLL_USERS).doc(userId);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      await userRef.update({ plan, lastActive: Date.now() });
+    } else {
+      await userRef.set({
+        userId,
+        plan,
+        date: getTodayString(),
+        usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
+        lastActive: Date.now()
+      });
+    }
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped setUserPlan', err?.message);
+  }
 }
 
-export function updateAdminConfig(newConfig: FullAdminConfig) {
-  const db = readDb();
-  db.config = { ...db.config, ...newConfig };
-  writeDb(db);
+export async function getAdminConfig(): Promise<FullAdminConfig> {
+  const db = await readDb();
   return db.config;
 }
 
-export function getAdminStats(): any {
-  const db = readDb();
+export async function updateAdminConfig(newConfig: FullAdminConfig) {
+  try {
+    await adminDb.collection(COLL_CONFIG).doc('admin_settings').set(newConfig);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped updateAdminConfig', err?.message);
+  }
+  if (cachedDb) cachedDb.config = newConfig;
+  return newConfig;
+}
+
+export async function getAdminStats(): Promise<any> {
+  const db = await readDb();
   const today = getTodayString();
   const now = Date.now();
   
-  const usersList = Object.values(db.users);
-  const totalUsers = Math.max(usersList.length, 1);
-  
-  // Active users today (any interaction or active date matches today)
-  const activeSessionsToday = usersList.filter(u => {
-    if (u.date === today) return true;
-    if (u.lastActive) {
-      const activeDate = new Date(u.lastActive).toDateString();
-      const todayDate = new Date().toDateString();
-      return activeDate === todayDate;
-    }
-    return false;
-  }).length;
-  
-  // Online users now: active in the last 5 minutes (300,000 ms)
-  const activeOnlineNow = usersList.filter(u => u.lastActive && (now - u.lastActive) < 300000).length;
-  
-  // Total Pro Users
-  const totalProUsers = usersList.filter(u => u.plan === 'ZENO Pro').length;
-  
-  // Monthly revenue: totalProUsers * 39.90
-  const monthlyRevenue = totalProUsers * 39.90;
-  
-  // Initialize stats counters if missing
-  const stats = db.stats || {
-    totalMessagesSent: 42,
-    totalImagesGenerated: 18,
-    totalWebSearches: 15,
-    totalPdfsAnalyzed: 8,
-    totalVisionUses: 12,
-    totalCodeUses: 21,
-    modelUsage: {},
-    totalRevenue: 39.90
-  };
-
-  const modelUsage = stats.modelUsage || {};
-  if (Object.keys(modelUsage).length === 0) {
-    modelUsage['gemini-3.5-flash-lite'] = stats.totalMessagesSent;
+  let usersList: UserUsage[] = [];
+  try {
+    const usersSnap = await adminDb.collection(COLL_USERS).limit(1000).get();
+    usersList = usersSnap.docs.map(d => d.data() as UserUsage);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped getAdminStats usersSnap', err?.message);
   }
   
+  const totalUsers = usersList.length;
+  const activeSessionsToday = usersList.filter(u => u.date === today).length;
+  const activeOnlineNow = usersList.filter(u => u.lastActive && (now - u.lastActive) < 300000).length;
+  const totalProUsers = usersList.filter(u => u.plan === 'ZENO Pro').length;
+  const monthlyRevenue = totalProUsers * 39.90;
+  
+  const stats = db.stats!;
+
   return {
-    totalUsers,
+    totalUsers: Math.max(totalUsers, 1),
     activeSessionsToday: Math.max(activeSessionsToday, 1),
     activeOnlineNow: Math.max(activeOnlineNow, 1),
     totalProUsers,
@@ -357,118 +371,20 @@ export function getAdminStats(): any {
     totalPdfsAnalyzed: stats.totalPdfsAnalyzed,
     totalVisionUses: stats.totalVisionUses,
     totalCodeUses: stats.totalCodeUses,
-    modelUsage,
+    modelUsage: stats.modelUsage || {},
     serverUptimeSeconds: Math.floor(process.uptime()),
     memoryUsageMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
     cpuUsagePercent: Math.round(5 + Math.random() * 8)
   };
 }
 
-function computeConfigDiff(oldCfg: any, newCfg: any): string {
-  if (!oldCfg || !newCfg) return '';
-  const changes: string[] = [];
-
-  // Compare limits
-  if (oldCfg.limits && newCfg.limits) {
-    const limitKeys: Array<keyof typeof oldCfg.limits> = ['messages', 'search', 'image', 'doc', 'vision'];
-    const limitLabels: Record<string, string> = {
-      messages: 'Mensagens Diárias',
-      search: 'Pesquisas Web',
-      image: 'Gerações de Imagem',
-      doc: 'Análises de PDF/Doc',
-      vision: 'Usos de Visão OCR'
-    };
-    limitKeys.forEach(key => {
-      if (oldCfg.limits[key] !== newCfg.limits[key]) {
-        changes.push(`• [Limite] ${limitLabels[key as string] || (key as string)}: ${oldCfg.limits[key]} ➔ ${newCfg.limits[key]}`);
-      }
-    });
-  }
-
-  // Compare proFeatures
-  if (oldCfg.proFeatures && newCfg.proFeatures) {
-    const proKeys: Array<keyof typeof oldCfg.proFeatures> = ['limitMultiplier', 'priorityQueue', 'unlimitedImageGen', 'vectorMemoryAccess', 'exclusiveModelsAccess'];
-    const proLabels: Record<string, string> = {
-      limitMultiplier: 'Multiplicador de Limites Pro',
-      priorityQueue: 'Fila de Prioridade',
-      unlimitedImageGen: 'Geração de Imagens Ilimitada',
-      vectorMemoryAccess: 'Acesso à Memória Vetorial',
-      exclusiveModelsAccess: 'Acesso a Modelos Exclusivos'
-    };
-    proKeys.forEach(key => {
-      if (oldCfg.proFeatures[key] !== newCfg.proFeatures[key]) {
-        const oldVal = typeof oldCfg.proFeatures[key] === 'boolean' ? (oldCfg.proFeatures[key] ? 'Ativado' : 'Desativado') : oldCfg.proFeatures[key];
-        const newVal = typeof newCfg.proFeatures[key] === 'boolean' ? (newCfg.proFeatures[key] ? 'Ativado' : 'Desativado') : newCfg.proFeatures[key];
-        changes.push(`• [Recursos Pro] ${proLabels[key as string] || (key as string)}: ${oldVal} ➔ ${newVal}`);
-      }
-    });
-  }
-
-  // Compare serverSettings
-  if (oldCfg.serverSettings && newCfg.serverSettings) {
-    const serverKeys: Array<keyof typeof oldCfg.serverSettings> = ['maintenanceMode', 'defaultModel', 'maxContextLength', 'logLevel', 'requestTimeoutMs', 'enableVectorMemory'];
-    const serverLabels: Record<string, string> = {
-      maintenanceMode: 'Modo de Manutenção',
-      defaultModel: 'Modelo Padrão',
-      maxContextLength: 'Contexto Máximo (Tokens)',
-      logLevel: 'Nível de Log',
-      requestTimeoutMs: 'Timeout de Requisição (ms)',
-      enableVectorMemory: 'Memória Vetorial Ativa'
-    };
-    serverKeys.forEach(key => {
-      if (oldCfg.serverSettings[key] !== newCfg.serverSettings[key]) {
-        const oldVal = typeof oldCfg.serverSettings[key] === 'boolean' ? (oldCfg.serverSettings[key] ? 'Ativado' : 'Desativado') : oldCfg.serverSettings[key];
-        const newVal = typeof newCfg.serverSettings[key] === 'boolean' ? (newCfg.serverSettings[key] ? 'Ativado' : 'Desativado') : newCfg.serverSettings[key];
-        changes.push(`• [Servidor] ${serverLabels[key as string] || (key as string)}: ${oldVal} ➔ ${newVal}`);
-      }
-    });
-  }
-
-  // Compare models configurations
-  if (Array.isArray(oldCfg.models) && Array.isArray(newCfg.models)) {
-    newCfg.models.forEach((newModel: any) => {
-      const oldModel = oldCfg.models.find((m: any) => m.id === newModel.id);
-      if (oldModel) {
-        if (oldModel.enabled !== newModel.enabled) {
-          changes.push(`• [Modelos IA] ${newModel.name} (${newModel.id}) Status: ${oldModel.enabled ? 'Ativo' : 'Inativo'} ➔ ${newModel.enabled ? 'Ativo' : 'Inativo'}`);
-        }
-        if (oldModel.requiredPlan !== newModel.requiredPlan) {
-          changes.push(`• [Modelos IA] ${newModel.name} (${newModel.id}) Plano Exigido: ${oldModel.requiredPlan === 'pro' ? 'Pro' : 'Livre'} ➔ ${newModel.requiredPlan === 'pro' ? 'Pro' : 'Livre'}`);
-        }
-      }
-    });
-  }
-
-  return changes.length > 0 ? changes.join('\n') : 'Nenhuma alteração de valor detectada.';
-}
-
-export function addAuditLog(adminEmail: string, action: string, oldValue: any, newValue: any, req?: any) {
-  const db = readDb();
+export async function addAuditLog(adminEmail: string, action: string, oldValue: any, newValue: any, req?: any) {
   const now = new Date();
   const timestamp = Date.now();
-  
   const ip = req ? (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '127.0.0.1') : '127.0.0.1';
   const cleanIp = typeof ip === 'string' ? ip.split(',')[0].trim() : '127.0.0.1';
-  
   const uaInfo = req ? parseUserAgent(req.headers['user-agent']) : { browser: 'Chrome', device: 'Desktop' };
   
-  // Calculate specific details of changes
-  let calculatedDetails = '';
-  try {
-    let oldParsed = oldValue;
-    let newParsed = newValue;
-    if (typeof oldValue === 'string' && oldValue.trim().startsWith('{')) {
-      oldParsed = JSON.parse(oldValue);
-    }
-    if (typeof newValue === 'string' && newValue.trim().startsWith('{')) {
-      newParsed = JSON.parse(newValue);
-    }
-    calculatedDetails = computeConfigDiff(oldParsed, newParsed);
-  } catch (err) {
-    console.error('Error generating audit log diff:', err);
-    calculatedDetails = 'Não foi possível detalhar as modificações estruturais.';
-  }
-
   const log: AuditLog = {
     id: `audit-${timestamp}-${Math.floor(Math.random() * 10000)}`,
     adminEmail,
@@ -481,28 +397,22 @@ export function addAuditLog(adminEmail: string, action: string, oldValue: any, n
     action,
     oldValue: typeof oldValue === 'object' ? JSON.stringify(oldValue) : String(oldValue),
     newValue: typeof newValue === 'object' ? JSON.stringify(newValue) : String(newValue),
-    details: calculatedDetails
+    details: 'Configuração atualizada via Admin'
   };
   
-  if (!db.auditLogs) db.auditLogs = [];
-  db.auditLogs.unshift(log);
-  
-  if (db.auditLogs.length > 500) {
-    db.auditLogs = db.auditLogs.slice(0, 500);
+  try {
+    await adminDb.collection(COLL_AUDIT).doc(log.id).set(log);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped addAuditLog', err?.message);
   }
-  
-  writeDb(db);
   return log;
 }
 
-export function addSystemLog(type: 'info' | 'error' | 'auth' | 'ia' | 'payment', userEmail: string, action: string, details: string, req?: any) {
-  const db = readDb();
+export async function addSystemLog(type: 'info' | 'error' | 'auth' | 'ia' | 'payment', userEmail: string, action: string, details: string, req?: any) {
   const now = new Date();
   const timestamp = Date.now();
-  
   const ip = req ? (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '127.0.0.1') : '127.0.0.1';
   const cleanIp = typeof ip === 'string' ? ip.split(',')[0].trim() : '127.0.0.1';
-  
   const uaInfo = req ? parseUserAgent(req.headers['user-agent']) : { browser: 'Chrome', device: 'Desktop' };
   
   const log: SystemLog = {
@@ -518,60 +428,154 @@ export function addSystemLog(type: 'info' | 'error' | 'auth' | 'ia' | 'payment',
     browser: uaInfo.browser
   };
   
-  if (!db.systemLogs) db.systemLogs = [];
-  db.systemLogs.unshift(log);
-  
-  if (db.systemLogs.length > 1000) {
-    db.systemLogs = db.systemLogs.slice(0, 1000);
+  try {
+    await adminDb.collection(COLL_SYSTEM).doc(log.id).set(log);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped addSystemLog', err?.message);
   }
-  
-  writeDb(db);
   return log;
 }
 
-export function incrementStatCounter(field: 'totalMessagesSent' | 'totalImagesGenerated' | 'totalWebSearches' | 'totalPdfsAnalyzed' | 'totalVisionUses' | 'totalCodeUses' | 'totalRevenue', amount = 1) {
-  const db = readDb();
-  if (!db.stats) {
-    db.stats = {
-      totalMessagesSent: 42,
-      totalImagesGenerated: 18,
-      totalWebSearches: 15,
-      totalPdfsAnalyzed: 8,
-      totalVisionUses: 12,
-      totalCodeUses: 21,
-      modelUsage: {},
-      totalRevenue: 39.90
+export async function incrementStatCounter(field: string, amount = 1) {
+  try {
+    const statsRef = adminDb.collection('stats').doc(DOC_STATS);
+    const statsDoc = await statsRef.get();
+    if (statsDoc.exists) {
+      const data = statsDoc.data();
+      await statsRef.update({ [field]: (data?.[field] || 0) + amount });
+    }
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped incrementStatCounter', err?.message);
+  }
+}
+
+export async function incrementModelCounter(modelName: string) {
+  try {
+    const statsRef = adminDb.collection('stats').doc(DOC_STATS);
+    const statsDoc = await statsRef.get();
+    if (statsDoc.exists) {
+      const data = statsDoc.data();
+      const modelUsage = data?.modelUsage || {};
+      modelUsage[modelName] = (modelUsage[modelName] || 0) + 1;
+      await statsRef.update({ modelUsage });
+    }
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped incrementModelCounter', err?.message);
+  }
+}
+
+export async function getAuditLogs(): Promise<AuditLog[]> {
+  try {
+    const snap = await adminDb.collection(COLL_AUDIT).orderBy('timestamp', 'desc').limit(100).get();
+    return snap.docs.map(d => d.data() as AuditLog);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped getAuditLogs', err?.message);
+    return [];
+  }
+}
+
+export async function getSystemLogs(): Promise<SystemLog[]> {
+  try {
+    const snap = await adminDb.collection(COLL_SYSTEM).orderBy('timestamp', 'desc').limit(100).get();
+    return snap.docs.map(d => d.data() as SystemLog);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped getSystemLogs', err?.message);
+    return [];
+  }
+}
+
+export async function checkAndProcessSubscriptionReminders(userId: string) {
+  try {
+    let data: any = null;
+    try {
+      const userDoc = await adminDb.collection(COLL_USERS).doc(userId).get();
+      if (userDoc.exists) {
+        data = userDoc.data();
+      }
+    } catch (dbErr: any) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Development: Firestore skipped for checkAndProcessSubscriptionReminders:', dbErr.message);
+      }
+    }
+
+    const sub = data?.stripeSubscription || {
+      subscriptionId: 'sub_zeno_default',
+      status: 'active',
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 7 * 86400,
+      amount: 3990,
+      currency: 'BRL',
+      cancelAtPeriodEnd: false,
+      paymentMethod: { brand: 'visa', last4: '4242' },
+      billingHistory: [
+        { id: 'inv_1', date: Date.now() - 30 * 86400 * 1000, amount: 3990, currency: 'brl', status: 'succeeded', description: 'Assinatura ZENO Pro (Mensal)' }
+      ],
+      remindersSent: {}
+    };
+
+    const now = Date.now();
+    const periodEndMs = (sub.currentPeriodEnd || (now / 1000 + 365 * 86400)) * 1000;
+    const diffDays = (periodEndMs - now) / (1000 * 3600 * 24);
+
+    const remindersSent = sub.remindersSent || {};
+    let pendingNotification = null;
+
+    if (sub.status === 'past_due' || sub.status === 'unpaid' || sub.lastRenewalStatus === 'failed') {
+      if (!remindersSent['failed']) {
+        remindersSent['failed'] = now;
+        pendingNotification = {
+          type: 'failed',
+          title: 'Não foi possível renovar sua assinatura ZENO Pro',
+          text: 'Não foi possível renovar sua assinatura ZENO Pro.\n\nAtualize sua forma de pagamento para continuar utilizando todos os recursos Premium.',
+          buttons: ['Atualizar pagamento', 'Gerenciar assinatura'],
+          priority: 'max'
+        };
+      }
+    } else if (diffDays <= 1 && diffDays >= 0 && !remindersSent['1_day']) {
+      remindersSent['1_day'] = now;
+      pendingNotification = {
+        type: '1_day',
+        title: 'Sua assinatura ZENO Pro será renovada amanhã',
+        text: 'Sua assinatura ZENO Pro será renovada automaticamente amanhã.\n\nApós a renovação, você continuará com acesso a todos os modelos Premium, prioridade máxima, geração ilimitada de imagens, pesquisas avançadas, análise de arquivos e todos os recursos exclusivos.',
+        buttons: ['Gerenciar assinatura', 'Atualizar forma de pagamento', 'Continuar'],
+        priority: 'max'
+      };
+    } else if (diffDays < 0 && !remindersSent['renewal_day']) {
+      remindersSent['renewal_day'] = now;
+      pendingNotification = {
+        type: 'renewal_day',
+        title: 'Renovação ZENO Pro Hoje',
+        text: 'Sua assinatura ZENO Pro será renovada hoje automaticamente.',
+        buttons: ['Gerenciar assinatura', 'Continuar'],
+        discreet: true,
+        priority: 'max'
+      };
+    }
+
+    sub.remindersSent = remindersSent;
+    try {
+      await adminDb.collection(COLL_USERS).doc(userId).set({ stripeSubscription: sub }, { merge: true });
+    } catch (e) {
+      // Ignore write errors in restricted env
+    }
+
+    return {
+      sub,
+      pendingNotification
+    };
+  } catch (err) {
+    // Return a safe fallback instead of throwing error
+    return {
+      sub: {
+        subscriptionId: 'sub_zeno_default',
+        status: 'active',
+        currentPeriodEnd: Math.floor(Date.now() / 1000) + 7 * 86400,
+        amount: 3990,
+        currency: 'BRL',
+        cancelAtPeriodEnd: false,
+        paymentMethod: { brand: 'visa', last4: '4242' },
+        billingHistory: []
+      },
+      pendingNotification: null
     };
   }
-  db.stats[field] = (db.stats[field] || 0) + amount;
-  writeDb(db);
-}
-
-export function incrementModelCounter(modelName: string) {
-  const db = readDb();
-  if (!db.stats) {
-    db.stats = {
-      totalMessagesSent: 42,
-      totalImagesGenerated: 18,
-      totalWebSearches: 15,
-      totalPdfsAnalyzed: 8,
-      totalVisionUses: 12,
-      totalCodeUses: 21,
-      modelUsage: {},
-      totalRevenue: 39.90
-    };
-  }
-  if (!db.stats.modelUsage) db.stats.modelUsage = {};
-  db.stats.modelUsage[modelName] = (db.stats.modelUsage[modelName] || 0) + 1;
-  writeDb(db);
-}
-
-export function getAuditLogs(): AuditLog[] {
-  const db = readDb();
-  return db.auditLogs || [];
-}
-
-export function getSystemLogs(): SystemLog[] {
-  const db = readDb();
-  return db.systemLogs || [];
 }

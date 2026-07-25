@@ -23,6 +23,7 @@ interface ComposerInputProps {
   theme: 'dark' | 'light';
   plan?: UserPlan;
   onOpenSubscriptionModal?: (reason?: string) => void;
+  onOpenProFeatureModal?: () => void;
   dailyUsage?: DailyUsage;
 }
 
@@ -44,6 +45,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   theme,
   plan = 'ZENO Free',
   onOpenSubscriptionModal,
+  onOpenProFeatureModal,
   dailyUsage
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,8 +61,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   const handleModelClick = (modelId: ModelType, isModelPro: boolean, modelName: string) => {
     setIsSpeedMenuOpen(false);
     if (isModelPro && !isPro) {
-      if (onOpenSubscriptionModal) {
-        onOpenSubscriptionModal(`O modelo ${modelName} é exclusivo para assinantes ZENO Pro.`);
+      if (onOpenProFeatureModal) {
+        onOpenProFeatureModal();
       }
     } else {
       onSelectSpeed(modelId);
@@ -82,6 +84,10 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   }, [input]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isPro && onOpenProFeatureModal) {
+      onOpenProFeatureModal();
+      return;
+    }
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -138,7 +144,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`fixed bottom-0 left-0 right-0 md:left-[270px] z-30 pt-3 pb-4 px-3 sm:px-6 pointer-events-none transition-all ${
+      className={`fixed bottom-0 left-0 right-0 md:left-[270px] z-30 pt-3 pb-4 pb-[env(safe-area-inset-bottom)] px-3 sm:px-6 pointer-events-none transition-all ${
         isDark 
           ? 'bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/95 to-transparent' 
           : 'bg-gradient-to-t from-white via-white/95 to-transparent'
@@ -234,13 +240,20 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
           <button
             type="button"
-            onClick={onOpenImageStudio}
+            onClick={() => {
+              if (!isPro && onOpenProFeatureModal) {
+                onOpenProFeatureModal();
+              } else {
+                onOpenImageStudio();
+              }
+            }}
             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
               isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
             }`}
           >
             <Wand2 className="w-3.5 h-3.5 text-neutral-400" />
             <span>Estúdio ZENO Vision</span>
+            {!isPro && <Lock className="w-3 h-3 text-neutral-400 ml-1" />}
           </button>
         </div>
 
@@ -259,10 +272,10 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                   : `Você usou ${messagesCount}/${FREE_LIMITS.MESSAGES_PER_DAY} mensagens gratuitas de hoje.`}
               </span>
             </div>
-            {onOpenSubscriptionModal && (
+            {onOpenProFeatureModal && (
               <button
                 type="button"
-                onClick={() => onOpenSubscriptionModal("Aumente seus limites com o ZENO Pro para conversas ilimitadas.")}
+                onClick={() => onOpenProFeatureModal()}
                 className="px-3 py-1 rounded-xl text-[11px] font-bold bg-neutral-200 hover:bg-white text-neutral-950 transition-all shadow-xs ml-2 flex-shrink-0"
               >
                 Upgrade Pro

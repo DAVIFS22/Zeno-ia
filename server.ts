@@ -2,435 +2,89 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { OAuth2Client } from "google-auth-library";
+import { GoogleGenAI } from "@google/genai";
 import Stripe from "stripe";
+import dotenv from "dotenv";
+import { SubscriptionService } from "./src/lib/subscriptionService";
 import { 
   getUserUsage, 
-  updateUserUsage, 
-  getAdminConfig, 
   setUserPlan, 
-  updateAdminConfig, 
-  getAdminStats, 
-  addAuditLog, 
-  addSystemLog, 
-  getAuditLogs, 
-  getSystemLogs, 
-  incrementStatCounter, 
-  incrementModelCounter 
+  addSystemLog,
+  getAdminConfig,
+  updateUserUsage,
+  incrementStatCounter,
+  getAdminStats,
+  getAuditLogs,
+  getSystemLogs,
+  readDb
 } from "./src/lib/limits";
 import { 
-  registerImageGenerator, 
   createQueuedTask, 
   getTaskStatusDetails, 
   cancelQueuedTask, 
   executeAndProcessTask, 
-  initFallbackQueueRunner, 
+  initFallbackQueueRunner,
   getQueueDiagnosticStats 
 } from "./src/lib/taskManager";
+import { verifyAdminRole } from "./src/config/admin";
 import { storeMemory, retrieveRelevantMemories } from "./src/lib/vectorMemory";
 import { getModelConfig } from "./src/lib/models";
 import { getUserRole, isAdminUser, ADMIN_EMAIL } from "./src/config/admin";
+import { adminDb, adminAuth } from "./src/lib/firebaseAdmin";
+import { StripeWebhookHandler } from "./src/webhooks/stripeWebhookHandler";
+import { StripeService, getStripe } from "./src/services/stripeService";
+import { SubscriptionManager } from "./src/services/subscriptionManager";
+
+dotenv.config();
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build",
-    },
-  },
 });
-
-const systemInstruction = `Você é ZENO, uma inteligência artificial avançada de altíssimo desempenho, projetada para raciocínio profundo, análise lógica e resolução de problemas complexos.
-Sua missão é fornecer respostas precisas, altamente estruturadas e perspicazes. Você domina todas as áreas do conhecimento, como engenharia de software, ciências, negócios, filosofia e criatividade.
-Diretrizes de Inteligência e Comunicação:
-1. Pense Passo a Passo: Em problemas complexos, estruture sua lógica internamente antes de responder.
-2. Direto e Conciso: Entregue valor imediatamente. Evite floreios, introduções redundantes ou textos prolixos. Suas respostas devem ser precisas, curtas e diretas ao ponto.
-3. Precisão Técnica: Use terminologia correta e forneça exemplos práticos quando aplicável.
-4. Clareza Absoluta: Explique conceitos difíceis de maneira simples, sem perder a profundidade técnica.
-5. Personalidade: Futurista, altamente inteligente, analítico, prestativo e amigável.
-Seu lema é: "ZENO — Precisão e inteligência em cada resposta."`;
-
-// List of known supported Gemini models according to @google/genai guidelines
-const PRIMARY_TEXT_MODEL = "gemini-3.5-flash-lite";
-const PRO_REASONING_MODEL = "gemini-3.5-flash-lite";
-const LITE_FAST_MODEL = "gemini-3.5-flash-lite";
-const LATEST_ALIAS_MODEL = "gemini-flash-latest";
-
-// Deprecated or non-existent models to block
-const DEPRECATED_MODELS = new Set([
-  "gemini-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-]);
-
-// Helper to validate model names
-function isValidModelName(modelName: string): boolean {
-  if (!modelName || typeof modelName !== "string") return false;
-  return !DEPRECATED_MODELS.has(modelName.trim().toLowerCase());
-}
-
-// Get fallback sequence for a given mode
-function getCandidateModelsForMode(speed?: string): string[] {
-  let list: string[];
-  if (speed === "mega" || speed === "think" || speed === "code" || speed === "strategy") {
-    list = [PRO_REASONING_MODEL, "gemini-3.1-flash-lite", PRIMARY_TEXT_MODEL, LATEST_ALIAS_MODEL];
-  } else if (speed === "search") {
-    list = [PRIMARY_TEXT_MODEL, "gemini-3.1-flash-lite", LITE_FAST_MODEL, LATEST_ALIAS_MODEL];
-  } else {
-    list = [PRIMARY_TEXT_MODEL, "gemini-3.1-flash-lite", LITE_FAST_MODEL, LATEST_ALIAS_MODEL];
-  }
-  return list.filter(isValidModelName);
-}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  const subscriptionClients = new Map<string, express.Response[]>();
-
-  // --- PRODUCTION-GRADE SLIDING WINDOW RATE LIMITER ---
-  const ipRequestTimes = new Map<string, number[]>();
-  const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-  const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per window
-
-  function rateLimiterMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
-    if (req.path === '/api/webhook' || req.path === '/api/health') {
-      return next();
-    }
-    
-    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-    const ip = (typeof rawIp === 'string' ? rawIp.split(',')[0] : 'unknown').trim();
-    const now = Date.now();
-    
-    let timestamps = ipRequestTimes.get(ip) || [];
-    timestamps = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
-    
-    if (timestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-      console.warn(`[RATE LIMIT] IP bloqueado por excesso de requisições: ${ip}`);
-      addSystemLog('error', 'Sistema', 'Rate Limit Ativado', `Bloqueado IP ${ip} por exceder ${MAX_REQUESTS_PER_WINDOW} req/min`, req);
-      
-      return res.status(429).json({
-        error: "Muitas requisições. Por favor, aguarde alguns instantes antes de enviar mais mensagens.",
-        retryAfterSeconds: Math.ceil((RATE_LIMIT_WINDOW_MS - (now - timestamps[0])) / 1000)
-      });
-    }
-    
-    timestamps.push(now);
-    ipRequestTimes.set(ip, timestamps);
-    next();
-  }
-
-  app.use("/api", rateLimiterMiddleware);
-
-  app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  // Stripe Webhook Endpoint MUST parse raw body to verify signature
+  app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), async (req: any, res: any) => {
     const sig = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    let event: Stripe.Event;
+    let event: any;
 
     try {
       if (webhookSecret && sig) {
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_mock");
-        event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+        const stripe = getStripe();
+        if (!stripe) {
+          return res.status(500).json({ error: "Stripe SDK não inicializado." });
+        }
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
       } else {
-        event = JSON.parse(req.body.toString());
+        // Fallback for development/testing when webhook secret is not configured
+        const rawString = typeof req.body === 'string' ? req.body : req.body.toString('utf8');
+        event = JSON.parse(rawString);
       }
+
+      await StripeWebhookHandler.handleWebhookEvent(event);
+      return res.status(200).json({ received: true });
     } catch (err: any) {
-      console.error("Webhook signature verification failed.", err.message);
+      console.error("[STRIPE WEBHOOK VERIFICATION ERROR]:", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-
-    try {
-      if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted" || event.type === "invoice.payment_succeeded") {
-        let subscriptionId: string | null = null;
-        let subscription: Stripe.Subscription | null = null;
-
-        if (event.type === "invoice.payment_succeeded") {
-          const invoice = event.data.object as any;
-          subscriptionId = invoice.subscription as string;
-          if (subscriptionId) {
-            const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_mock");
-            subscription = await stripe.subscriptions.retrieve(subscriptionId);
-          }
-        } else {
-          subscription = event.data.object as Stripe.Subscription;
-          subscriptionId = subscription.id;
-        }
-
-        if (subscription && subscriptionId) {
-          const planAmount = subscription.items.data[0]?.price.unit_amount || 0;
-          const planCurrency = subscription.items.data[0]?.price.currency || "brl";
-
-          const payload = {
-            subscriptionId: subscription.id,
-            status: subscription.status,
-            trialEnd: subscription.trial_end,
-            cancelAtPeriodEnd: subscription.cancel_at_period_end,
-            currentPeriodEnd: (subscription as any).current_period_end,
-            amount: planAmount,
-            currency: planCurrency,
-          };
-
-          const clients = subscriptionClients.get(subscriptionId);
-          if (clients) {
-            clients.forEach(client => {
-              client.write(`data: ${JSON.stringify(payload)}\n\n`);
-            });
-          }
-        }
-      }
-      res.json({ received: true });
-    } catch (err: any) {
-      console.error("Error processing webhook event", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
-  const oauth2Client = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    "postmessage" // Using postmessage for GIS code client
-  );
+  // Initialize task manager background loop
+  initFallbackQueueRunner();
 
-  app.post("/api/auth/google/token", async (req, res) => {
-    try {
-      const { code } = req.body;
-      if (!code) return res.status(400).json({ error: "Code is required" });
-
-      const { tokens } = await oauth2Client.getToken(code);
-      
-      // Verify ID token to get user info
-      const ticket = await oauth2Client.verifyIdToken({
-        idToken: tokens.id_token!,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      const payload = ticket.getPayload();
-      
-      if (!payload) throw new Error("Invalid token payload");
-
-      res.json({
-        tokens,
-        user: {
-          uid: payload.sub,
-          email: payload.email,
-          displayName: payload.name,
-          photoURL: payload.picture,
-        }
-      });
-    } catch (error: any) {
-      console.error("Token exchange error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/auth/google/refresh", async (req, res) => {
-    try {
-      const { refreshToken } = req.body;
-      if (!refreshToken) return res.status(400).json({ error: "Refresh token is required" });
-
-      const client = new OAuth2Client(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET
-      );
-      client.setCredentials({ refresh_token: refreshToken });
-      
-      const { tokens } = await client.refreshAccessToken();
-      res.json({ tokens });
-    } catch (error: any) {
-      console.error("Token refresh error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/subscription/stream", (req, res) => {
-    const { subscription_id } = req.query;
-    if (!subscription_id || typeof subscription_id !== "string") {
-      return res.status(400).json({ error: "subscription_id is required" });
-    }
-
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    const clients = subscriptionClients.get(subscription_id) || [];
-    clients.push(res);
-    subscriptionClients.set(subscription_id, clients);
-
-    res.write(":\n\n");
-
-    req.on("close", () => {
-      const activeClients = subscriptionClients.get(subscription_id) || [];
-      subscriptionClients.set(subscription_id, activeClients.filter(c => c !== res));
-      if (subscriptionClients.get(subscription_id)?.length === 0) {
-        subscriptionClients.delete(subscription_id);
-      }
-    });
-  });
-
-
-  app.get("/api/limits", (req, res) => {
-    try {
-      const userId = req.query.userId;
-      if (!userId) return res.status(400).json({ error: "userId is required" });
-      const usage = getUserUsage(userId as string);
-      const config = getAdminConfig();
-      res.json({ usage, config });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get("/api/memory/retrieve", (req, res) => {
-    try {
-      const { userId, query } = req.query;
-      if (!userId || !query) return res.status(400).json({ error: "userId and query are required" });
-      const memories = retrieveRelevantMemories(userId as string, query as string, 5);
-      res.json({ memories });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/memory/store", (req, res) => {
-    try {
-      const { userId, content, metadata } = req.body;
-      if (!userId || !content) return res.status(400).json({ error: "userId and content are required" });
-      const chunk = storeMemory(userId, content, metadata);
-      res.json({ chunk });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // Backend RBAC Guard Helper Function
-  function verifyAdminRole(req: express.Request, res: express.Response): boolean {
-    const userEmail = (
-      req.headers['x-user-email'] ||
-      req.body?.userEmail ||
-      req.query?.userEmail ||
-      ''
-    ) as string;
-
-    const role = getUserRole(userEmail);
-
-    if (role !== 'admin') {
-      res.status(403).json({
-        error: '403 Forbidden',
-        code: 'ACCESS_DENIED',
-        message: `Acesso Negado. O seu usuário (${userEmail || 'Anônimo'}) possui o papel 'user'. Apenas o administrador (${ADMIN_EMAIL}) possui permissão para acessar ou alterar o Painel Administrativo.`,
-        userEmail: userEmail || 'Anônimo',
-        requiredRole: 'admin',
-        currentRole: role
-      });
-      return false;
-    }
-    return true;
-  }
-
-  // GET Admin Config (Protected)
-  app.get("/api/admin/config", (req, res) => {
-    try {
-      if (!verifyAdminRole(req, res)) return;
-      const config = getAdminConfig();
-      res.json({ config });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // POST Admin Config (Protected with Audit Log)
-  app.post("/api/admin/config", (req, res) => {
-    try {
-      if (!verifyAdminRole(req, res)) return;
-      const { config, userEmail } = req.body;
-      const oldConfig = getAdminConfig();
-      const updated = updateAdminConfig(config);
-      
-      // Register this administrative change in audit logs!
-      addAuditLog(
-        userEmail || ADMIN_EMAIL, 
-        "Alteração de Configurações do Sistema", 
-        oldConfig, 
-        updated, 
-        req
-      );
-      
-      addSystemLog(
-        "info", 
-        userEmail || ADMIN_EMAIL, 
-        "Configurações Salvas", 
-        "As configurações globais do ZENO AI foram modificadas pelo administrador", 
-        req
-      );
-      
-      res.json({ success: true, config: updated });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // GET Admin Stats (Protected - Real calculated Database metrics)
-  app.get("/api/admin/stats", (req, res) => {
-    try {
-      if (!verifyAdminRole(req, res)) return;
-      const stats = getAdminStats();
-      res.json(stats);
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // GET Admin Logs (Protected)
-  app.get("/api/admin/logs", (req, res) => {
-    try {
-      if (!verifyAdminRole(req, res)) return;
-      const auditLogs = getAuditLogs();
-      const systemLogs = getSystemLogs();
-      res.json({ auditLogs, systemLogs });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // POST Admin Auth Log (Logs Login/Logout operations)
-  app.post("/api/admin/log-auth", (req, res) => {
-    try {
-      const { userEmail, action, details } = req.body;
-      addSystemLog("auth", userEmail || "Anônimo", action, details, req);
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // POST Verify User Role
-  app.post("/api/admin/verify", (req, res) => {
-    try {
-      const userEmail = (req.body?.userEmail || req.headers['x-user-email'] || '') as string;
-      const role = getUserRole(userEmail);
-      res.json({
-        userEmail,
-        role,
-        isAdmin: role === 'admin'
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
+  // API Routes
   app.post("/api/chat", async (req, res) => {
     try {
-
-      const { history, message, speed, attachments, userId, plan } = req.body;
-
+      const { message, history, speed, plan, userId, attachments, systemInstruction } = req.body;
+      
       if (!message) {
-        return res.status(400).json({ error: "Message is required" });
+        return res.status(400).json({ error: "Mensagem é obrigatória." });
       }
 
       // Model-specific instructions and parameters from models.ts
@@ -451,8 +105,8 @@ async function startServer() {
       // Retrieve long-term memory context if userId is available
       let memoryContext = "";
       if (userId) {
-        const relevantMemories = retrieveRelevantMemories(userId, message, 4);
-        if (relevantMemories.length > 0) {
+        const relevantMemories = await retrieveRelevantMemories(userId, message, 4);
+        if (relevantMemories && relevantMemories.length > 0) {
           memoryContext = "\n\n[Memória de Longo Prazo do Usuário (Recuperada do Vetor Store)]:\n" + relevantMemories.map(m => `- ${m.content} (Contexto: ${m.metadata?.sessionTitle || 'Chat'})`).join('\n');
           modelSystemPrompt += memoryContext;
         }
@@ -468,13 +122,13 @@ async function startServer() {
       const userEmail = (req.body?.userEmail || req.headers['x-user-email'] || '') as string;
 
       if (userId) {
-        setUserPlan(userId, plan || 'ZENO Free');
+        await setUserPlan(userId, plan || 'ZENO Free');
         
         // Pass userEmail and req to automatically update active metadata
-        const usage = getUserUsage(userId, userEmail, req);
+        const usage = await getUserUsage(userId, userEmail, req);
         
         if (plan !== 'ZENO Pro') {
-          const config = getAdminConfig();
+          const config = await getAdminConfig();
           let actionType = 'messages';
           if (normSpeed === 'search' || normSpeed === 'mega' || normSpeed === 'pdf') actionType = 'search';
           else if (normSpeed === 'vision' || normSpeed === 'image' || isImageMode) actionType = 'vision';
@@ -482,11 +136,11 @@ async function startServer() {
           
           if (usage.usage[actionType] >= config.limits[actionType]) {
             // Log limit block
-            addSystemLog('error', userEmail || 'Anônimo', 'Limite de Uso Atingido', `Usuário bloqueado: atingiu o limite de ${config.limits[actionType]} em ${actionType}`, req);
+            await addSystemLog('error', userEmail || 'Anônimo', 'Limite de Uso Atingido', `Usuário bloqueado: atingiu o limite de ${config.limits[actionType]} em ${actionType}`, req);
             return res.status(429).json({ error: `Limite diário atingido. Você atingiu o limite de ${config.limits[actionType]} usos para ${actionType} hoje. Faça upgrade para o ZENO Pro para usar sem limites.`, isLimitReached: true, actionType: actionType });
           }
           
-          updateUserUsage(userId, actionType as keyof typeof config.limits);
+          await updateUserUsage(userId, actionType as keyof typeof config.limits);
         } else {
           // If Pro user, let's still update dynamic system stats
           let actionType = 'messages';
@@ -494,65 +148,28 @@ async function startServer() {
           else if (normSpeed === 'vision' || normSpeed === 'image' || isImageMode) actionType = 'vision';
           else if (attachments && attachments.length > 0) actionType = 'doc';
           
-          if (actionType === 'messages') incrementStatCounter('totalMessagesSent');
-          else if (actionType === 'search') incrementStatCounter('totalWebSearches');
-          else if (actionType === 'image') incrementStatCounter('totalImagesGenerated');
-          else if (actionType === 'doc') incrementStatCounter('totalPdfsAnalyzed');
-          else if (actionType === 'vision') incrementStatCounter('totalVisionUses');
+          if (actionType === 'messages') await incrementStatCounter('totalMessagesSent');
+          else if (actionType === 'search') await incrementStatCounter('totalWebSearches');
+          else if (actionType === 'image') await incrementStatCounter('totalImagesGenerated');
+          else if (actionType === 'doc') await incrementStatCounter('totalPdfsAnalyzed');
+          else if (actionType === 'vision') await incrementStatCounter('totalVisionUses');
         }
       }
 
       // Store user message in vector memory
       if (userId && message.length > 10) {
-        storeMemory(userId, message, { model: normSpeed, type: 'qa' });
+        await storeMemory(userId, message, { type: "user_message", speed: normSpeed });
       }
 
-      if (isImageMode) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-
+      // If user is asking for image generation, we might want to use the task queue instead of streaming
+      // for free users if server is busy, but for now we stream directly unless explicitly handled.
+      // Special check: ZENO Vision free tier queuing
+      if (isImageMode && plan !== 'ZENO Pro' && !isAdminUser(userEmail)) {
         try {
-          // Clean prompt
-          const cleanPrompt = message
-            .replace(/^(gerar imagem|crie uma imagem|desenhe|gerar arte|criar imagem|gerar foto|generate image|draw|fazer uma ilustração|fazer um wallpaper|desenhar|criar uma arte|criar logotipo|criar personagem|criar foto realista|faça uma ilustração|faça um wallpaper|logotipo|personagem|foto realista|anime|crie um mockup|faça um diagrama|crie um infográfico|mostre uma imagem|gere uma imagem)\s*(de|para|a|um|uma|of|about)?\s*/i, "")
-            .trim() || message;
-
-          const userPlan = userEmail === ADMIN_EMAIL ? 'ADMIN' : (plan === 'ZENO Pro' ? 'ZENO Pro' : 'ZENO Free');
-
-          if (userPlan === 'ADMIN' || userPlan === 'ZENO Pro') {
-            res.write(`data: ${JSON.stringify({ text: "⚡ **Processando sua solicitação de imagem prioritária no ZENO AI sem fila de espera...**\n\n" })}\n\n`);
+          const config = await getAdminConfig();
+          if (config.serverSettings?.enforceImageQueue) {
+            const cleanPrompt = message.replace(/^(gerar|crie|criar|desenhe|desenhar|faça|fazer|gere|mostre|me dá|me mostre)\s*(uma?|um)?\s*(imagem|foto|arte|ilustração|wallpaper|quadro|desenho|logotipo|logo|personagem|grafico|gráfico|infográfico|infografico|diagrama|wireframe|mockup|render|3d|pintura|avatar|ícone|icone)/i, "").trim();
             
-            const task = await createQueuedTask({
-              userId: userId || 'anon-user',
-              userEmail: userEmail || 'Anônimo',
-              plan: userPlan,
-              payload: {
-                prompt: cleanPrompt,
-                style: "photorealistic",
-                aspectRatio: "1:1",
-                enhance: true,
-                engine: "flux",
-                negativePrompt: ""
-              },
-              req
-            });
-
-            const processedTask = await executeAndProcessTask(task.id, req);
-            if (processedTask.status === 'failed') {
-              res.write(`data: ${JSON.stringify({ text: `❌ **Falha ao gerar imagem:** ${processedTask.error || 'Erro desconhecido.'}` })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              return res.end();
-            }
-
-            const markdownOutput = `![${cleanPrompt}](${processedTask.result.imageUrl})`;
-            res.write(`data: ${JSON.stringify({ text: markdownOutput })}\n\n`);
-            res.write("data: [DONE]\n\n");
-            return res.end();
-          } else {
-            // ZENO Free tier - write initial queue status and poll in the background of the SSE stream
-            res.write(`data: ${JSON.stringify({ text: "⏳ **Sua solicitação foi adicionada à fila gratuita do ZENO AI.**\nComo assinantes ZENO Pro possuem prioridade e processamento imediato, estamos organizando o tráfego do servidor para processar sua imagem com segurança.\n\n" })}\n\n`);
-
             const task = await createQueuedTask({
               userId: userId || 'anon-user',
               userEmail: userEmail || 'Anônimo',
@@ -570,7 +187,7 @@ async function startServer() {
 
             let lastPosition = -1;
             while (true) {
-              const details = getTaskStatusDetails(task.id);
+              const details = await getTaskStatusDetails(task.id);
               if (!details.task) {
                 res.write(`data: ${JSON.stringify({ text: "❌ **Erro:** Tarefa não encontrada no servidor." })}\n\n`);
                 res.write("data: [DONE]\n\n");
@@ -612,9 +229,7 @@ async function startServer() {
         }
       }
 
-      // Convert history to the format expected by GenAI SDK, which is just string content for simple cases,
-      // but the chat model holds state on the backend. Since this is stateless via HTTP,
-      // we'll pass the entire conversation history as an array of contents.
+      // Convert history to the format expected by GenAI SDK
       const contents: any[] = [];
       if (history && Array.isArray(history)) {
         history.forEach((msg) => {
@@ -630,7 +245,6 @@ async function startServer() {
       let userParts: any[] = [];
       
       if (attachments && Array.isArray(attachments)) {
-        // Remove massive base64 markdown images from the text we send to Gemini
         finalMessageText = finalMessageText.replace(/!\[.*?\]\(data:.*?\)/g, "[Imagem Anexada]");
         
         for (const att of attachments) {
@@ -654,579 +268,673 @@ async function startServer() {
         parts: userParts,
       });
 
-      // 2. URL Reading & Extraction
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const urls = message.match(urlRegex) || [];
-      if (urls.length > 0) {
-        let urlContents = "";
-        const fetchPromises = urls.map(async (url) => {
-          try {
-            console.log(`[ZENO API] Extraindo conteúdo da URL: ${url}`);
-            const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
-              headers: { "User-Agent": "ZENO-AI-Bot" }
-            });
-            if (jinaRes.ok) {
-              const text = await jinaRes.text();
-              return `\n\n--- Conteúdo da URL (${url}) ---\n${text.substring(0, 30000)}\n---------------------------\n`;
-            }
-          } catch (e) {
-            console.error(`[ZENO API] Erro ao ler URL ${url}:`, e);
-          }
-          return "";
-        });
-        
-        const results = await Promise.all(fetchPromises);
-        urlContents = results.join("");
-        
-        if (urlContents) {
-           contents.push({
-              role: "user",
-              parts: [{ text: `[SISTEMA]: O usuário enviou os seguintes links. Aqui está o conteúdo extraído deles para você analisar e responder à pergunta:\n${urlContents}` }]
-           });
-        }
-      }
+      const response = await ai.models.generateContent({
+        model: modelCfg.apiModel,
+        contents,
+        config: {
+          systemInstruction: modelSystemPrompt,
+          temperature: modelTemperature,
+          maxOutputTokens: 2048,
+        },
+      });
 
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      
-      let activeSpeed = speed;
-      let currentSystemInstruction = systemInstruction;
-      let routerIntent = "GENERAL";
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
 
-      // 1. Smart Model Router
-      if (speed === "smart") {
-        const routerPrompt = `Analyze the user's message and reply ONLY with one of these tags indicating the intent:
-[CODE] for programming, coding, refactoring, debug.
-[MATH] for math, complex logic, deep reasoning.
-[CREATIVE] for storytelling, poetry, creative writing.
-[GENERAL] for casual conversation, general questions.
+      const fullResponseText = response.text || "";
+      res.write(`data: ${JSON.stringify({ text: fullResponseText })}\n\n`);
 
-User Message: "${message}"`;
-
-        try {
-          const routerResponse = await ai.models.generateContent({
-            model: PRIMARY_TEXT_MODEL,
-            contents: routerPrompt,
-            config: { temperature: 0.1 }
-          });
-          
-          routerIntent = routerResponse.text?.trim().toUpperCase() || "[GENERAL]";
-          console.log(`[Smart Router] Intent detectada: ${routerIntent}`);
-
-          if (routerIntent.includes("[CODE]")) {
-            activeSpeed = "mega";
-            currentSystemInstruction = `${systemInstruction}\n\n[MODO ARQUITETO DE SOFTWARE]: Forneça código limpo, modular, documentado e explique a lógica. Suporte a múltiplas linguagens com as melhores práticas de engenharia.`;
-          } else if (routerIntent.includes("[MATH]")) {
-            activeSpeed = "mega";
-            currentSystemInstruction = `${systemInstruction}\n\n[MODO RACIOCÍNIO LÓGICO]: Pense profundamente e passo-a-passo. Descreva todas as deduções antes de fornecer a resposta final.`;
-          } else if (routerIntent.includes("[CREATIVE]")) {
-            activeSpeed = "fast";
-            currentSystemInstruction = `${systemInstruction}\n\n[MODO ESCRITA CRIATIVA]: Seja altamente expressivo, use vocabulário rico, tom envolvente e estrutura narrativa impecável.`;
-          } else {
-            activeSpeed = "fast";
-          }
-        } catch (e: any) {
-          console.error("[Smart Router] Falha na classificação, usando fallback (fast):", e.message);
-          activeSpeed = "fast";
-        }
-      }
-
-      const config: any = {
-        systemInstruction: currentSystemInstruction,
-      };
-      
-      if (activeSpeed === "fast" || activeSpeed === "zeno") {
-        config.temperature = 0.5;
-        config.topP = 0.8;
-      } else if (activeSpeed === "mega" || activeSpeed === "think") {
-        config.temperature = 0.7;
-        config.topP = 0.95;
-        if (!config.systemInstruction.includes("MODO")) {
-          config.systemInstruction = `${currentSystemInstruction}\n\n[MODO ANALÍTICO AVANÇADO ATIVADO]: Traga a síntese mais profunda, abrangente, atualizada e analítica possível. Cruze dados de ciência, tecnologia e conhecimento global.`;
-        }
-      } else {
-        config.temperature = 0.9;
-        config.topP = 0.95;
-      }
-      
-      // Permitir que o modelo pesquise antes de responder quando necessário (Search & Mega modes)
-      if (activeSpeed === "search" || activeSpeed === "mega") {
-        config.tools = [{ googleSearch: {} }];
-      }
-
-      const candidateModels = getCandidateModelsForMode(activeSpeed);
-
-      let success = false;
-      let lastError: any = null;
-
-      for (const modelName of candidateModels) {
-        if (!isValidModelName(modelName)) {
-          console.warn(`[ZENO API] Ignorando nome de modelo inválido/obsoleto: ${modelName}`);
-          continue;
-        }
-
-        try {
-          console.log(`[ZENO API] Conectando ao Gemini com modelo: ${modelName} (modo: ${speed || "padrão"})`);
-          const responseStream = await ai.models.generateContentStream({
-            model: modelName,
-            contents: contents,
-            config: config,
-          });
-
-          for await (const chunk of responseStream) {
-            const c = chunk as GenerateContentResponse;
-            if (c.text) {
-              res.write(`data: ${JSON.stringify({ text: c.text })}\n\n`);
-            }
-          }
-          success = true;
-          incrementModelCounter(modelName);
-          addSystemLog('ia', userEmail || 'Anônimo', 'Resposta de IA', `Uso do modelo: ${modelName} (modo: ${speed || 'padrão'})`, req);
-          console.log(`[ZENO API] Sucesso na geração com modelo: ${modelName}`);
-          break;
-        } catch (err: any) {
-          console.error(`[ZENO API] Erro ao usar modelo ${modelName}:`, err?.message || err);
-          lastError = err;
-        }
-      }
-
-      if (!success) {
-        console.error("[ZENO API] Todos os modelos da cadeia de fallback falharam. Erro final:", lastError);
-        const errStr = String(lastError?.message || lastError || "");
-        
-        // Register critical AI error in system logs
-        addSystemLog('error', userEmail || 'Anônimo', 'Falha Crítica de IA', `Cadeia de fallback falhou. Erro: ${errStr.substring(0, 150)}`, req);
-        
-        let errorMessage = "Não foi possível se conectar aos modelos de IA do ZENO no momento. Por favor, tente novamente em alguns instantes.";
-
-        if (errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED") || errStr.includes("429")) {
-          errorMessage = "O limite de requisições por minuto da IA foi atingido. Por favor, aguarde alguns instantes e tente novamente.";
-        } else if (errStr.includes("API_KEY") || errStr.includes("API key")) {
-          errorMessage = "Erro nas credenciais da API do Gemini no servidor.";
-        }
-
-        res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
-        return res.end();
+      // Store AI response in vector memory
+      if (userId && fullResponseText.length > 10) {
+        await storeMemory(userId, fullResponseText, { type: "ai_response", model: modelCfg.apiModel });
       }
 
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error: any) {
-      console.error("[ZENO API] Exceção crítica na rota de chat:", error?.message || error);
-      const errStr = String(error?.message || error || "");
-      let errorMessage = "Não foi possível processar sua solicitação no momento. Tente novamente.";
-      if (errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED") || errStr.includes("429")) {
-        errorMessage = "O limite de requisições por minuto da IA foi atingido. Por favor, aguarde alguns instantes e tente novamente.";
-      }
-      res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+      console.error("Chat Error:", error);
+      res.write(`data: ${JSON.stringify({ error: error.message || "Erro interno no servidor ZENO." })}\n\n`);
+      res.write("data: [DONE]\n\n");
       res.end();
     }
   });
 
-  // API route to generate concise LLM title for chat session
-  app.post("/api/generate-title", async (req, res) => {
-    try {
-      const { message } = req.body;
-      if (!message || typeof message !== "string") {
-        return res.status(400).json({ error: "Mensagem é obrigatória." });
-      }
-
-      const cleanMessage = message.slice(0, 500);
-      const prompt = `Você é um assistente de IA. Sua tarefa é criar um título extremamente curto, conciso, elegante e altamente descritivo (de 3 a 5 palavras no máximo) para uma conversa no chat baseando-se na mensagem inicial do usuário.
-Responda APENAS com o texto do título gerado, sem aspas, sem ponto final, e sem nenhum prefixo como "Título:".
-
-Mensagem do usuário:
-"${cleanMessage}"`;
-
-      const candidateModels = [LITE_FAST_MODEL, PRIMARY_TEXT_MODEL, LATEST_ALIAS_MODEL];
-      let aiTitle = "";
-
-      for (const modelName of candidateModels) {
-        if (!isValidModelName(modelName)) continue;
-        try {
-          const result = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-            config: {
-              temperature: 0.3,
-              topP: 0.8,
-            },
-          });
-          const text = result.text?.trim();
-          if (text) {
-            aiTitle = text.replace(/^["'«»]|["'«»]$/g, '').replace(/\.$/, '').trim();
-            if (aiTitle) break;
-          }
-        } catch (err: any) {
-          console.error(`[ZENO Title API] Erro ao usar modelo ${modelName}:`, err?.message || err);
-        }
-      }
-
-      return res.json({ title: aiTitle || null });
-    } catch (error: any) {
-      console.error("[ZENO Title API] Erro ao gerar título:", error?.message || error);
-      return res.json({ title: null });
-    }
-  });
-
-  // Core Image Generation Engine
-  async function generateImageCore(options: {
-    prompt: string;
-    style?: string;
-    aspectRatio?: string;
-    enhance?: boolean;
-    engine?: string;
-    negativePrompt?: string;
-    seed?: any;
-    guidanceScale?: number;
-    userEmail?: string;
-    req?: any;
-  }) {
-    const { 
-      prompt, 
-      style = "photorealistic", 
-      aspectRatio = "1:1", 
-      enhance = true,
-      engine = "flux",
-      negativePrompt = "",
-      seed: customSeed,
-      guidanceScale = 7.5,
-      userEmail = "Anônimo",
-      req
-    } = options;
-
-    let width = 1024;
-    let height = 1024;
-    if (aspectRatio === "16:9") {
-      width = 1280;
-      height = 720;
-    } else if (aspectRatio === "9:16") {
-      width = 720;
-      height = 1280;
-    } else if (aspectRatio === "4:3") {
-      width = 1024;
-      height = 768;
-    } else if (aspectRatio === "3:2") {
-      width = 1080;
-      height = 720;
-    }
-
-    const stylePrompts: Record<string, string> = {
-      photorealistic: "photorealistic, ultra-detailed 8k resolution, cinematic lighting, physical shadow depth, sharp focus, professional photography, flawless human anatomy, natural hands",
-      "ultra-realista": "ultra realistic photographic, masterwork lighting, 8k UHD resolution, highly detailed texture, DSLR camera lens 85mm f1.4, accurate hands and faces",
-      anime: "anime art style, vibrant colors, clean line art, Studio Ghibli inspired, high quality japanese animation visual, masterwork illustration",
-      manga: "japanese manga style, dramatic ink shading, high contrast monochrome with subtle tones, expressive character design",
-      ghibli: "Studio Ghibli aesthetic, hand-drawn anime background, lush nature, dreamy atmospheric lighting, nostalgic art style",
-      pixar: "3D Pixar animation style, warm charming character design, soft subsurface scattering, realistic textures, Disney Pixar render",
-      "3d-render": "3D render, Blender, Unreal Engine 5, ray tracing, soft volumetric lighting, octane render, 8k detail",
-      cyberpunk: "cyberpunk aesthetics, glowing neon reflections, dark futuristic metropolis, volumetric fog, high detail octane render",
-      fantasy: "epic dark fantasy art, magical atmosphere, intricate armor and clothing details, legendary lighting, concept art",
-      scifi: "sci-fi cinematic visual, advanced technology aesthetics, sleek metallic surfaces, cosmic space lighting, 8k concept art",
-      "concept-art": "digital concept art, trending on artstation, rich color palette, detailed texturing, cinematic framing",
-      digital: "digital painting masterpiece, refined brush strokes, dramatic lighting, vivid color depth",
-      watercolor: "soft watercolor painting, artistic water brush strokes, pastel aesthetic, delicate details, expressive traditional art",
-      vector: "flat vector graphic, sharp clean lines, modern geometric shapes, vibrant solid colors, professional illustration",
-      logo: "professional minimalist vector logo design, iconic brand symbol, clean geometry, isolated background, elegant branding",
-      icon: "app icon design, 3D glossy metallic/clay emblem, isolated object, sleek modern UI asset",
-      minimalist: "minimalist design, clean empty space, elegant composition, subtle color harmony, sophisticated visual",
-      "low-poly": "low poly 3D art, geometric facet design, vibrant pastel lighting, stylized low polygon artwork"
-    };
-
-    const styleSuffix = stylePrompts[style] || stylePrompts.photorealistic;
-    let finalPrompt = `${prompt}, ${styleSuffix}`;
-
-    if (enhance) {
-      const enhanceModels = [PRIMARY_TEXT_MODEL, LITE_FAST_MODEL, LATEST_ALIAS_MODEL];
-      for (const mName of enhanceModels) {
-        try {
-          const enhanceResponse = await ai.models.generateContent({
-            model: mName,
-            contents: `Transform this Portuguese/English user request into a detailed, high-quality image generation prompt in English (max 50 words). Include camera framing, light physics, exact style elements, and natural anatomy (flawless hands and faces).\nUser request: "${prompt}"\nStyle: "${style}"`,
-          });
-          const enhancedText = enhanceResponse.text?.trim();
-          if (enhancedText) {
-            finalPrompt = `${enhancedText}, ${styleSuffix}`;
-            break;
-          }
-        } catch (e: any) {
-          console.error(`[ZENO Image API] Prompt enhancement error with ${mName}:`, e?.message || e);
-        }
-      }
-    }
-
-    const seed = customSeed && !isNaN(Number(customSeed)) ? Number(customSeed) : Math.floor(Math.random() * 1000000);
-    
-    let modelParam = "flux";
-    if (engine === "flux-realism" || style === "photorealistic" || style === "ultra-realista") modelParam = "flux-realism";
-    else if (engine === "turbo" || engine === "sdxl") modelParam = "turbo";
-    else if (engine === "flux-anime" || style === "anime" || style === "ghibli") modelParam = "flux-anime";
-    else if (engine === "flux-3d" || style === "3d-render" || style === "pixar") modelParam = "flux-3d";
-
-    const encodedPrompt = encodeURIComponent(finalPrompt);
-    const negParam = negativePrompt ? `&negative=${encodeURIComponent(negativePrompt)}` : '';
-    
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=${modelParam}${negParam}`;
-    const fallbackUrls = [
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=turbo${negParam}`,
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=default${negParam}`
-    ];
-
-    const imageItem = {
-      id: `img-${Date.now()}-${Math.floor(Math.random()*10000)}`,
-      imageUrl,
-      fallbackUrls,
-      prompt: finalPrompt,
-      originalPrompt: prompt,
-      optimizedPrompt: finalPrompt,
-      aspectRatio,
-      style,
-      seed,
-      engine: modelParam,
-      negativePrompt,
-      guidanceScale,
-      model: "Estúdio ZENO Vision",
-      provider: "Flux Dev",
-      collection: "Geral",
-      timestamp: Date.now()
-    };
-
-    backendImageLibrary.unshift(imageItem);
-
-    incrementStatCounter('totalImagesGenerated');
-    incrementModelCounter(modelParam);
-    addSystemLog('ia', userEmail, 'Geração de Imagem', `Geração com motor ${modelParam} para o prompt: "${prompt.substring(0, 80)}..."`, req);
-
-    return imageItem;
-  }
-
-  // Register with task manager and initialize fallback runner ONCE at startup
-  registerImageGenerator(generateImageCore);
-  initFallbackQueueRunner();
-
-  // API route to generate AI Images (With subscription queuing)
-  app.post("/api/generate-image", async (req, res) => {
-    try {
-      const { 
-        prompt, 
-        style = "photorealistic", 
-        aspectRatio = "1:1", 
-        enhance = true, 
-        engine = "flux", 
-        negativePrompt = "", 
-        seed, 
-        guidanceScale = 7.5, 
-        plan, 
-        userId, 
-        userEmail = "Anônimo" 
-      } = req.body;
-
-      if (!prompt || typeof prompt !== "string") {
-        return res.status(400).json({ error: "O prompt é obrigatório." });
-      }
-
-      const userPlan = userEmail === ADMIN_EMAIL ? 'ADMIN' : (plan === 'ZENO Pro' ? 'ZENO Pro' : 'ZENO Free');
-
-      // Create queued task in persistent db and queue locally
-      const task = await createQueuedTask({
-        userId: userId || 'anon-user',
-        userEmail,
-        plan: userPlan,
-        payload: {
-          prompt,
-          style,
-          aspectRatio,
-          enhance,
-          engine,
-          negativePrompt,
-          seed,
-          guidanceScale
-        },
-        req
-      });
-
-      if (userPlan === 'ADMIN' || userPlan === 'ZENO Pro') {
-        // "Usuários Pro nunca devem visualizar fila de espera." -> Synchronous execution
-        console.log(`[QUEUE] Usuário Pro/Admin (${userEmail}) ignorou a fila. Processando imediatamente.`);
-        const processedTask = await executeAndProcessTask(task.id, req);
-        if (processedTask.status === 'failed') {
-          return res.status(500).json({ error: processedTask.error || "Erro ao gerar imagem." });
-        }
-        return res.json(processedTask.result);
-      } else {
-        // Free tier users get queued task details and poll the status endpoint
-        console.log(`[QUEUE] Usuário gratuito (${userEmail}) adicionado à fila.`);
-        const details = getTaskStatusDetails(task.id);
-        return res.json({
-          taskId: task.id,
-          status: task.status,
-          position: details.position,
-          estimatedTimeSeconds: details.estimatedTimeSeconds,
-          averageWaitTimeSeconds: details.averageWaitTimeSeconds
-        });
-      }
-    } catch (error: any) {
-      console.error("Error generating image via tasks:", error);
-      return res.status(500).json({ error: "Erro ao processar tarefa de geração. Tente novamente." });
-    }
-  });
-
-  // Task status details endpoint (ZENO Free polling)
-  app.get("/api/tasks/status/:id", (req, res) => {
-    try {
-      const details = getTaskStatusDetails(req.params.id);
-      if (!details.task) {
-        return res.status(404).json({ error: "Tarefa não encontrada." });
-      }
-      return res.json({
-        taskId: details.task.id,
-        status: details.task.status,
-        plan: details.task.plan,
-        position: details.position,
-        estimatedTimeSeconds: details.estimatedTimeSeconds,
-        averageWaitTimeSeconds: details.averageWaitTimeSeconds,
-        error: details.task.error,
-        result: details.task.result
-      });
-    } catch (error: any) {
-      return res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Task cancellation endpoint
-  app.post("/api/tasks/cancel", (req, res) => {
-    try {
-      const { taskId, userEmail = "Anônimo" } = req.body;
-      if (!taskId) {
-        return res.status(400).json({ error: "O ID da tarefa é obrigatório para cancelamento." });
-      }
-      const success = cancelQueuedTask(taskId, userEmail, req);
-      return res.json({ success });
-    } catch (error: any) {
-      return res.status(500).json({ error: error.message });
-    }
-  });
-
-  // REAL-TIME SYSTEM MONITORING DIAGNOSTICS ENDPOINT (DevOps/Admin tool)
-  app.get("/api/health", (req, res) => {
-    try {
-      const memoryUsage = process.memoryUsage();
-      const uptime = process.uptime();
-      
-      const dbPath = path.join(process.cwd(), '.data', 'db.json');
-      let dbOk = false;
-      let dbSize = 0;
-      if (fs.existsSync(dbPath)) {
-        dbOk = true;
-        dbSize = fs.statSync(dbPath).size;
-      }
-
-      res.json({
-        status: "healthy",
-        uptimeSeconds: Math.floor(uptime),
-        timestamp: Date.now(),
-        process: {
-          memoryRssMb: Math.round(memoryUsage.rss / 1024 / 1024),
-          memoryHeapTotalMb: Math.round(memoryUsage.heapTotal / 1024 / 1024),
-          memoryHeapUsedMb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-          nodeVersion: process.version,
-          platform: process.platform
-        },
-        queue: getQueueDiagnosticStats(),
-        database: {
-          healthy: dbOk,
-          provider: "db.json (Decoupled Abstract Mode)",
-          sizeBytes: dbSize
-        }
-      });
-    } catch (e: any) {
-      res.status(500).json({ status: "unhealthy", error: e.message });
-    }
-  });
-
-  // SECURE ADMINISTRATOR DATABASE BACKUP GENERATOR (Protected with verifyAdminRole)
-  app.post("/api/admin/backup", (req, res) => {
+  // GET Admin Stats (Protected)
+  app.get("/api/admin/stats", async (req, res) => {
     try {
       if (!verifyAdminRole(req, res)) return;
-      
-      const backupDir = path.join(process.cwd(), '.data', 'backups');
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
-      }
-
-      const dbPath = path.join(process.cwd(), '.data', 'db.json');
-      if (!fs.existsSync(dbPath)) {
-        return res.status(404).json({ error: "O banco de dados db.json não existe no momento para criar o backup." });
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupFilename = `db-backup-${timestamp}.json`;
-      const backupFilePath = path.join(backupDir, backupFilename);
-
-      fs.copyFileSync(dbPath, backupFilePath);
-      console.log(`[BACKUP] Backup gerado com sucesso pelo administrador: ${backupFilename}`);
-
-      // Log backup audit log
-      addSystemLog('info', ADMIN_EMAIL, 'Backup Gerado', `Backup gerado com sucesso: ${backupFilename}`, req);
-
-      // Enforce file retention: keep only the 5 most recent backup files
-      const files = fs.readdirSync(backupDir);
-      const backupFiles = files
-        .filter(f => f.startsWith('db-backup-') && f.endsWith('.json'))
-        .map(f => ({ name: f, time: fs.statSync(path.join(backupDir, f)).mtime.getTime() }))
-        .sort((a, b) => b.time - a.time); // newest first
-
-      if (backupFiles.length > 5) {
-        const excessFiles = backupFiles.slice(5);
-        excessFiles.forEach(f => {
-          fs.unlinkSync(path.join(backupDir, f.name));
-          console.log(`[BACKUP] Backup de histórico antigo excluído: ${f.name}`);
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Backup do banco de dados concluído com sucesso.",
-        filename: backupFilename,
-        totalBackupsStored: Math.min(backupFiles.length, 5)
-      });
+      const stats = await getAdminStats();
+      const queueStats = await getQueueDiagnosticStats();
+      res.json({ ...stats, queue: queueStats });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  // Backend Image Library Storage In-Memory Database
-  const backendImageLibrary: any[] = [];
-
-  app.get("/api/images", (req, res) => {
-    return res.json(backendImageLibrary);
+  // GET Admin Logs (Protected)
+  app.get("/api/admin/logs", async (req, res) => {
+    try {
+      if (!verifyAdminRole(req, res)) return;
+      const auditLogs = await getAuditLogs();
+      const systemLogs = await getSystemLogs();
+      res.json({ auditLogs, systemLogs });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
-  app.post("/api/images", (req, res) => {
+  // POST Admin Auth Log
+  app.post("/api/admin/log-auth", async (req, res) => {
     try {
-      const item = req.body;
-      if (!item || !item.imageUrl) {
-        return res.status(400).json({ error: "Dados inválidos." });
+      const { userEmail, action, details } = req.body;
+      await addSystemLog("auth", userEmail || "Anônimo", action, details, req);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET Admin Config (Protected)
+  app.get("/api/admin/config", async (req, res) => {
+    try {
+      if (!verifyAdminRole(req, res)) return;
+      const config = await getAdminConfig();
+      res.json(config);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST Admin Config (Protected)
+  app.post("/api/admin/config", async (req, res) => {
+    try {
+      if (!verifyAdminRole(req, res)) return;
+      const newConfig = req.body;
+      const db = await readDb();
+      await addSystemLog('info', ADMIN_EMAIL, 'Atualização de Configuração', 'Configurações globais do sistema atualizadas via painel admin.', req);
+      await adminDb.collection('config').doc('admin_settings').set(newConfig);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST Admin Manual Subscription Sync with Stripe API
+  app.post("/api/admin/sync-subscription", async (req, res) => {
+    try {
+      const { userId, customerId, subscriptionId } = req.body;
+      if (!userId && !customerId && !subscriptionId) {
+        return res.status(400).json({ error: "Informe userId, customerId ou subscriptionId para sincronização manual." });
       }
-      const existingIdx = backendImageLibrary.findIndex(i => i.id === item.id || i.imageUrl === item.imageUrl);
-      if (existingIdx >= 0) {
-        backendImageLibrary[existingIdx] = { ...backendImageLibrary[existingIdx], ...item };
-      } else {
-        backendImageLibrary.unshift(item);
+
+      let resolvedUserId = userId;
+      let targetSubId = subscriptionId;
+      let targetCustId = customerId;
+
+      if (!resolvedUserId) {
+        resolvedUserId = await SubscriptionManager.resolveUserId(targetCustId, undefined, undefined);
       }
-      return res.json({ success: true, item });
+
+      if (!resolvedUserId) {
+        return res.status(404).json({ error: "Usuário correspondente não encontrado no Firestore." });
+      }
+
+      // If subscriptionId isn't passed, check Firestore subscription doc for customerId / subId
+      if (!targetSubId) {
+        const existingSubDoc = await adminDb.collection('subscriptions').doc(resolvedUserId).get();
+        if (existingSubDoc.exists) {
+          const data = existingSubDoc.data();
+          targetSubId = data?.subscriptionId;
+          targetCustId = targetCustId || data?.customerId;
+        }
+      }
+
+      let updatedData = null;
+
+      if (targetSubId) {
+        const stripeSub = await StripeService.getSubscription(targetSubId);
+        if (stripeSub) {
+          const isAnnual = stripeSub.items?.data[0]?.plan?.interval === 'year';
+          const priceAmount = stripeSub.items?.data[0]?.price?.unit_amount;
+          const amount = priceAmount ? priceAmount / 100 : (isAnnual ? 399.00 : 39.90);
+          const statusMap: Record<string, any> = {
+            active: 'active',
+            trialing: 'trialing',
+            past_due: 'past_due',
+            unpaid: 'unpaid',
+            canceled: 'canceled'
+          };
+          const status = statusMap[stripeSub.status] || 'inactive';
+          const isActive = status === 'active' || status === 'trialing';
+
+          const subAny = stripeSub as any;
+          const startSec = subAny.current_period_start || Math.floor(Date.now() / 1000);
+          const endSec = subAny.current_period_end || (startSec + 30 * 86400);
+
+          updatedData = await SubscriptionManager.updateSubscriptionRecord({
+            userId: resolvedUserId,
+            subscriptionId: stripeSub.id,
+            customerId: (stripeSub.customer as string) || targetCustId || '',
+            subscriptionStatus: status,
+            active: isActive,
+            planId: isActive ? 'zeno_pro' : 'zeno_free',
+            priceId: stripeSub.items?.data[0]?.price?.id || '',
+            billingPeriod: isAnnual ? 'Anual' : 'Mensal',
+            currentPeriodStart: startSec * 1000,
+            currentPeriodEnd: endSec * 1000,
+            nextRenewal: endSec * 1000,
+            cancelAt: subAny.cancel_at ? subAny.cancel_at * 1000 : null,
+            cancelAtPeriodEnd: !!subAny.cancel_at_period_end,
+            lastInvoice: typeof subAny.latest_invoice === 'string' ? subAny.latest_invoice : subAny.latest_invoice?.id || '',
+            paymentStatus: isActive ? 'succeeded' : 'failed',
+            currency: (subAny.currency || 'brl').toUpperCase(),
+            amount
+          });
+        }
+      }
+
+      if (!updatedData) {
+        // Fallback: sync from current Firestore state to verify consistency
+        const subDoc = await adminDb.collection('subscriptions').doc(resolvedUserId).get();
+        updatedData = subDoc.exists ? subDoc.data() : null;
+      }
+
+      await addSystemLog('info', ADMIN_EMAIL, 'Sincronização Manual Stripe', `Assinatura sincronizada manualmente para o usuário ${resolvedUserId}.`, req);
+
+      return res.json({
+        success: true,
+        message: 'Assinatura sincronizada com sucesso no Firestore.',
+        userId: resolvedUserId,
+        subscription: updatedData
+      });
+    } catch (e: any) {
+      console.error('/api/admin/sync-subscription error:', e);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET Stripe Webhook Logs & Diagnostics
+  app.get("/api/admin/stripe-logs", async (req, res) => {
+    try {
+      if (!verifyAdminRole(req, res)) return;
+      const logsSnap = await adminDb.collection('stripe_webhook_logs').orderBy('timestamp', 'desc').limit(100).get();
+      const failedSnap = await adminDb.collection('failed_webhooks').limit(50).get();
+
+      const logs = logsSnap.docs.map(d => d.data());
+      const failed = failedSnap.docs.map(d => d.data());
+
+      return res.json({ logs, failedWebhooks: failed });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }
   });
 
-  app.delete("/api/images/:id", (req, res) => {
-    const { id } = req.params;
-    const idx = backendImageLibrary.findIndex(i => i.id === id);
-    if (idx >= 0) {
-      backendImageLibrary.splice(idx, 1);
+  // GET Subscription Details & Renewal Reminders
+  app.get("/api/subscription/details", async (req, res) => {
+    try {
+      const userId = req.query.userId as string;
+      if (!userId) {
+        return res.status(400).json({ error: "userId é obrigatório." });
+      }
+      const details = await SubscriptionService.validateAndGetDetails(userId);
+      const reminderResult = await SubscriptionService.checkAndProcessReminders(userId);
+      
+      res.json({
+        ...details,
+        pendingNotification: reminderResult?.pendingNotification || null
+      });
+    } catch (e: any) {
+      res.json({
+        isPro: false,
+        subscriptionStatus: 'free',
+        subscriptionPlan: 'Free',
+        purchaseDate: null,
+        renewDate: null,
+        expirationDate: null,
+        daysRemaining: 0,
+        autoRenew: false,
+        paymentStatus: 'none',
+        sub: null,
+        pendingNotification: null
+      });
     }
-    return res.json({ success: true });
+  });
+
+  // POST Real-time Forced Subscription Reconciliation / Sync
+  const handleSubscriptionReconciliation = async (req: any, res: any) => {
+    try {
+      const userId = req.body?.userId || req.query?.userId;
+      if (!userId) {
+        return res.status(400).json({ error: "userId é obrigatório para reconciliação." });
+      }
+
+      let targetSubId: string | undefined = undefined;
+      let targetCustId: string | undefined = undefined;
+
+      try {
+        const subDoc = await adminDb.collection('subscriptions').doc(userId).get();
+        if (subDoc.exists) {
+          const s = subDoc.data();
+          targetSubId = s?.subscriptionId || s?.stripeSubscriptionId;
+          targetCustId = s?.customerId || s?.stripeCustomerId;
+        }
+      } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped read subscription doc for reconcile', e?.message);
+      }
+
+      if (!targetSubId || !targetCustId) {
+        try {
+          const userDoc = await adminDb.collection('users').doc(userId).get();
+          if (userDoc.exists) {
+            const u = userDoc.data();
+            targetSubId = targetSubId || u?.stripeSubscriptionId;
+            targetCustId = targetCustId || u?.stripeCustomerId;
+          }
+        } catch (e: any) {
+          if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped read user doc for reconcile', e?.message);
+        }
+      }
+
+      let updatedRecord = null;
+
+      if (targetSubId) {
+        try {
+          const stripeSub = await StripeService.getSubscription(targetSubId);
+          if (stripeSub) {
+            const isAnnual = stripeSub.items?.data[0]?.plan?.interval === 'year';
+            const priceAmount = stripeSub.items?.data[0]?.price?.unit_amount;
+            const amount = priceAmount ? priceAmount / 100 : (isAnnual ? 399.00 : 39.90);
+            const statusMap: Record<string, any> = {
+              active: 'active',
+              trialing: 'trialing',
+              past_due: 'past_due',
+              unpaid: 'unpaid',
+              canceled: 'canceled'
+            };
+            const status = statusMap[stripeSub.status] || 'inactive';
+            const isActive = status === 'active' || status === 'trialing';
+
+            const subAny = stripeSub as any;
+            const startSec = subAny.current_period_start || Math.floor(Date.now() / 1000);
+            const endSec = subAny.current_period_end || (startSec + 30 * 86400);
+
+            updatedRecord = await SubscriptionManager.updateSubscriptionRecord({
+              userId,
+              subscriptionId: stripeSub.id,
+              customerId: (stripeSub.customer as string) || targetCustId || '',
+              subscriptionStatus: status,
+              active: isActive,
+              planId: isActive ? 'zeno_pro' : 'zeno_free',
+              priceId: stripeSub.items?.data[0]?.price?.id || '',
+              billingPeriod: isAnnual ? 'Anual' : 'Mensal',
+              currentPeriodStart: startSec * 1000,
+              currentPeriodEnd: endSec * 1000,
+              nextRenewal: endSec * 1000,
+              cancelAt: subAny.cancel_at ? subAny.cancel_at * 1000 : null,
+              cancelAtPeriodEnd: !!subAny.cancel_at_period_end,
+              lastInvoice: typeof subAny.latest_invoice === 'string' ? subAny.latest_invoice : subAny.latest_invoice?.id || '',
+              paymentStatus: isActive ? 'succeeded' : 'failed',
+              currency: (subAny.currency || 'brl').toUpperCase(),
+              amount
+            });
+          }
+        } catch (e: any) {
+          if (process.env.NODE_ENV !== 'production') console.warn('Dev: Stripe reconcile skipped or failed', e?.message);
+        }
+      }
+
+      if (!updatedRecord) {
+        // Fallback reconciliation directly on Firestore document if renewDate is outdated
+        const now = Date.now();
+        try {
+          const subDocRef = adminDb.collection('subscriptions').doc(userId);
+          const subSnap = await subDocRef.get();
+          if (subSnap.exists) {
+            const subData = subSnap.data() as any;
+            const currentRenew = subData.renewDate || subData.expirationDate || subData.nextRenewal;
+            if (currentRenew && currentRenew < now) {
+              if (subData.status === 'active' || subData.status === 'trialing') {
+                if (subData.autoRenew !== false) {
+                  const periodMs = subData.plano === 'ZENO Pro Anual' || subData.billingPeriod === 'Anual' ? 365 * 86400 * 1000 : 30 * 86400 * 1000;
+                  let nextRenew = currentRenew;
+                  while (nextRenew < now) {
+                    nextRenew += periodMs;
+                  }
+                  subData.renewDate = nextRenew;
+                  subData.expirationDate = nextRenew;
+                  subData.lastRenewalStatus = 'success';
+                  await subDocRef.set(subData, { merge: true });
+                  await setUserPlan(userId, 'ZENO Pro');
+                  await addSystemLog('info', userId, 'Reconciliação Forçada', `Data de renovação atualizada para ${new Date(nextRenew).toISOString()}`, req);
+                } else {
+                  subData.status = 'expired';
+                  await subDocRef.set(subData, { merge: true });
+                  await setUserPlan(userId, 'ZENO Free');
+                  await addSystemLog('info', userId, 'Reconciliação Forçada', 'Assinatura expirada devido ao término do período sem renovação automática', req);
+                }
+              }
+            }
+          }
+        } catch (e: any) {
+          if (process.env.NODE_ENV !== 'production') console.warn('Dev: Firestore direct reconcile skipped', e?.message);
+        }
+      }
+
+      const refreshedDetails = await SubscriptionService.validateAndGetDetails(userId);
+      return res.json({
+        success: true,
+        reconciled: true,
+        details: refreshedDetails
+      });
+    } catch (e: any) {
+      return res.json({ success: false, reconciled: false, error: e?.message || 'Erro na reconciliação' });
+    }
+  };
+
+  app.post("/api/subscription/sync", handleSubscriptionReconciliation);
+  app.post("/api/subscription/reconcile", handleSubscriptionReconciliation);
+
+  // POST Cancel Subscription Auto-Renewal
+  app.post("/api/subscription/cancel", async (req, res) => {
+    try {
+      const { userId, subscription_id } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId é obrigatório." });
+      }
+      const sub = await SubscriptionService.getSubscription(userId);
+      if (!sub) {
+        return res.status(404).json({ error: "Assinatura não encontrada." });
+      }
+      sub.autoRenew = false;
+      sub.status = 'active'; // active until period end
+
+      await adminDb.collection('subscriptions').doc(userId).set(sub, { merge: true });
+      await SubscriptionService.emitEvent(userId, 'SubscriptionCanceled', { subscriptionId: sub.subscriptionId });
+      await addSystemLog('info', userId, 'Cancelamento de Renovação', 'Renovação automática da assinatura ZENO Pro cancelada.', req);
+
+      res.json({ success: true, subscriptionId: sub.subscriptionId || subscription_id, cancelAtPeriodEnd: true, status: 'active' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST Reactivate Subscription Auto-Renewal
+  app.post("/api/subscription/reactivate", async (req, res) => {
+    try {
+      const { userId, subscription_id } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId é obrigatório." });
+      }
+      const sub = await SubscriptionService.getSubscription(userId);
+      if (!sub) {
+        return res.status(404).json({ error: "Assinatura não encontrada." });
+      }
+      sub.autoRenew = true;
+      sub.status = 'active';
+
+      await adminDb.collection('subscriptions').doc(userId).set(sub, { merge: true });
+      await SubscriptionService.emitEvent(userId, 'SubscriptionActivated', { subscriptionId: sub.subscriptionId });
+      await addSystemLog('info', userId, 'Reativação de Renovação', 'Cobrança automática da assinatura ZENO Pro reativada.', req);
+
+      res.json({ success: true, subscriptionId: sub.subscriptionId || subscription_id, cancelAtPeriodEnd: false, status: 'active' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST Update Payment Method
+  app.post("/api/subscription/update-payment", async (req, res) => {
+    try {
+      const { userId, paymentMethod } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId é obrigatório." });
+      }
+      const sub = await SubscriptionService.getSubscription(userId);
+      if (!sub) {
+        return res.status(404).json({ error: "Assinatura não encontrada." });
+      }
+      sub.paymentMethod = paymentMethod || { brand: 'visa', last4: '4242' };
+      sub.lastRenewalStatus = 'success';
+      sub.status = 'active';
+
+      await adminDb.collection('subscriptions').doc(userId).set(sub, { merge: true });
+      await SubscriptionService.emitEvent(userId, 'SubscriptionUpdated', { paymentMethod: sub.paymentMethod });
+      await addSystemLog('info', userId, 'Atualização de Pagamento', 'Forma de pagamento da assinatura ZENO Pro atualizada.', req);
+
+      res.json({ success: true, paymentMethod: sub.paymentMethod });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/limits", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) return res.status(400).json({ error: "userId é necessário." });
+      console.log('Fetching usage for:', userId);
+      const usage = await getUserUsage(userId as string);
+      console.log('Fetching config...');
+      const config = await getAdminConfig();
+      res.json({ usage, config });
+    } catch (e: any) {
+      console.error('/api/limits error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Image Library Endpoints
+  app.get("/api/images", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) {
+        return res.json([]); // Strictly isolate: require userId
+      }
+      let snap;
+      try {
+        snap = await adminDb.collection('images').where('userId', '==', userId).orderBy('timestamp', 'desc').limit(200).get();
+      } catch (idxErr) {
+        try {
+          snap = await adminDb.collection('images').where('userId', '==', userId).limit(200).get();
+        } catch (dbErr) {
+          return res.json([]);
+        }
+      }
+      return res.json(snap.docs.map(d => d.data()));
+    } catch (e: any) {
+      return res.json([]);
+    }
+  });
+
+  app.post("/api/images", async (req, res) => {
+    try {
+      const item = req.body;
+      if (!item || !item.imageUrl || !item.userId) {
+        return res.status(400).json({ error: "Dados inválidos ou userId ausente." });
+      }
+      const id = item.id || `img-${Date.now()}`;
+      await adminDb.collection('images').doc(id).set({ ...item, id, userId: item.userId }, { merge: true });
+      return res.json({ success: true, item: { ...item, id } });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/images/:id", async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.query;
+    try {
+      const docRef = adminDb.collection('images').doc(id);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (userId && data?.userId && data.userId !== userId) {
+          return res.status(403).json({ error: "Acesso negado: imagem pertence a outro usuário." });
+        }
+        await docRef.delete();
+      }
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Account Initialization Endpoint for New / Switched Accounts
+  app.post("/api/account/init", async (req, res) => {
+    try {
+      const { userId, email, name, photoURL } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+
+      const now = Date.now();
+      const userDocRef = adminDb.collection('users').doc(userId);
+      const userDoc = await userDocRef.get();
+
+      if (!userDoc.exists) {
+        // Initialize user settings & profile
+        const defaultSettings = {
+          userName: name || 'Usuário ZENO',
+          userEmail: email || '',
+          userAvatar: photoURL || '',
+          plan: 'ZENO Free',
+          theme: 'dark',
+          logoVariant: 'monochrome',
+          fontSize: 'normal',
+          defaultSpeed: 'zeno',
+          temperature: 0.7,
+          systemInstruction: '',
+          autoRead: false,
+          voiceSpeed: 1.0,
+          speechLanguage: 'pt-BR',
+          customInstructions: '',
+          memoryEnabled: true,
+          saveHistory: true,
+          anonymousMode: false,
+          rememberDevice: true,
+          language: 'pt-BR',
+          soundEnabled: true,
+          notificationsEnabled: true,
+        };
+
+        await userDocRef.set({
+          userId,
+          email: email || '',
+          name: name || 'Usuário ZENO',
+          photoURL: photoURL || '',
+          createdAt: now,
+          settings: defaultSettings,
+        }, { merge: true });
+      }
+
+      // Initialize default subscription
+      const sub = await SubscriptionService.getSubscription(userId);
+      if (!sub) {
+        await adminDb.collection('subscriptions').doc(userId).set({
+          userId,
+          plan: 'ZENO Free',
+          status: 'active',
+          trialUsed: false,
+          trialEndsAt: null,
+          renewAt: null,
+          cancelAtPeriodEnd: false,
+          paymentMethod: null,
+          history: []
+        }, { merge: true });
+      }
+
+      // Initialize daily usage
+      await getUserUsage(userId, email, req);
+
+      res.json({ success: true, userId });
+    } catch (e: any) {
+      console.error('/api/account/init error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Cloud Synchronization Endpoints
+  app.get("/api/sync/sessions", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      let snap;
+      try {
+        snap = await adminDb.collection('chats').where('userId', '==', userId).orderBy('updatedAt', 'desc').get();
+      } catch (idxErr) {
+        try {
+          snap = await adminDb.collection('chats').where('userId', '==', userId).get();
+        } catch (dbErr) {
+          return res.json({ sessions: [] });
+        }
+      }
+      const sessions = snap.docs.map(d => d.data());
+      res.json({ sessions });
+    } catch (e: any) {
+      res.json({ sessions: [] });
+    }
+  });
+
+  app.post("/api/sync/sessions", async (req, res) => {
+    try {
+      const { userId, sessions } = req.body;
+      if (!userId || !Array.isArray(sessions)) return res.status(400).json({ error: "Invalid data" });
+      
+      const batch = adminDb.batch();
+      sessions.forEach((s: any) => {
+        const ref = adminDb.collection('chats').doc(s.id);
+        batch.set(ref, { ...s, userId }, { merge: true });
+      });
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/sync/settings", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      const doc = await adminDb.collection('users').doc(userId as string).get();
+      if (!doc.exists) return res.json({ settings: null });
+      const data = doc.data();
+      res.json({ settings: data?.settings || null });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/sync/settings", async (req, res) => {
+    try {
+      const { userId, settings } = req.body;
+      if (!userId || !settings) return res.status(400).json({ error: "Invalid data" });
+      await adminDb.collection('users').doc(userId).set({ settings }, { merge: true });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/sync/account", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      
+      const batch = adminDb.batch();
+      const chatSnap = await adminDb.collection('chats').where('userId', '==', userId).get();
+      chatSnap.docs.forEach(d => batch.delete(d.ref));
+      const imgSnap = await adminDb.collection('images').where('userId', '==', userId).get();
+      imgSnap.docs.forEach(d => batch.delete(d.ref));
+      const memSnap = await adminDb.collection('memory').where('userId', '==', userId).get();
+      memSnap.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(adminDb.collection('users').doc(userId as string));
+      batch.delete(adminDb.collection('subscriptions').doc(userId as string));
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Stripe Checkout Session Endpoint
@@ -1237,28 +945,20 @@ Mensagem do usuário:
       const stripe = new Stripe(stripeSecret);
 
       const isAnnual = plan === "annual";
-      
       let userEligibleForTrial = !hasUsedFreeTrial;
 
       if (email && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== "sk_test_mock") {
         try {
-          // Look for an existing customer with this email
           const customers = await stripe.customers.list({ email, limit: 10 });
           for (const customer of customers.data) {
-            // Check if customer has or had subscriptions
             const subscriptions = await stripe.subscriptions.list({ customer: customer.id, status: 'all', limit: 10 });
             if (subscriptions.data.length > 0) {
               userEligibleForTrial = false;
-              console.log(`[AUDIT] O usuário ${email} já possui histórico de assinaturas na Stripe. Avaliação gratuita revogada.`);
               break;
             }
           }
         } catch (e) {
-          console.error("Erro ao verificar histórico de assinaturas do usuário:", e);
-        }
-      } else {
-        if (!userEligibleForTrial) {
-          console.log(`[AUDIT] O usuário ${email || 'desconhecido'} já utilizou o teste (verificado via banco/localStorage). Avaliação gratuita revogada.`);
+          console.error("Erro ao verificar histórico Stripe:", e);
         }
       }
 
@@ -1266,12 +966,10 @@ Mensagem do usuário:
       const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
       const baseUrl = process.env.APP_URL || `${protocol}://${host}`;
 
-      // Since this is a test environment and we don't have real price IDs, we create dynamic price data
-      // For a real production app, use existing price IDs (e.g., price_123)
       const sessionConfig: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
         mode: "subscription",
-        customer_email: email, // Associate checkout with the user's email
+        customer_email: email,
         line_items: [
           {
             price_data: {
@@ -1280,10 +978,8 @@ Mensagem do usuário:
                 name: isAnnual ? "ZENO Pro - Plano Anual" : "ZENO Pro - Plano Mensal",
                 description: isAnnual ? "Acesso anual ilimitado aos modelos ZENO" : "Acesso mensal ilimitado aos modelos ZENO",
               },
-              unit_amount: isAnnual ? 39990 : 3990, // in cents
-              recurring: {
-                interval: isAnnual ? "year" : "month",
-              },
+              unit_amount: isAnnual ? 39990 : 3990,
+              recurring: { interval: isAnnual ? "year" : "month" },
             },
             quantity: 1,
           },
@@ -1293,152 +989,74 @@ Mensagem do usuário:
       };
 
       if (userEligibleForTrial) {
-        sessionConfig.subscription_data = {
-          trial_period_days: 7, // Free 7-day trial before billing begins
-        };
+        sessionConfig.subscription_data = { trial_period_days: 7 };
       }
 
       const session = await stripe.checkout.sessions.create(sessionConfig);
-
       return res.json({ url: session.url, trialApplied: userEligibleForTrial });
     } catch (error: any) {
-      console.error("Stripe Checkout Error:", error);
-      return res.status(500).json({ error: error.message || "Erro ao criar sessão de checkout." });
+      return res.status(500).json({ error: error.message });
     }
   });
 
-  // Retrieve Subscription Details
-  app.get("/api/subscription/retrieve", async (req, res) => {
+  // Task APIs for polling
+  app.post("/api/images/task", async (req, res) => {
     try {
-      const { session_id, subscription_id } = req.query;
-      const stripeSecret = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
-      const stripe = new Stripe(stripeSecret);
-
-      let subscription;
-
-      if (session_id) {
-        const session = await stripe.checkout.sessions.retrieve(session_id as string, {
-          expand: ["subscription"],
-        });
-        subscription = session.subscription as Stripe.Subscription;
-      } else if (subscription_id) {
-        subscription = await stripe.subscriptions.retrieve(subscription_id as string);
-      } else {
-        return res.status(400).json({ error: "É necessário informar session_id ou subscription_id." });
-      }
-
-      if (!subscription) {
-        return res.status(404).json({ error: "Assinatura não encontrada." });
-      }
-
-      const planAmount = subscription.items.data[0]?.price.unit_amount || 0;
-      const planCurrency = subscription.items.data[0]?.price.currency || 'brl';
-
-      return res.json({
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        trialEnd: subscription.trial_end,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: (subscription as any).current_period_end,
-        amount: planAmount,
-        currency: planCurrency,
+      const { prompt, userId, userEmail, plan } = req.body;
+      const task = await createQueuedTask({
+        userId,
+        userEmail,
+        plan: plan || 'ZENO Free',
+        payload: {
+          prompt,
+          style: 'photorealistic',
+          aspectRatio: '1:1',
+          enhance: true,
+          engine: "flux",
+          negativePrompt: ""
+        },
+        req
       });
-    } catch (error: any) {
-      console.error("Stripe Retrieve Error:", error);
-      return res.status(500).json({ error: error.message || "Erro ao buscar assinatura." });
+      const details = await getTaskStatusDetails(task.id);
+      res.json(details);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
-  // Cancel Subscription Auto-Renewal
-  app.post("/api/subscription/cancel", async (req, res) => {
+  app.get("/api/tasks/status/:id", async (req, res) => {
     try {
-      const { subscription_id } = req.body;
-      console.log(`[API] Solicitado cancelamento da assinatura: ${subscription_id}`);
-      
-      if (!subscription_id) {
-        console.error("[API] Falha: subscription_id ausente na requisição de cancelamento.");
-        return res.status(400).json({ error: "subscription_id não fornecido." });
-      }
-      
-      const stripeSecret = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
-      const stripe = new Stripe(stripeSecret);
-      
-      console.log(`[API] Chamando Stripe.subscriptions.update para cancelar a assinatura: ${subscription_id}`);
-      const subscription = await stripe.subscriptions.update(subscription_id, {
-        cancel_at_period_end: true,
-      }) as Stripe.Subscription;
-      console.log(`[API] Sucesso: Assinatura Stripe cancelada com sucesso. (cancel_at_period_end: ${subscription.cancel_at_period_end})`);
-
-      const planAmount = subscription.items.data[0]?.price.unit_amount || 0;
-      const planCurrency = subscription.items.data[0]?.price.currency || 'brl';
-
-      return res.json({
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        trialEnd: subscription.trial_end,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: (subscription as any).current_period_end,
-        amount: planAmount,
-        currency: planCurrency,
-      });
-    } catch (error: any) {
-      console.error("[API] Stripe Cancel Error:", error);
-      return res.status(500).json({ error: error.message || "Erro ao cancelar assinatura na Stripe." });
+      const details = await getTaskStatusDetails(req.params.id);
+      if (!details.task) return res.status(404).json({ error: "Não encontrado" });
+      res.json(details);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
-  // Reactivate Subscription Auto-Renewal
-  app.post("/api/subscription/reactivate", async (req, res) => {
+  app.post("/api/tasks/cancel", async (req, res) => {
     try {
-      const { subscription_id } = req.body;
-      console.log(`[API] Solicitada reativação da assinatura: ${subscription_id}`);
-      
-      if (!subscription_id) {
-        console.error("[API] Falha: subscription_id ausente na requisição de reativação.");
-        return res.status(400).json({ error: "subscription_id não fornecido." });
-      }
-      
-      const stripeSecret = process.env.STRIPE_SECRET_KEY || "sk_test_mock";
-      const stripe = new Stripe(stripeSecret);
-      
-      console.log(`[API] Chamando Stripe.subscriptions.update para reativar a assinatura: ${subscription_id}`);
-      const subscription = await stripe.subscriptions.update(subscription_id, {
-        cancel_at_period_end: false,
-      }) as Stripe.Subscription;
-      console.log(`[API] Sucesso: Assinatura Stripe reativada com sucesso. (cancel_at_period_end: ${subscription.cancel_at_period_end})`);
-
-      const planAmount = subscription.items.data[0]?.price.unit_amount || 0;
-      const planCurrency = subscription.items.data[0]?.price.currency || 'brl';
-
-      return res.json({
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        trialEnd: subscription.trial_end,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: (subscription as any).current_period_end,
-        amount: planAmount,
-        currency: planCurrency,
-      });
-    } catch (error: any) {
-      console.error("[API] Stripe Reactivate Error:", error);
-      return res.status(500).json({ error: error.message || "Erro ao reativar assinatura na Stripe." });
+      const { taskId, userEmail } = req.body;
+      const success = await cancelQueuedTask(taskId, userEmail, req);
+      res.json({ success });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
-  // Vite middleware for development
+  // Health
+  app.get("/api/health", async (req, res) => {
+    res.json({ status: "healthy", timestamp: Date.now() });
+  });
+
+  // Vite/Prod middleware
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    // Support Express v4 syntax
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
   app.listen(PORT, "0.0.0.0", () => {

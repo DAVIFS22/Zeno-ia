@@ -1,7 +1,12 @@
 import { GeneratedImage, ImageCollection } from '../types';
 
-const STORAGE_KEY = 'zeno_image_library';
-const COLLECTIONS_KEY = 'zeno_image_collections';
+function getStorageKey(userId?: string) {
+  return `zeno_image_library_${userId || 'default'}`;
+}
+
+function getCollectionsKey(userId?: string) {
+  return `zeno_image_collections_${userId || 'default'}`;
+}
 
 export const DEFAULT_COLLECTIONS: ImageCollection[] = [
   { id: 'geral', name: 'Geral', icon: '📁', color: '#3B82F6' },
@@ -13,9 +18,9 @@ export const DEFAULT_COLLECTIONS: ImageCollection[] = [
   { id: 'projetos', name: 'Projetos', icon: '💼', color: '#14B8A6' },
 ];
 
-export function getStoredImages(): GeneratedImage[] {
+export function getStoredImages(userId?: string): GeneratedImage[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(getStorageKey(userId));
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) return parsed;
@@ -26,16 +31,16 @@ export function getStoredImages(): GeneratedImage[] {
   return [];
 }
 
-export function saveStoredImages(images: GeneratedImage[]) {
+export function saveStoredImages(images: GeneratedImage[], userId?: string) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(images));
+    localStorage.setItem(getStorageKey(userId), JSON.stringify(images));
   } catch (e) {
     console.error('Error saving image library to localStorage:', e);
   }
 }
 
-export function addImageToLibrary(image: Partial<GeneratedImage> & { imageUrl: string; prompt: string }): GeneratedImage {
-  const current = getStoredImages();
+export function addImageToLibrary(image: Partial<GeneratedImage> & { imageUrl: string; prompt: string }, userId?: string): GeneratedImage {
+  const current = getStoredImages(userId);
   
   // Check if image already exists by URL
   const existing = current.find(i => i.imageUrl === image.imageUrl);
@@ -46,21 +51,22 @@ export function addImageToLibrary(image: Partial<GeneratedImage> & { imageUrl: s
         return {
           ...item,
           ...image,
+          userId: userId || item.userId || image.userId,
           conversationId: image.conversationId || item.conversationId,
           conversationTitle: image.conversationTitle || item.conversationTitle,
         };
       }
       return item;
     });
-    saveStoredImages(updated);
+    saveStoredImages(updated, userId);
     // Sync to backend asynchronously
-    syncImageToBackend({ ...existing, ...image });
-    return { ...existing, ...image };
+    syncImageToBackend({ ...existing, ...image, userId: userId || existing.userId });
+    return { ...existing, ...image, userId: userId || existing.userId };
   }
 
   const newImg: GeneratedImage = {
     id: image.id || 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-    userId: image.userId || 'user-default',
+    userId: userId || image.userId || 'user-default',
     conversationId: image.conversationId,
     conversationTitle: image.conversationTitle,
     imageUrl: image.imageUrl,
@@ -81,13 +87,13 @@ export function addImageToLibrary(image: Partial<GeneratedImage> & { imageUrl: s
   };
 
   const updatedList = [newImg, ...current];
-  saveStoredImages(updatedList);
+  saveStoredImages(updatedList, userId);
   syncImageToBackend(newImg);
   return newImg;
 }
 
-export function updateImageInLibrary(id: string, updates: Partial<GeneratedImage>): GeneratedImage[] {
-  const current = getStoredImages();
+export function updateImageInLibrary(id: string, updates: Partial<GeneratedImage>, userId?: string): GeneratedImage[] {
+  const current = getStoredImages(userId);
   const updatedList = current.map(item => {
     if (item.id === id) {
       const updated = { ...item, ...updates };
@@ -96,22 +102,22 @@ export function updateImageInLibrary(id: string, updates: Partial<GeneratedImage
     }
     return item;
   });
-  saveStoredImages(updatedList);
+  saveStoredImages(updatedList, userId);
   return updatedList;
 }
 
-export function deleteImageFromLibrary(id: string): GeneratedImage[] {
-  const current = getStoredImages();
+export function deleteImageFromLibrary(id: string, userId?: string): GeneratedImage[] {
+  const current = getStoredImages(userId);
   const updatedList = current.filter(item => item.id !== id);
-  saveStoredImages(updatedList);
+  saveStoredImages(updatedList, userId);
   
   // Call backend delete
-  fetch(`/api/images/${id}`, { method: 'DELETE' }).catch(() => {});
+  fetch(`/api/images/${id}?userId=${userId || ''}`, { method: 'DELETE' }).catch(() => {});
   return updatedList;
 }
 
-export function toggleFavoriteInLibrary(id: string): GeneratedImage[] {
-  const current = getStoredImages();
+export function toggleFavoriteInLibrary(id: string, userId?: string): GeneratedImage[] {
+  const current = getStoredImages(userId);
   const updatedList = current.map(item => {
     if (item.id === id) {
       const updated = { ...item, isFavorite: !item.isFavorite };
@@ -120,13 +126,13 @@ export function toggleFavoriteInLibrary(id: string): GeneratedImage[] {
     }
     return item;
   });
-  saveStoredImages(updatedList);
+  saveStoredImages(updatedList, userId);
   return updatedList;
 }
 
-export function getStoredCollections(): ImageCollection[] {
+export function getStoredCollections(userId?: string): ImageCollection[] {
   try {
-    const saved = localStorage.getItem(COLLECTIONS_KEY);
+    const saved = localStorage.getItem(getCollectionsKey(userId));
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -137,8 +143,8 @@ export function getStoredCollections(): ImageCollection[] {
   return DEFAULT_COLLECTIONS;
 }
 
-export function addStoredCollection(name: string, icon = '📁', color = '#3B82F6'): ImageCollection[] {
-  const collections = getStoredCollections();
+export function addStoredCollection(name: string, icon = '📁', color = '#3B82F6', userId?: string): ImageCollection[] {
+  const collections = getStoredCollections(userId);
   const newCol: ImageCollection = {
     id: 'col-' + Date.now(),
     name: name.trim(),
@@ -147,7 +153,7 @@ export function addStoredCollection(name: string, icon = '📁', color = '#3B82F
   };
   const updated = [...collections, newCol];
   try {
-    localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(updated));
+    localStorage.setItem(getCollectionsKey(userId), JSON.stringify(updated));
   } catch (e) {
     console.error(e);
   }
@@ -168,26 +174,28 @@ async function syncImageToBackend(image: GeneratedImage) {
 }
 
 // Sync whole library from backend on startup
-export async function syncLibraryWithBackend(): Promise<GeneratedImage[]> {
+export async function syncLibraryWithBackend(userId?: string): Promise<GeneratedImage[]> {
   try {
-    const res = await fetch('/api/images');
+    if (!userId) return getStoredImages();
+    const url = `/api/images?userId=${userId}`;
+    const res = await fetch(url);
     if (res.ok) {
       const remoteImages = await res.json();
-      if (Array.isArray(remoteImages) && remoteImages.length > 0) {
-        const localImages = getStoredImages();
-        // Merge local & remote by id / imageUrl
+      if (Array.isArray(remoteImages)) {
+        const localImages = getStoredImages(userId);
+        // Merge local & remote by id / imageUrl for this specific user
         const map = new Map<string, GeneratedImage>();
         localImages.forEach(i => map.set(i.id || i.imageUrl, i));
         remoteImages.forEach(i => map.set(i.id || i.imageUrl, { ...map.get(i.id || i.imageUrl), ...i }));
         const merged = Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
-        saveStoredImages(merged);
+        saveStoredImages(merged, userId);
         return merged;
       }
     }
   } catch (e) {
     console.error('Backend sync unavailable:', e);
   }
-  return getStoredImages();
+  return getStoredImages(userId);
 }
 
 // Helper to scan markdown text and extract all images automatically
@@ -195,7 +203,8 @@ export function scanAndSaveImagesFromText(
   text: string, 
   conversationId?: string, 
   conversationTitle?: string,
-  modelName = 'ZENO'
+  modelName = 'ZENO',
+  userId?: string
 ) {
   if (!text) return;
   // Regex to match markdown images: ![alt](https://...)
@@ -216,7 +225,7 @@ export function scanAndSaveImagesFromText(
         provider: 'Flux Dev',
         aspectRatio: '1:1',
         style: 'photorealistic'
-      });
+      }, userId);
     }
   }
 }

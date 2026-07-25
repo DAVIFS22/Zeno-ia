@@ -1,37 +1,83 @@
 {
-  "collections": {
-    "users": {
-      "description": "Store user profile information",
-      "fields": {
-        "uid": {
-          "type": "string",
-          "description": "Firebase Auth UID"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User's full name"
-        },
-        "email": {
-          "type": "string",
-          "description": "User's email address"
-        },
-        "photoURL": {
-          "type": "string",
-          "description": "URL to user's profile picture"
-        },
-        "createdAt": {
-          "type": "timestamp",
-          "description": "When the user first signed in"
-        },
-        "lastLogin": {
-          "type": "timestamp",
-          "description": "Last time the user signed in"
-        },
-        "rememberDevice": {
-          "type": "boolean",
-          "description": "Whether the user wants to stay logged in"
-        }
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile information, settings, and subscription status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "settings": { "type": "object" },
+        "preferences": { "type": "object" },
+        "plan": { "type": "string" },
+        "subscription": { "type": "object" },
+        "usageStats": { "type": "object" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ChatSession": {
+      "title": "Chat Session",
+      "description": "A single conversation session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "messages": { "type": "array" },
+        "lastMessageAt": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "model": { "type": "string" },
+        "isArchived": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "messages"]
+    },
+    "GeneratedImage": {
+      "title": "Generated Image",
+      "description": "Image metadata for the user's library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "prompt": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "collection": { "type": "string" },
+        "isFavorite": { "type": "boolean" }
       }
+    },
+    "MemoryChunk": {
+      "title": "AI Memory Chunk",
+      "description": "A piece of information remembered by the AI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "metadata": { "type": "object" },
+        "embedding": { "type": "array" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and settings"
+    },
+    "/chats/{chatId}": {
+      "schema": "ChatSession",
+      "description": "Chat history"
+    },
+    "/images/{imageId}": {
+      "schema": "GeneratedImage",
+      "description": "Image library"
+    },
+    "/memory/{memoryId}": {
+      "schema": "MemoryChunk",
+      "description": "AI Memory"
     }
   }
 }

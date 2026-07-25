@@ -1,7 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-const MEMORY_DB_PATH = path.join(process.cwd(), '.data', 'vector_memory.json');
+import { adminDb } from './firebaseAdmin';
 
 export interface MemoryChunk {
   id: string;
@@ -11,43 +8,13 @@ export interface MemoryChunk {
   metadata?: {
     sessionTitle?: string;
     model?: string;
-    type?: 'summary' | 'qa' | 'preference';
+    type?: 'summary' | 'qa' | 'preference' | 'user_message' | 'ai_response';
+    speed?: string;
   };
   embedding?: number[];
 }
 
-interface MemoryStoreData {
-  chunks: MemoryChunk[];
-}
-
-function ensureDir() {
-  const dir = path.dirname(MEMORY_DB_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-
-export function readMemoryStore(): MemoryStoreData {
-  try {
-    ensureDir();
-    if (fs.existsSync(MEMORY_DB_PATH)) {
-      const data = fs.readFileSync(MEMORY_DB_PATH, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    console.error('Error reading memory store:', e);
-  }
-  return { chunks: [] };
-}
-
-export function writeMemoryStore(store: MemoryStoreData) {
-  try {
-    ensureDir();
-    fs.writeFileSync(MEMORY_DB_PATH, JSON.stringify(store, null, 2));
-  } catch (e) {
-    console.error('Error writing memory store:', e);
-  }
-}
+const COLL_MEMORY = 'memory';
 
 export function computeEmbedding(text: string): number[] {
   const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean);
@@ -78,36 +45,56 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(mA) * Math.sqrt(mB));
 }
 
-export function storeMemory(userId: string, content: string, metadata?: MemoryChunk['metadata']): MemoryChunk {
-  const store = readMemoryStore();
-  const chunk: MemoryChunk = {
-    id: 'mem_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
-    userId,
-    content,
-    timestamp: Date.now(),
-    metadata,
-    embedding: computeEmbedding(content)
-  };
-  store.chunks.push(chunk);
-  if (store.chunks.length > 500) {
-    store.chunks = store.chunks.slice(-500);
+export async function storeMemory(userId: string, content: string, metadata?: MemoryChunk['metadata']): Promise<MemoryChunk | null> {
+  try {
+    const chunk: MemoryChunk = {
+      id: 'mem_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+      userId,
+      content,
+      timestamp: Date.now(),
+      metadata,
+      embedding: computeEmbedding(content)
+    };
+    
+    await adminDb.collection(COLL_MEMORY).doc(chunk.id).set(chunk);
+    return chunk;
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Dev: Skipped store memory in Firestore:', err?.message || err);
+    }
+    return null;
   }
-  writeMemoryStore(store);
-  return chunk;
 }
 
-export function retrieveRelevantMemories(userId: string, query: string, limit: number = 3): MemoryChunk[] {
-  const store = readMemoryStore();
-  const userChunks = store.chunks.filter(c => c.userId === userId);
-  if (userChunks.length === 0) return [];
+export async function retrieveRelevantMemories(userId: string, query: string, limit: number = 3): Promise<MemoryChunk[]> {
+  try {
+    let snap;
+    try {
+      snap = await adminDb.collection(COLL_MEMORY).where('userId', '==', userId).orderBy('timestamp', 'desc').limit(100).get();
+    } catch (idxErr) {
+      try {
+        snap = await adminDb.collection(COLL_MEMORY).where('userId', '==', userId).get();
+      } catch (fallbackErr) {
+        return [];
+      }
+    }
+    const userChunks = snap.docs.map(d => d.data() as MemoryChunk);
+    
+    if (userChunks.length === 0) return [];
 
-  const queryEmbedding = computeEmbedding(query);
-  
-  const scored = userChunks.map(chunk => {
-    const score = chunk.embedding ? cosineSimilarity(queryEmbedding, chunk.embedding) : 0;
-    return { chunk, score };
-  });
+    const queryEmbedding = computeEmbedding(query);
+    
+    const scored = userChunks.map(chunk => {
+      const score = chunk.embedding ? cosineSimilarity(queryEmbedding, chunk.embedding) : 0;
+      return { chunk, score };
+    });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).filter(s => s.score > 0.05).map(s => s.chunk);
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, limit).filter(s => s.score > 0.05).map(s => s.chunk);
+  } catch (err: any) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('Dev: Skipped retrieve relevant memories from Firestore:', err?.message || err);
+    }
+    return [];
+  }
 }

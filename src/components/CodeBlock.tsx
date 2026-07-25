@@ -103,7 +103,7 @@ function splitHtmlLines(html: string): string[] {
   return result;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({ 
+export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ 
   language = '', 
   value = '', 
   theme = 'dark',
@@ -518,4 +518,6 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       )}
     </>
   );
-};
+});
+
+CodeBlock.displayName = 'CodeBlock';

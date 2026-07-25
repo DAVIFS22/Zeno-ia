@@ -1,10 +1,113 @@
 import React from 'react';
 import { 
   Plus, MessageSquare, Settings, Search, PanelLeftClose, 
-  X, Pin, Edit2, Trash2, Sparkles, User, Lock
+  X, Pin, Edit2, Trash2, Sparkles, User, Lock, Check, RefreshCw
 } from 'lucide-react';
 import { UserSettings, ChatSession } from '../types';
 import { ZenoLogo } from './ZenoLogo';
+
+interface SidebarSessionItemProps {
+  session: ChatSession;
+  isActive: boolean;
+  isEditing: boolean;
+  editingTitle: string;
+  isDark: boolean;
+  textMain: string;
+  textMuted: string;
+  hoverItemBg: string;
+  bgActiveItem: string;
+  onSelectSession: (id: string) => void;
+  onTogglePinSession: (id: string, e: React.MouseEvent) => void;
+  onStartRenameSession: (session: ChatSession, e: React.MouseEvent) => void;
+  onSaveRenameSession: (id: string) => void;
+  onSetEditingSessionId: (id: string | null) => void;
+  onSetEditingTitle: (title: string) => void;
+  onSetDeletingSessionId: (id: string | null) => void;
+}
+
+const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
+  session,
+  isActive,
+  isEditing,
+  editingTitle,
+  isDark,
+  textMain,
+  textMuted,
+  hoverItemBg,
+  bgActiveItem,
+  onSelectSession,
+  onTogglePinSession,
+  onStartRenameSession,
+  onSaveRenameSession,
+  onSetEditingSessionId,
+  onSetEditingTitle,
+  onSetDeletingSessionId
+}) => {
+  return (
+    <div
+      onClick={() => onSelectSession(session.id)}
+      className={`group relative flex items-center gap-2.5 px-3 h-[38px] rounded-xl text-xs transition-colors duration-150 cursor-pointer ${
+        isActive
+          ? `${bgActiveItem} ${textMain} font-medium`
+          : `bg-transparent ${textMuted} hover:${textMain} ${hoverItemBg}`
+      }`}
+    >
+      <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isActive ? textMain : `${textMuted} group-hover:${textMain}`}`} />
+      
+      {isEditing ? (
+        <input
+          type="text"
+          value={editingTitle}
+          onChange={(e) => onSetEditingTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSaveRenameSession(session.id);
+            if (e.key === 'Escape') onSetEditingSessionId(null);
+          }}
+          onBlur={() => onSaveRenameSession(session.id)}
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+          className={`w-full bg-transparent border-b ${textMuted} focus:outline-none text-xs ${textMain} px-1`}
+        />
+      ) : (
+        <span className="truncate flex-1 font-normal">
+          {session.title}
+        </span>
+      )}
+
+      {/* Quick Action Icons */}
+      {!isEditing && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => onTogglePinSession(session.id, e)}
+            className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${session.isPinned ? textMain : `${textMuted} hover:${textMain}`}`}
+            title={session.isPinned ? "Desfixar" : "Fixar"}
+          >
+            <Pin className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => onStartRenameSession(session, e)}
+            className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${textMuted} hover:${textMain}`}
+            title="Renomear"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetDeletingSessionId(session.id);
+            }}
+            className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${textMuted} hover:${textMain}`}
+            title="Excluir"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+SidebarSessionItem.displayName = 'SidebarSessionItem';
 
 interface SidebarNavProps {
   isSidebarOpen: boolean;
@@ -82,9 +185,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   const textMuted = isDark ? 'text-[#A8A8A8]' : 'text-neutral-500';
   
   const bgButton = isDark ? 'bg-[#242424]' : 'bg-neutral-200/50';
-  const borderButton = isDark ? 'border-[#303030]' : 'border-neutral-200';
-  const hoverButtonBg = isDark ? 'hover:bg-[#2F2F2F]' : 'hover:bg-neutral-200';
-  
   const hoverItemBg = isDark ? 'hover:bg-[#242424]' : 'hover:bg-neutral-200/50';
   const bgActiveItem = isDark ? 'bg-[#2F2F2F]' : 'bg-neutral-200/80';
 
@@ -219,74 +319,27 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                   {group.label}
                 </div>
               )}
-              {group.sessions.map(session => {
-                const isActive = session.id === currentSessionId;
-                const isEditing = editingSessionId === session.id;
-
-                return (
-                  <div
-                    key={session.id}
-                    onClick={() => onSelectSession(session.id)}
-                    className={`group relative flex items-center gap-2.5 px-3 h-[38px] rounded-xl text-xs transition-colors duration-150 cursor-pointer ${
-                      isActive
-                        ? `${bgActiveItem} ${textMain} font-medium`
-                        : `bg-transparent ${textMuted} hover:${textMain} ${hoverItemBg}`
-                    }`}
-                  >
-                    <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isActive ? textMain : `${textMuted} group-hover:${textMain}`}`} />
-                    
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editingTitle}
-                        onChange={(e) => onSetEditingTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') onSaveRenameSession(session.id);
-                          if (e.key === 'Escape') onSetEditingSessionId(null);
-                        }}
-                        onBlur={() => onSaveRenameSession(session.id)}
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                        className={`w-full bg-transparent border-b ${textMuted} focus:outline-none text-xs ${textMain} px-1`}
-                      />
-                    ) : (
-                      <span className="truncate flex-1 font-normal">
-                        {session.title}
-                      </span>
-                    )}
-
-                    {/* Quick Action Icons */}
-                    {!isEditing && (
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => onTogglePinSession(session.id, e)}
-                          className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${session.isPinned ? textMain : `${textMuted} hover:${textMain}`}`}
-                          title={session.isPinned ? "Desfixar" : "Fixar"}
-                        >
-                          <Pin className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => onStartRenameSession(session, e)}
-                          className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${textMuted} hover:${textMain}`}
-                          title="Renomear"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSetDeletingSessionId(session.id);
-                          }}
-                          className={`p-1 rounded-md hover:${isDark ? 'bg-[#303030]' : 'bg-neutral-200'} ${textMuted} hover:${textMain}`}
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {group.sessions.map(session => (
+                <SidebarSessionItem
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === currentSessionId}
+                  isEditing={editingSessionId === session.id}
+                  editingTitle={editingSessionId === session.id ? editingTitle : ''}
+                  isDark={isDark}
+                  textMain={textMain}
+                  textMuted={textMuted}
+                  hoverItemBg={hoverItemBg}
+                  bgActiveItem={bgActiveItem}
+                  onSelectSession={onSelectSession}
+                  onTogglePinSession={onTogglePinSession}
+                  onStartRenameSession={onStartRenameSession}
+                  onSaveRenameSession={onSaveRenameSession}
+                  onSetEditingSessionId={onSetEditingSessionId}
+                  onSetEditingTitle={onSetEditingTitle}
+                  onSetDeletingSessionId={onSetDeletingSessionId}
+                />
+              ))}
             </div>
           ))
         )}

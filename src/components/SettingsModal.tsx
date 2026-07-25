@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, User, Moon, Sun, Brain, Shield,
-  Download, Trash2, Check, Sparkles,
+  Download, Trash2, Check, Sparkles, Plus, RefreshCw,
   Lock, Zap, Wand2, Globe, ArrowLeft, ChevronRight, CheckCircle2, AlertCircle, Laptop,
   LogOut, LogIn, ExternalLink, Settings as SettingsIcon, Fingerprint
 } from 'lucide-react';
@@ -64,9 +64,9 @@ export function SettingsModal({
   }, [adminConfig]);
 
   const safeSettings: UserSettings = settings || {
-    userName: 'Davi Fernandes',
-    userEmail: 'davifernandes0024509@gmail.com',
-    userAvatar: '',
+    userName: user?.displayName || 'Usuário ZENO',
+    userEmail: user?.email || '',
+    userAvatar: user?.photoURL || '',
     plan: 'ZENO Free',
     theme: 'dark',
     logoVariant: 'monochrome',
@@ -87,8 +87,8 @@ export function SettingsModal({
     notificationsEnabled: true,
   };
 
-  const userName = safeSettings.userName || 'Davi Fernandes';
-  const userEmail = safeSettings.userEmail || 'davifernandes0024509@gmail.com';
+  const userName = safeSettings.userName || user?.displayName || 'Usuário ZENO';
+  const userEmail = safeSettings.userEmail || user?.email || '';
   const theme = safeSettings.theme || 'dark';
   const plan = safeSettings.plan || 'ZENO Free';
   const isPro = plan === 'ZENO Pro';
@@ -497,6 +497,41 @@ export function SettingsModal({
                           <ChevronRight className="w-4 h-4 text-neutral-400" />
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Permanent Deletion Button */}
+                  {user && (
+                    <div className="pt-8 mt-8 border-t border-[#313131] space-y-4">
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-semibold text-red-500 uppercase tracking-wider">Zona de Perigo</h4>
+                        <p className="text-xs text-neutral-400 leading-relaxed">
+                          Ao excluir sua conta permanentemente, todas as suas conversas, memória da IA, biblioteca de imagens e configurações serão apagados da nuvem de forma irreversível.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm("ATENÇÃO: Você tem certeza que deseja excluir sua conta permanentemente? Esta ação é IRREVERSÍVEL e apagará todos os seus dados da nuvem.")) {
+                            try {
+                              const res = await fetch(`/api/sync/account?userId=${user.uid}`, { method: 'DELETE' });
+                              if (res.ok) {
+                                alert("Sua conta e todos os seus dados foram excluídos com sucesso.");
+                                onLogout();
+                                onClose();
+                              } else {
+                                throw new Error("Erro ao excluir conta.");
+                              }
+                            } catch (err) {
+                              alert("Falha ao excluir conta. Tente novamente mais tarde.");
+                            }
+                          }
+                        }}
+                        className="w-full h-[52px] rounded-xl border border-red-500/30 hover:border-red-500 bg-red-500/5 hover:bg-red-500/10 text-red-500 font-medium text-sm transition-all duration-180 flex items-center justify-center gap-2"
+                      >
+                        <Trash2 className="w-4.5 h-4.5" />
+                        <span>Excluir Conta Permanentemente</span>
+                      </button>
                     </div>
                   )}
                 </div>
