@@ -1,22 +1,29 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './lib/firebase';
 import { getOrCreateUserId } from './lib/userId';
 import { Sparkles, AlertCircle } from 'lucide-react';
 import { Message, ChatSession, FileAttachment, UserSettings, ModelType, DailyUsage } from './types';
 import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
 import { CodeBlock } from './components/CodeBlock';
+import { ImageWithLoader } from './components/ImageWithLoader';
 import { ZenoLogo } from './components/ZenoLogo';
 import { syncLibraryWithBackend, scanAndSaveImagesFromText } from './lib/imageLibraryStorage';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { PlanUsageCard } from './components/PlanUsageCard';
 import { ComposerInput } from './components/ComposerInput';
 import { SidebarNav } from './components/SidebarNav';
-import { useAuth } from './hooks/useAuth';
+import { YouTubeProcessor } from './components/YouTubeProcessor';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthScreen } from './components/AuthScreen';
 import { useCloudSync } from './hooks/useCloudSync';
 import { useRealtimeSubscription } from './hooks/useRealtimeSubscription';
 import { MessageList } from './components/MessageList';
 import { AppHeader } from './components/AppHeader';
 import { AppModals } from './components/AppModals';
+import { ContextualPrompts } from './components/ContextualPrompts';
 import { UIProvider } from './contexts/UIContext';
+import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext';
 import { useUIState } from './hooks/useUIState';
 import { usePerformanceMetrics, measureApiLatency } from './hooks/usePerformanceMetrics';
 import { 
@@ -27,39 +34,32 @@ import {
   FREE_LIMITS,
   getModelDef
 } from './lib/subscription';
+import { hasPremiumAccess } from './config/admin';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
 const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
 const STORAGE_KEY_SETTINGS = 'zeno_user_settings_v3';
 const STORAGE_KEY_USAGE = 'zeno_daily_usage_v3';
 
-function MainApp() {
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+
+function MainAppInner() {
   const ui = useUIState();
   const { trackApi } = usePerformanceMetrics('MainApp');
+  const { isPro } = useSubscription();
 
   // User Settings State
   const [userSettings, setUserSettings] = useState<UserSettings>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.plan !== 'ZENO Pro' && parsed.plan !== 'ZENO Free') {
-          parsed.plan = 'ZENO Free';
-        }
-        return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading settings:', e);
-    }
-    return {
+    const DEFAULT_SETTINGS: UserSettings = {
       userName: 'Davi Fernandes',
       userEmail: 'davifernandes0024509@gmail.com',
       userAvatar: '',
       plan: 'ZENO Free',
       theme: 'dark',
+      showHomeSuggestions: false,
       logoVariant: 'monochrome',
       fontSize: 'normal',
-      defaultSpeed: 'zeno',
+      defaultSpeed: 'smart',
       temperature: 0.7,
       systemInstruction: '',
       autoRead: false,
@@ -71,9 +71,27 @@ function MainApp() {
       anonymousMode: false,
       rememberDevice: true,
       language: 'pt-BR',
+      isSmartMode: true,
       soundEnabled: true,
       notificationsEnabled: true,
     };
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure all default keys exist, especially autoRead
+        const merged = { ...DEFAULT_SETTINGS, ...parsed };
+        
+        if (merged.plan !== 'ZENO Pro' && merged.plan !== 'ZENO Free') {
+          merged.plan = 'ZENO Free';
+        }
+        return merged;
+      }
+    } catch (e) {
+      console.error('Error loading settings:', e);
+    }
+    return DEFAULT_SETTINGS;
   });
 
   // Auth State
@@ -81,7 +99,7 @@ function MainApp() {
     user, 
     profile, 
     loading: authLoading, 
-    login: signInWithGoogle, 
+    signInWithGoogle, 
     logout, 
     switchAccount, 
     session 
@@ -113,6 +131,14 @@ function MainApp() {
     }
   }, [profile]);
 
+  useEffect(() => {
+    if (isPro || (profile && hasPremiumAccess(profile)) || hasPremiumAccess(userSettings) || hasPremiumAccess(profile?.email)) {
+      if (userSettings.plan !== 'ZENO Pro') {
+        setUserSettings(prev => ({ ...prev, plan: 'ZENO Pro' }));
+      }
+    }
+  }, [isPro, profile, userSettings.userEmail]);
+
   const userId = getOrCreateUserId(profile?.uid);
 
   // Switch context reset & server init when userId changes
@@ -123,17 +149,51 @@ function MainApp() {
       prevUserIdRef.current = userId;
       console.log('[ACCOUNT ISOLATION] Alternando contexto para o UID:', userId);
 
-      // 1. Initialize account on backend
-      fetch('/api/account/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          email: profile?.email || '',
-          name: profile?.displayName || 'Usuário ZENO',
-          photoURL: profile?.photoURL || ''
-        })
-      }).catch(() => {});
+      // 1. Initialize account on frontend directly, because backend admin SDK lacks permissions in preview
+      const initAccountLocally = async () => {
+        try {
+          const userRef = doc(db, 'users', userId);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              userId,
+              email: profile?.email || '',
+              name: profile?.displayName || 'Usuário ZENO',
+              photoURL: profile?.photoURL || '',
+              createdAt: Date.now(),
+              role: 'user',
+              plan: 'ZENO Free',
+              isPro: false,
+              unlimited: false
+            }, { merge: true });
+            
+            const subRef = doc(db, 'subscriptions', userId);
+            await setDoc(subRef, {
+              userId,
+              plan: 'ZENO Free',
+              status: 'active',
+              trialUsed: false,
+              history: []
+            }, { merge: true });
+          }
+        } catch(e) {
+          console.error("Failed to initialize user in Firestore:", e);
+        }
+      };
+      
+      initAccountLocally().then(() => {
+        // optionally still call backend to track usage etc
+        fetch('/api/account/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            email: profile?.email || '',
+            name: profile?.displayName || 'Usuário ZENO',
+            photoURL: profile?.photoURL || ''
+          })
+        }).catch(() => {});
+      });
 
       // 2. Load user settings for new UID
       try {
@@ -147,9 +207,10 @@ function MainApp() {
             userAvatar: profile?.photoURL || '',
             plan: 'ZENO Free',
             theme: 'dark',
+      showHomeSuggestions: false,
             logoVariant: 'monochrome',
             fontSize: 'normal',
-            defaultSpeed: 'zeno',
+            defaultSpeed: 'smart',
             temperature: 0.7,
             systemInstruction: '',
             autoRead: false,
@@ -161,6 +222,7 @@ function MainApp() {
             anonymousMode: false,
             rememberDevice: true,
             language: 'pt-BR',
+            isSmartMode: true,
             soundEnabled: true,
             notificationsEnabled: true,
           });
@@ -250,12 +312,24 @@ function MainApp() {
   }, [userId, ui]);
 
   const handleOpenSubscriptionModal = useCallback((reasonMessage?: string) => {
-    ui.openModal('subscription', { data: { reasonMessage } });
-  }, [ui]);
+    if (!user && !user?.isAnonymous) {
+      ui.openModal('auth', { data: { message: "Crie uma conta ou faça login para assinar um plano e salvar seus dados." } });
+      return;
+    }
+    if (isPro) {
+      ui.openModal('subscription', { data: { reasonMessage } });
+    } else {
+      ui.openModal('plans');
+    }
+  }, [ui, isPro, user]);
 
   const handleOpenProFeatureModal = useCallback(() => {
+    if (!user && !user?.isAnonymous) {
+      ui.openModal('auth', { data: { message: "Crie uma conta ou faça login para acessar recursos Pro." } });
+      return;
+    }
     ui.openModal('proFeature');
-  }, [ui]);
+  }, [ui, user]);
 
   // Daily Usage Tracker State
   const [backendLimits, setBackendLimits] = useState<any>(null);
@@ -424,12 +498,13 @@ function MainApp() {
   }, [currentSessionId, userId]);
 
   // Local Chat UI State
+  const [isNewChat, setIsNewChat] = useState<boolean>(true);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
-  const [speed, setSpeed] = useState<ModelType>('zeno');
+  const [speed, setSpeed] = useState<ModelType>('smart');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sync image library from backend on start
@@ -550,6 +625,7 @@ function MainApp() {
       }
       setIsLoading(false);
     }
+    setIsNewChat(true);
     setCurrentSessionId(null);
     setInput('');
     setAttachments([]);
@@ -612,7 +688,7 @@ function MainApp() {
 
   // Handle Select Speed
   const handleSelectSpeed = useCallback((newSpeed: ModelType) => {
-    if (isModelPro(newSpeed) && userSettings.plan !== 'ZENO Pro') {
+    if (isModelPro(newSpeed) && !isPro) {
       handleOpenProFeatureModal();
       return;
     }
@@ -623,7 +699,7 @@ function MainApp() {
         prev.map(s => (s.id === currentSessionId ? { ...s, speed: newSpeed } : s))
       );
     }
-  }, [userSettings.plan, currentSessionId, handleOpenProFeatureModal]);
+  }, [isPro, currentSessionId, handleOpenProFeatureModal]);
 
   // Stop Generation
   const handleStopGeneration = useCallback(() => {
@@ -635,25 +711,26 @@ function MainApp() {
   }, []);
 
   // Main Submit Handler
-  const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
+  const handleSubmit = async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
     if (e) e.preventDefault();
+    setIsNewChat(false);
 
     const textToSend = overrideText !== undefined ? overrideText : input;
     if ((!textToSend.trim() && attachments.length === 0) || isLoading) return;
 
-    if (isModelPro(speed) && userSettings.plan !== 'ZENO Pro') {
+    if (isModelPro(speed) && !isPro) {
       handleOpenProFeatureModal();
       return;
     }
 
     const usageAction = speed === 'image' ? 'image' : speed === 'search' ? 'search' : 'message';
-    const usageCheck = checkUsageLimit(userSettings.plan, dailyUsage, usageAction);
+    const usageCheck = checkUsageLimit(isPro ? 'ZENO Pro' : userSettings.plan, dailyUsage, usageAction);
     if (!usageCheck.allowed) {
       handleLimitReached();
       return;
     }
 
-    if (userSettings.plan === 'ZENO Free') {
+    if (!isPro) {
       const limitKey = speed === 'image' ? 'image' : speed === 'vision' ? 'vision' : 'messages';
       const currentCount = (dailyUsage as any)[limitKey] || 0;
       setDailyUsage(prev => ({
@@ -697,12 +774,16 @@ function MainApp() {
       attachments: currentAttachments,
     };
 
+    const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
+    const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
+
     const initialModelMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: 'model',
-      text: '',
+      text: youtubeUrl ? '' : '', // Placeholder
       timestamp: Date.now(),
       modelSpeed: speed,
+      youtubeUrl: youtubeUrl,
     };
 
     setSessions(prev =>
@@ -722,19 +803,25 @@ function MainApp() {
     abortControllerRef.current = new AbortController();
 
     try {
+      const token = user ? await user.getIdToken() : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await measureApiLatency('/api/chat', () =>
         fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           signal: abortControllerRef.current?.signal,
           body: JSON.stringify({
-            message: currentInput,
-            model: speed,
+            message: extraContext ? `${extraContext}\n\n[SOLICITAÇÃO]: ${textToSend}` : textToSend,
+            speed: speed,
+            isSmartMode: userSettings.isSmartMode,
             attachments: currentAttachments,
             systemInstruction: userSettings.systemInstruction,
             temperature: userSettings.temperature,
             customInstructions: userSettings.customInstructions,
             userId: userId,
+            userEmail: userSettings.userEmail,
             history: messages.slice(-10).map(m => ({ role: m.role, text: m.text })),
           }),
         })
@@ -753,31 +840,113 @@ function MainApp() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = '';
+      let buffer = '';
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          accumulatedText += chunk;
+          const chunkText = decoder.decode(value, { stream: true });
+          buffer += chunkText;
 
-          setSessions(prev =>
-            prev.map(s => {
-              if (s.id === sessionId) {
-                const updatedMsgs = [...s.messages];
-                const lastIdx = updatedMsgs.length - 1;
-                if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
-                  updatedMsgs[lastIdx] = {
-                    ...updatedMsgs[lastIdx],
-                    text: accumulatedText,
-                  };
+          // SSE Parsing
+          let textUpdated = false;
+          while (buffer.includes('\n\n')) {
+            const eventIndex = buffer.indexOf('\n\n');
+            const eventStr = buffer.slice(0, eventIndex);
+            buffer = buffer.slice(eventIndex + 2); // Remove processed event
+
+            const lines = eventStr.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data:')) {
+                const dataStr = trimmed.substring(5).trim();
+                if (dataStr === '[DONE]') continue;
+                
+                try {
+                  const data = JSON.parse(dataStr);
+                  if (data.activeModel && data.modelId) {
+                    setSessions(prev =>
+                      prev.map(s => {
+                        if (s.id === sessionId) {
+                          const updatedMsgs = [...s.messages];
+                          const lastIdx = updatedMsgs.length - 1;
+                          if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
+                            updatedMsgs[lastIdx] = {
+                              ...updatedMsgs[lastIdx],
+                              modelSpeed: data.modelId
+                            };
+                          }
+                          return { ...s, messages: updatedMsgs };
+                        }
+                        return s;
+                      })
+                    );
+                    continue;
+                  }
+                  if (data.error) {
+                    accumulatedText = data.error;
+                    textUpdated = true;
+                    continue;
+                  }
+                  if (data.text !== undefined) {
+                    // Replace full text (since server often sends full text replacements)
+                    accumulatedText = data.text;
+                    textUpdated = true;
+                  } else if (data.delta && data.delta.content) {
+                    accumulatedText += data.delta.content;
+                    textUpdated = true;
+                  }
+                } catch (e) {
+                  // Fallback: If it's valid SSE but not JSON, append plain text
+                  if (dataStr && !dataStr.startsWith('{') && !dataStr.startsWith('[')) {
+                    accumulatedText += dataStr;
+                    textUpdated = true;
+                  }
                 }
-                return { ...s, messages: updatedMsgs };
               }
-              return s;
-            })
-          );
+            }
+          }
+
+          // Fallback if the backend is just sending raw text without SSE format
+          if (textUpdated === false && !buffer.includes('data:') && !buffer.includes('event:')) {
+             try {
+                // Try to parse the entire buffer as JSON in case it's a single JSON response
+                const data = JSON.parse(buffer);
+                if (data.text) {
+                   accumulatedText = data.text;
+                   textUpdated = true;
+                   buffer = '';
+                }
+             } catch (e) {
+                // If it's just plain text being streamed and doesn't look like SSE at all
+                if (buffer.length > 0 && !buffer.startsWith('{')) {
+                   accumulatedText += buffer;
+                   textUpdated = true;
+                   buffer = '';
+                }
+             }
+          }
+
+          if (textUpdated) {
+            setSessions(prev =>
+              prev.map(s => {
+                if (s.id === sessionId) {
+                  const updatedMsgs = [...s.messages];
+                  const lastIdx = updatedMsgs.length - 1;
+                  if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
+                    updatedMsgs[lastIdx] = {
+                      ...updatedMsgs[lastIdx],
+                      text: accumulatedText,
+                    };
+                  }
+                  return { ...s, messages: updatedMsgs };
+                }
+                return s;
+              })
+            );
+          }
         }
       }
 
@@ -882,6 +1051,24 @@ function MainApp() {
     handleSubmit(undefined, newText);
   }, [editingMessageText, currentSessionId]);
 
+  const handleYouTubeAction = async (action: string, transcript: string, metadata: any) => {
+    let prompt = "";
+    const videoTitle = metadata?.title || "este vídeo";
+    
+    switch(action) {
+      case 'resumir': prompt = `Resuma o conteúdo do vídeo "${videoTitle}" de forma clara e objetiva.`; break;
+      case 'traduzir': prompt = `Traduza os principais pontos do vídeo "${videoTitle}" para o português, mantendo o contexto original.`; break;
+      case 'topicos': prompt = `Organize os principais temas e tópicos abordados no vídeo "${videoTitle}" em uma lista estruturada.`; break;
+      case 'pontos': prompt = `Destaque os insights e pontos mais importantes discutidos no vídeo "${videoTitle}".`; break;
+      case 'perguntar': prompt = `O que você gostaria de saber sobre o vídeo "${videoTitle}"?`; setInput(prompt); return;
+      case 'corrigir': prompt = `Corrija a pontuação e gramática da transcrição do vídeo "${videoTitle}" e apresente-a de forma legível.`; break;
+      default: return;
+    }
+    
+    const contextWithTranscript = `[TRANSCRICÃO DO VÍDEO DO YOUTUBE "${videoTitle}"]:\n${transcript}\n\n`;
+    handleSubmit(undefined, prompt, contextWithTranscript);
+  };
+
   // Copy to Clipboard
   const copyToClipboard = useCallback((id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -939,6 +1126,15 @@ function MainApp() {
         </code>
       );
     },
+    img({ src, alt }: any) {
+      if (!src) return null;
+      return (
+        <ImageWithLoader
+          src={src}
+          alt={alt || 'Imagem'}
+        />
+      );
+    },
   }), [theme, copyToClipboard]);
 
   // Feedback Handler
@@ -952,6 +1148,7 @@ function MainApp() {
   // Select Session
   const handleSelectSession = useCallback((id: string) => {
     if (isLoading) handleStopGeneration();
+    setIsNewChat(false);
     setCurrentSessionId(id);
     ui.setSidebarOpen(false);
   }, [isLoading, handleStopGeneration, ui]);
@@ -1125,7 +1322,7 @@ function MainApp() {
           <div className="flex flex-col items-center min-h-full pb-36 pt-4">
             
             {/* Warning Banner */}
-            {userSettings.plan === 'ZENO Free' && backendLimits && adminConfig && (
+            {!isPro && backendLimits && adminConfig && (
               (() => {
                 const limit = adminConfig.messages;
                 const used = backendLimits.messages;
@@ -1150,7 +1347,7 @@ function MainApp() {
             )}
 
             {/* Plan Usage Card */}
-            {showUsageCard && userSettings.plan === 'ZENO Free' && (messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
+            {showUsageCard && !isPro && (messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
               <div className="w-full max-w-4xl px-4 sm:px-6 flex flex-col pt-4">
                 <PlanUsageCard 
                   plan={userSettings.plan} 
@@ -1162,22 +1359,25 @@ function MainApp() {
               </div>
             )}
             
-            {/* Home / Welcome Screen if no user messages */}
-            {(messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
+            {/* Model Welcome Card on New Chat */}
+            {isNewChat && messages.length === 0 && (
               <WelcomeScreen
+                speed={speed}
                 theme={theme}
                 logoVariant={logoVariant}
                 userName={userSettings.userName}
-                onSelectPrompt={(prompt) => handleSubmit(undefined, prompt)}
+                onSelectPrompt={(prompt) => setInput(prompt)}
                 onOpenImageStudio={() => ui.openModal('imageStudio')}
+                onOpenMusicStudio={() => ui.openModal('musicStudio')}
                 onSelectSpeed={handleSelectSpeed}
                 user={profile}
-                onLogin={(remember) => signInWithGoogle({ rememberDevice: !!remember })}
+                onLogin={() => ui.openModal('auth')}
                 authLoading={authLoading}
               />
             )}
 
             {/* Conversation Messages Container */}
+
             <MessageList
               messages={messages}
               theme={theme}
@@ -1200,13 +1400,17 @@ function MainApp() {
               onSaveEditMessage={handleSaveEditMessage}
               onEditingTextChange={setEditingMessageText}
               onOpenSubscriptionModal={handleOpenSubscriptionModal}
+              userId={userId}
+              userToken={session?.access_token || null}
+              onYouTubeAction={handleYouTubeAction}
             />
           </div>
         </div>
 
         {/* Composer Input Area */}
-        <ComposerInput
-          input={input}
+        <div className="flex-shrink-0 w-full flex flex-col">
+          <ComposerInput
+            input={input}
           setInput={setInput}
           isLoading={isLoading}
           isListening={isListening}
@@ -1226,6 +1430,7 @@ function MainApp() {
           onOpenProFeatureModal={handleOpenProFeatureModal}
           dailyUsage={dailyUsage}
         />
+        </div>
       </main>
 
       {/* Global App Modals */}
@@ -1249,15 +1454,37 @@ function MainApp() {
         sessions={sessions}
         onSelectSession={setCurrentSessionId}
         onLimitReached={handleLimitReached}
+        dailyUsage={dailyUsage}
+        onUpdateUsage={setDailyUsage}
       />
     </div>
   );
 }
 
+function MainAppWrapper() {
+  const { profile } = useAuth();
+  const userId = getOrCreateUserId(profile?.uid);
+  const userEmail = profile?.email || '';
+
+  return (
+    <SubscriptionProvider userId={userId} userEmail={userEmail}>
+      <MainAppInner />
+    </SubscriptionProvider>
+  );
+}
+
+function AuthWrapper() {
+  const { loading } = useAuth();
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-[#050505] text-white">Carregando...</div>;
+  return <MainAppWrapper />;
+}
+
 export default function App() {
   return (
-    <UIProvider>
-      <MainApp />
-    </UIProvider>
+    <AuthProvider>
+      <UIProvider>
+        <AuthWrapper />
+      </UIProvider>
+    </AuthProvider>
   );
 }

@@ -1,31 +1,19 @@
-import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps, applicationDefault, getApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { adminDb as mockDb } from './mockAdminDb';
 
-const app = getApps().length === 0 
-  ? initializeApp({ 
-      credential: applicationDefault(),
-      projectId: firebaseConfig.projectId 
-    }) 
-  : getApps()[0];
+const authProjectId = firebaseConfig.projectId;
 
-const databaseId = firebaseConfig.firestoreDatabaseId;
-
-let dbInstance;
-try {
-  if (databaseId) {
-    dbInstance = getFirestore(app, databaseId);
-  } else {
-    dbInstance = getFirestore(app);
-  }
-} catch (e) {
-  try {
-    dbInstance = getFirestore(app);
-  } catch (err) {
-    dbInstance = getFirestore();
-  }
+// 1. Initialize default app for Auth
+if (getApps().length === 0) {
+  initializeApp({
+    credential: applicationDefault(),
+    projectId: authProjectId
+  });
 }
 
-export const adminDb = dbInstance;
-export const adminAuth = getAuth(app);
+const defaultApp = getApp();
+
+export const adminDb = mockDb;
+export const adminAuth = getAuth(defaultApp);

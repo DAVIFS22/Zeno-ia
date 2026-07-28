@@ -234,6 +234,11 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
   const closeImageLibrary = useCallback(() => closeModal('imageLibrary'), [closeModal]);
   const toggleImageLibrary = useCallback(() => toggleModal('imageLibrary'), [toggleModal]);
 
+  const isMusicStudioOpen = !!modals['musicStudio']?.isOpen;
+  const openMusicStudio = useCallback((data?: any) => openModal('musicStudio', { data }), [openModal]);
+  const closeMusicStudio = useCallback(() => closeModal('musicStudio'), [closeModal]);
+  const toggleMusicStudio = useCallback(() => toggleModal('musicStudio'), [toggleModal]);
+
   const isSubscriptionOpen = !!modals['subscription']?.isOpen;
   const openSubscription = useCallback((data?: any) => openModal('subscription', { data }), [openModal]);
   const closeSubscription = useCallback(() => closeModal('subscription'), [closeModal]);
@@ -339,6 +344,11 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     openSettings,
     closeSettings,
     toggleSettings,
+
+    isMusicStudioOpen,
+    openMusicStudio,
+    closeMusicStudio,
+    toggleMusicStudio,
 
     isImageStudioOpen,
     openImageStudio,
@@ -448,6 +458,11 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     openSettings,
     closeSettings,
     toggleSettings,
+
+    isMusicStudioOpen,
+    openMusicStudio,
+    closeMusicStudio,
+    toggleMusicStudio,
 
     isImageStudioOpen,
     openImageStudio,

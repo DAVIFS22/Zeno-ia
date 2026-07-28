@@ -505,7 +505,7 @@ export async function checkAndProcessSubscriptionReminders(userId: string) {
       amount: 3990,
       currency: 'BRL',
       cancelAtPeriodEnd: false,
-      paymentMethod: { brand: 'visa', last4: '4242' },
+      paymentMethod: null,
       billingHistory: [
         { id: 'inv_1', date: Date.now() - 30 * 86400 * 1000, amount: 3990, currency: 'brl', status: 'succeeded', description: 'Assinatura ZENO Pro (Mensal)' }
       ],
@@ -572,7 +572,7 @@ export async function checkAndProcessSubscriptionReminders(userId: string) {
         amount: 3990,
         currency: 'BRL',
         cancelAtPeriodEnd: false,
-        paymentMethod: { brand: 'visa', last4: '4242' },
+        paymentMethod: null,
         billingHistory: []
       },
       pendingNotification: null

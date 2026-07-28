@@ -177,10 +177,10 @@ async function syncImageToBackend(image: GeneratedImage) {
 export async function syncLibraryWithBackend(userId?: string): Promise<GeneratedImage[]> {
   try {
     if (!userId) return getStoredImages();
-    const url = `/api/images?userId=${userId}`;
+    const url = `/api/images?userId=${encodeURIComponent(userId)}`;
     const res = await fetch(url);
     if (res.ok) {
-      const remoteImages = await res.json();
+      const remoteImages = await res.json().catch(() => null);
       if (Array.isArray(remoteImages)) {
         const localImages = getStoredImages(userId);
         // Merge local & remote by id / imageUrl for this specific user
@@ -193,7 +193,7 @@ export async function syncLibraryWithBackend(userId?: string): Promise<Generated
       }
     }
   } catch (e) {
-    console.error('Backend sync unavailable:', e);
+    // Graceful fallback to local image storage
   }
   return getStoredImages(userId);
 }

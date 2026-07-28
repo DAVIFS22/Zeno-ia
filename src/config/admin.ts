@@ -158,3 +158,38 @@ export function verifyAdminRole(req: any, res: any): boolean {
   }
   return true;
 }
+
+/**
+ * Centralized function to check if a user has premium access (either via active Stripe subscription OR as OWNER).
+ */
+export function hasPremiumAccess(userOrSettingsOrEmail?: any): boolean {
+  if (!userOrSettingsOrEmail) return false;
+  if (typeof userOrSettingsOrEmail === 'boolean') return userOrSettingsOrEmail;
+
+  if (typeof userOrSettingsOrEmail === 'string') {
+    if (isAdminUser(userOrSettingsOrEmail)) return true;
+    return userOrSettingsOrEmail === 'ZENO Pro' || userOrSettingsOrEmail === 'pro' || userOrSettingsOrEmail === 'active';
+  }
+
+  if (userOrSettingsOrEmail.isAdmin === true || 
+      isAdminUser(userOrSettingsOrEmail.email) || 
+      isAdminUser(userOrSettingsOrEmail.userEmail)) {
+    return true;
+  }
+
+  if (userOrSettingsOrEmail.isPro === true) {
+    return true;
+  }
+
+  const plan = userOrSettingsOrEmail.plan || userOrSettingsOrEmail.subscriptionPlan;
+  if (plan === 'ZENO Pro' || plan === 'Pro' || plan === 'Anual' || plan === 'Mensal') {
+    return true;
+  }
+
+  const status = userOrSettingsOrEmail.subscriptionStatus || userOrSettingsOrEmail.status || userOrSettingsOrEmail.subscription?.status;
+  if (status === 'active' || status === 'trialing' || status === 'cancel_at_period_end') {
+    return true;
+  }
+
+  return false;
+}

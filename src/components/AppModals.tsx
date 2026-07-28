@@ -1,8 +1,9 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { useUIState, useModal } from '../hooks/useUIState';
 import { UserSettings, ChatSession } from '../types';
-import { SubscriptionModal } from './SubscriptionModal';
+import { SubscriptionManager } from './SubscriptionManager';
+import { PlansModal } from './PlansModal';
 import { SettingsModal } from './SettingsModal';
 import { ImageStudioModal } from './ImageStudioModal';
 import { ImageLibraryModal } from './ImageLibraryModal';
@@ -10,6 +11,8 @@ import { ProjectsModal } from './ProjectsModal';
 import { PluginsModal } from './PluginsModal';
 import { MoreModal } from './MoreModal';
 import { ProFeatureModal } from './ProFeatureModal';
+import { AuthModal } from './AuthModal';
+import { MusicStudioModal } from './MusicStudioModal';
 
 interface AppModalsProps {
   theme: 'dark' | 'light';
@@ -31,6 +34,8 @@ interface AppModalsProps {
   sessions: ChatSession[];
   onSelectSession: (id: string) => void;
   onLimitReached: () => void;
+  dailyUsage: any;
+  onUpdateUsage: (newUsage: any) => void;
 }
 
 export const AppModals: React.FC<AppModalsProps> = React.memo(({
@@ -53,11 +58,14 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   sessions,
   onSelectSession,
   onLimitReached,
+  dailyUsage,
+  onUpdateUsage,
 }) => {
   const ui = useUIState();
 
   // Individual modal hooks for targeted state access
   const subscriptionModal = useModal<{ reasonMessage?: string }>('subscription');
+  const plansModal = useModal('plans');
   const proFeatureModal = useModal('proFeature');
   const settingsModal = useModal('settings');
   const imageStudioModal = useModal('imageStudio');
@@ -65,22 +73,46 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const projectsModal = useModal('projects');
   const pluginsModal = useModal('plugins');
   const moreModal = useModal('more');
+  const musicStudioModal = useModal('musicStudio');
   const deleteSessionModal = useModal<{ sessionId: string }>('deleteSession');
   const renewalNotificationModal = useModal<{ activeNotification: any }>('renewalNotification');
+  const authModal = useModal<{ message?: string }>('auth');
 
   const activeRenewalNotification = renewalNotificationModal.data?.activeNotification;
   const deletingSessionId = deleteSessionModal.data?.sessionId;
 
   return (
     <>
+      {musicStudioModal.isOpen && (
+        <MusicStudioModal
+          isOpen={musicStudioModal.isOpen}
+          onClose={musicStudioModal.close}
+          userPlan={userSettings.plan}
+          userEmail={userSettings.userEmail || profile?.email || ''}
+          dailyUsage={dailyUsage}
+          onUpdateUsage={onUpdateUsage}
+        />
+      )}
       {/* Pro Feature Modal */}
+      {authModal.isOpen && (
+        <AuthModal
+          isOpen={authModal.isOpen}
+          onClose={() => ui.closeModal('auth')}
+          message={authModal.data?.message}
+        />
+      )}
       {proFeatureModal.isOpen && (
         <ProFeatureModal
           theme={theme}
           onClose={proFeatureModal.close}
           onUpgrade={() => {
             proFeatureModal.close();
-            ui.openModal('subscription');
+            const isProUser = profile?.isPro || profile?.unlimited || profile?.role === 'admin';
+            if (isProUser) {
+              ui.openModal('subscription');
+            } else {
+              ui.openModal('plans');
+            }
           }}
         />
       )}
@@ -118,14 +150,119 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         </div>
       )}
 
-      {/* ZENO Subscription Modal */}
-      <SubscriptionModal
-        isOpen={subscriptionModal.isOpen}
-        onClose={subscriptionModal.close}
-        settings={userSettings}
-        onUpdateSettings={onUpdateSettings}
-        reasonMessage={subscriptionModal.data?.reasonMessage}
-      />
+      {/* ZENO Subscription / Manage Subscription Modal */}
+      {subscriptionModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div 
+            className={`relative w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden my-auto transition-all ${
+              theme === 'dark' 
+                ? 'bg-[#121215] border-neutral-800 text-neutral-100' 
+                : 'bg-white border-neutral-200 text-neutral-900'
+            }`}
+          >
+            {/* Modal Header */}
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${
+              theme === 'dark' ? 'border-neutral-800/80 bg-[#17171c]' : 'border-neutral-200/80 bg-neutral-50/80'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm sm:text-base tracking-tight">ZENO Pro</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      theme === 'dark' ? 'bg-neutral-800 text-neutral-300 border-neutral-700' : 'bg-neutral-200 text-neutral-700 border-neutral-300'
+                    }`}>
+                      Gerenciamento
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400">Status, renovação, forma de pagamento e faturas</p>
+                </div>
+              </div>
+
+              <button
+                onClick={subscriptionModal.close}
+                aria-label="Fechar"
+                className={`p-2 rounded-full transition-colors ${
+                  theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-black'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Optional Reason Message Banner */}
+            {subscriptionModal.data?.reasonMessage && (
+              <div className={`px-6 py-2.5 text-xs font-medium flex items-center gap-2 border-b ${
+                theme === 'dark' ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
+              }`}>
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                <span>{subscriptionModal.data.reasonMessage}</span>
+              </div>
+            )}
+
+            {/* Modal Body */}
+            <div className="p-6 sm:p-8 max-h-[82vh] overflow-y-auto scrollbar-custom">
+              <SubscriptionManager
+                settings={userSettings}
+                onUpdateSettings={onUpdateSettings}
+                onOpenCheckout={async (plan) => {
+                  try {
+                    const res = await fetch('/api/create-checkout-session', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        plan: plan || 'monthly', 
+                        email: userSettings.userEmail, 
+                        hasUsedFreeTrial: userSettings.hasUsedFreeTrial 
+                      })
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                      window.open(data.url, '_blank');
+                    } else {
+                      alert(data.error || 'Erro ao iniciar o checkout.');
+                    }
+                  } catch (err) {
+                    alert('Erro ao iniciar o checkout.');
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plans Selection Modal */}
+      {plansModal.isOpen && (
+        <PlansModal
+          isOpen={plansModal.isOpen}
+          onClose={plansModal.close}
+          settings={userSettings}
+          onOpenCheckout={async (plan) => {
+            try {
+              const res = await fetch('/api/create-checkout-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  plan: plan || 'monthly', 
+                  email: userSettings.userEmail, 
+                  hasUsedFreeTrial: userSettings.hasUsedFreeTrial 
+                })
+              });
+              const data = await res.json();
+              if (data.url) {
+                window.open(data.url, '_blank');
+              } else {
+                alert(data.error || 'Erro ao iniciar o checkout.');
+              }
+            } catch (err) {
+              alert('Erro ao iniciar o checkout.');
+            }
+          }}
+        />
+      )}
 
       {/* Tabbed Settings Modal */}
       <SettingsModal
@@ -141,7 +278,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         user={profile}
         session={session}
         onLogout={logout}
-        onLogin={(isAdding) => signInWithGoogle({ isAddingAccount: !!isAdding })}
+        onLogin={() => ui.openModal('auth')}
         onSwitchAccount={switchAccount}
         authLoading={authLoading}
       />

@@ -24,6 +24,8 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   onShare
 }) => {
   const isAlreadyLoaded = loadedImagesCache.has(src);
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+  const [isIntersecting, setIsIntersecting] = useState(isAlreadyLoaded);
   const [isLoading, setIsLoading] = useState(!isAlreadyLoaded);
   const [progress, setProgress] = useState(isAlreadyLoaded ? 100 : 12);
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -36,6 +38,34 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const prevSrcRef = useRef(src);
+
+  // Lazy loading observer: defer image loading until it scrolls near the viewport
+  useEffect(() => {
+    if (isAlreadyLoaded || isIntersecting) return;
+
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsIntersecting(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry && entry.isIntersecting) {
+          setIsIntersecting(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: '250px 0px 250px 0px',
+        threshold: 0.01
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [src, isAlreadyLoaded, isIntersecting]);
 
   // Check favorite status from library on mount / src change
   useEffect(() => {
@@ -198,8 +228,17 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   const currentStage = getProgressStage(progress);
 
+  if (!isIntersecting) {
+    return (
+      <span ref={containerRef} className="block my-4 relative max-w-xl min-h-[220px] rounded-2xl bg-neutral-800/30 border border-neutral-800/60 animate-pulse flex flex-col items-center justify-center p-6 text-center select-none">
+        <Sparkles className="w-5 h-5 text-neutral-500 mb-1" />
+        <span className="text-xs text-neutral-500 font-medium">Carregando imagem...</span>
+      </span>
+    );
+  }
+
   return (
-    <span className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-neutral-700/60 shadow-2xl bg-[#171717]">
+    <span ref={containerRef} className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-neutral-700/60 shadow-2xl bg-[#171717]">
       {/* Loading Container */}
       {isLoading && (
         <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative overflow-hidden select-none">
@@ -275,6 +314,8 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
           ref={imgRef}
           src={currentSrc}
           alt={alt || 'Imagem Gerada pelo ZENO'}
+          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           onLoad={handleImageLoad}
           onError={handleImageError}

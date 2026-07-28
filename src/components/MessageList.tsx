@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { 
-  Copy, Check, Edit3, Volume2, VolumeX, ThumbsUp, ThumbsDown, RefreshCw, Sparkles, AlertCircle
+  Copy, Check, Edit3, Volume2, VolumeX, ThumbsUp, ThumbsDown, RefreshCw, Sparkles, AlertCircle, ChevronUp, Layers
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,6 +8,10 @@ import { Message, ModelType } from '../types';
 import { ZenoLogo } from './ZenoLogo';
 import { ErrorBanner } from './ErrorBanner';
 import { Countdown } from './Countdown';
+import { YouTubeProcessor } from './YouTubeProcessor';
+
+const INITIAL_PAGE_SIZE = 25;
+const BATCH_SIZE = 25;
 
 interface MessageItemProps {
   msg: Message;
@@ -31,6 +35,9 @@ interface MessageItemProps {
   onSaveEditMessage: (id: string) => void;
   onEditingTextChange: (text: string) => void;
   onOpenSubscriptionModal?: () => void;
+  userId: string | null;
+  userToken: string | null;
+  onYouTubeAction: (action: string, transcript: string, metadata: any) => void;
 }
 
 export const MessageItem = React.memo<MessageItemProps>(({
@@ -54,7 +61,10 @@ export const MessageItem = React.memo<MessageItemProps>(({
   onCancelEditMessage,
   onSaveEditMessage,
   onEditingTextChange,
-  onOpenSubscriptionModal
+  onOpenSubscriptionModal,
+  userId,
+  userToken,
+  onYouTubeAction
 }) => {
   if (msg.role === 'user') {
     return (
@@ -130,10 +140,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
   // Model response
   const activeSpeed = msg.modelSpeed || speed;
-  const modelName = activeSpeed === 'image' ? 'ZENO Vision' :
-                    activeSpeed === 'mega' ? 'ZENO Mega Sábio' :
-                    activeSpeed === 'fast' ? 'ZENO Rápido' :
-                    'ZENO Inteligente';
+  const modelName = activeSpeed === 'think' ? 'ZENO Think' :
+                    activeSpeed === 'search' ? 'ZENO Search' :
+                    activeSpeed === 'vision' ? 'ZENO Vision' :
+                    activeSpeed === 'code' ? 'ZENO Código' :
+                    activeSpeed === 'fast' ? 'ZENO Flash' :
+                    activeSpeed === 'mega' ? 'ZENO Mega' :
+                    activeSpeed === 'image' ? 'ZENO Studio' :
+                    'ZENO Flash';
 
   return (
     <div className="group flex w-full justify-start">
@@ -149,6 +163,19 @@ export const MessageItem = React.memo<MessageItemProps>(({
               {modelName}
             </span>
           </div>
+
+          {msg.youtubeUrl && (
+            <YouTubeProcessor 
+              url={msg.youtubeUrl}
+              userId={userId}
+              userToken={userToken}
+              onProcessed={(transcript) => {
+                // We can inform the parent or just let it be.
+                // For now, the transcript is inside the processor.
+              }}
+              onActionRequest={(action, transcript, metadata) => onYouTubeAction(action, transcript, metadata)}
+            />
+          )}
 
           {/* Error Banner or Streamed Text */}
           {msg.isLimitWarning ? (
@@ -267,6 +294,30 @@ export const MessageItem = React.memo<MessageItemProps>(({
       </div>
     </div>
   );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.msg.id === nextProps.msg.id &&
+    prevProps.msg.text === nextProps.msg.text &&
+    prevProps.msg.role === nextProps.msg.role &&
+    prevProps.msg.hasError === nextProps.msg.hasError &&
+    prevProps.msg.errorMessage === nextProps.msg.errorMessage &&
+    prevProps.msg.isLimitWarning === nextProps.msg.isLimitWarning &&
+    prevProps.msg.modelSpeed === nextProps.msg.modelSpeed &&
+    prevProps.isLastMessage === nextProps.isLastMessage &&
+    prevProps.theme === nextProps.theme &&
+    prevProps.logoVariant === nextProps.logoVariant &&
+    prevProps.speed === nextProps.speed &&
+    prevProps.isLoadingLast === nextProps.isLoadingLast &&
+    prevProps.isCopied === nextProps.isCopied &&
+    prevProps.isSpeaking === nextProps.isSpeaking &&
+    prevProps.itemFeedback === nextProps.itemFeedback &&
+    prevProps.isEditing === nextProps.isEditing &&
+    prevProps.editingText === nextProps.editingText &&
+    prevProps.markdownComponents === nextProps.markdownComponents &&
+    prevProps.userId === nextProps.userId &&
+    prevProps.userToken === nextProps.userToken &&
+    prevProps.msg.youtubeUrl === nextProps.msg.youtubeUrl
+  );
 });
 
 MessageItem.displayName = 'MessageItem';
@@ -293,6 +344,9 @@ interface MessageListProps {
   onSaveEditMessage: (id: string) => void;
   onEditingTextChange: (text: string) => void;
   onOpenSubscriptionModal?: () => void;
+  userId: string | null;
+  userToken: string | null;
+  onYouTubeAction: (action: string, transcript: string, metadata: any) => void;
 }
 
 export const MessageList = React.memo<MessageListProps>(({
@@ -316,18 +370,157 @@ export const MessageList = React.memo<MessageListProps>(({
   onCancelEditMessage,
   onSaveEditMessage,
   onEditingTextChange,
-  onOpenSubscriptionModal
+  onOpenSubscriptionModal,
+  userId,
+  userToken,
+  onYouTubeAction
 }) => {
+  const [visibleLimit, setVisibleLimit] = useState<number>(INITIAL_PAGE_SIZE);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
+  const prevFirstMsgIdRef = useRef<string | null>(null);
+
+  // Filter welcome message when there are actual messages
   const visibleMessages = useMemo(() => {
     return messages.filter(msg => !(msg.id.startsWith('welcome') && messages.length === 1));
   }, [messages]);
 
+  const firstMsgId = visibleMessages[0]?.id || null;
+
+  // Reset pagination limit when chat session switches or message set is replaced
+  useEffect(() => {
+    if (prevFirstMsgIdRef.current !== firstMsgId) {
+      prevFirstMsgIdRef.current = firstMsgId;
+      setVisibleLimit(INITIAL_PAGE_SIZE);
+    }
+  }, [firstMsgId]);
+
+  // Keep latest messages visible when new messages arrive
+  const prevTotalCountRef = useRef(visibleMessages.length);
+  useEffect(() => {
+    if (visibleMessages.length > prevTotalCountRef.current) {
+      const addedCount = visibleMessages.length - prevTotalCountRef.current;
+      // If messages were added at the end, expand visibleLimit so the new message is visible
+      setVisibleLimit(prev => Math.max(prev + addedCount, INITIAL_PAGE_SIZE));
+    }
+    prevTotalCountRef.current = visibleMessages.length;
+  }, [visibleMessages.length]);
+
+  const hasMore = visibleMessages.length > visibleLimit;
+  const remainingCount = visibleMessages.length - visibleLimit;
+
+  const slicedMessages = useMemo(() => {
+    return visibleMessages.slice(-visibleLimit);
+  }, [visibleMessages, visibleLimit]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore) return;
+    // Capture parent scroll container height before prepending older messages
+    if (containerRef.current) {
+      const scrollParent = containerRef.current.closest('.overflow-y-auto');
+      if (scrollParent) {
+        prevScrollHeightRef.current = scrollParent.scrollHeight;
+      }
+    }
+    setVisibleLimit(prev => prev + BATCH_SIZE);
+  }, [hasMore]);
+
+  const handleLoadAll = useCallback(() => {
+    if (containerRef.current) {
+      const scrollParent = containerRef.current.closest('.overflow-y-auto');
+      if (scrollParent) {
+        prevScrollHeightRef.current = scrollParent.scrollHeight;
+      }
+    }
+    setVisibleLimit(visibleMessages.length);
+  }, [visibleMessages.length]);
+
+  // Preserve scroll position when older messages are loaded above current view
+  useLayoutEffect(() => {
+    if (prevScrollHeightRef.current !== null && containerRef.current) {
+      const scrollParent = containerRef.current.closest('.overflow-y-auto') as HTMLElement | null;
+      if (scrollParent) {
+        const delta = scrollParent.scrollHeight - prevScrollHeightRef.current;
+        if (delta > 0) {
+          scrollParent.scrollTop += delta;
+        }
+      }
+      prevScrollHeightRef.current = null;
+    }
+  }, [slicedMessages.length]);
+
+  // Lazy loading observer when user scrolls up to the top sentinel
+  useEffect(() => {
+    if (!hasMore) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry && entry.isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      {
+        root: sentinel.closest('.overflow-y-auto') || null,
+        rootMargin: '100px 0px 0px 0px', // trigger 100px before reaching top
+        threshold: 0.1
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, handleLoadMore]);
+
   if (visibleMessages.length === 0) return null;
 
   return (
-    <div className="w-full max-w-4xl px-4 sm:px-6 flex flex-col space-y-8">
-      {visibleMessages.map((msg, index) => {
-        const isLastMessage = index === visibleMessages.length - 1;
+    <div ref={containerRef} className="w-full max-w-4xl px-4 sm:px-6 flex flex-col space-y-8">
+      {/* Sentinel & Pagination Controls */}
+      {hasMore && (
+        <div className="flex flex-col items-center gap-2 my-2 transition-all">
+          <div ref={sentinelRef} className="h-1 w-full" />
+          
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            <button
+              onClick={handleLoadMore}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-2xs flex items-center gap-2 ${
+                theme === 'dark' 
+                  ? 'bg-[#1e1e24] hover:bg-neutral-800 text-neutral-300 border border-neutral-800' 
+                  : 'bg-white hover:bg-neutral-100 text-neutral-700 border border-neutral-200 shadow-2xs'
+              }`}
+            >
+              <ChevronUp className="w-3.5 h-3.5 text-amber-500" />
+              <span>Carregar {Math.min(BATCH_SIZE, remainingCount)} mensagens anteriores ({remainingCount} restantes)</span>
+            </button>
+
+            {remainingCount > BATCH_SIZE && (
+              <button
+                onClick={handleLoadAll}
+                className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200'
+                    : 'hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900'
+                }`}
+              >
+                Carregar todas ({visibleMessages.length})
+              </button>
+            )}
+          </div>
+
+          <div className={`text-[11px] font-medium flex items-center gap-1.5 opacity-60 ${
+            theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'
+          }`}>
+            <Layers className="w-3 h-3" />
+            <span>Exibindo {slicedMessages.length} de {visibleMessages.length} mensagens no histórico</span>
+          </div>
+        </div>
+      )}
+
+      {slicedMessages.map((msg, index) => {
+        const isLastMessage = index === slicedMessages.length - 1;
         return (
           <MessageItem
             key={msg.id}
@@ -352,6 +545,9 @@ export const MessageList = React.memo<MessageListProps>(({
             onSaveEditMessage={onSaveEditMessage}
             onEditingTextChange={onEditingTextChange}
             onOpenSubscriptionModal={onOpenSubscriptionModal}
+            userId={userId}
+            userToken={userToken}
+            onYouTubeAction={onYouTubeAction}
           />
         );
       })}

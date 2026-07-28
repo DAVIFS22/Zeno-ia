@@ -20,6 +20,7 @@ export type Message = {
   errorMessage?: string;
   rawErrorDetails?: string;
   isLimitWarning?: boolean;
+  youtubeUrl?: string;
 };
 
 export type ChatSession = {
@@ -72,8 +73,12 @@ export interface ConnectedAccount {
   accessToken: string;
   refreshToken?: string;
   expiresAt: number; // Timestamp em ms
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'owner';
   isAdmin: boolean;
+  isPro?: boolean;
+  unlimited?: boolean;
+  bypassStripe?: boolean;
+  subscriptionStatus?: string;
 }
 
 export interface MultiAccountSession {
@@ -118,6 +123,7 @@ export type DailyUsage = {
   imageGenCount: number;
   webSearchCount: number;
   docUploadCount: number;
+  musicGenCount: number;
 };
 
 export type UserSettings = {
@@ -133,6 +139,7 @@ export type UserSettings = {
   paymentMethod?: 'stripe' | 'google_play' | 'apple_pay';
   // Aparência
   theme: 'dark' | 'light' | 'auto';
+  showHomeSuggestions?: boolean;
   logoVariant: 'monochrome' | 'gradient';
   fontSize: 'normal' | 'large' | 'compact';
   // IA
@@ -153,6 +160,7 @@ export type UserSettings = {
   // Personalização & Idioma
   language: 'pt-BR' | 'en-US' | 'es-ES';
   groupByDate?: boolean;
+  isSmartMode: boolean;
   // Notificações
   soundEnabled: boolean;
   notificationsEnabled: boolean;

@@ -44,7 +44,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   zeno: {
     id: 'zeno',
     name: 'ZENO',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Essencial',
     description: 'Especialista em conversas gerais, escrita, explicações, traduções e tarefas do dia a dia.',
     category: 'general',
@@ -81,7 +81,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   think: {
     id: 'think',
     name: 'ZENO Pense',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Raciocínio',
     description: 'Especialista em raciocínio profundo, matemática, física, lógica e problemas complexos.',
     category: 'think',
@@ -118,7 +118,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   search: {
     id: 'search',
     name: 'Busca ZENO',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Pesquisa Web',
     description: 'Especialista em pesquisa em tempo real, grounding web, notícias, citações e fontes.',
     category: 'search',
@@ -155,7 +155,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   vision: {
     id: 'vision',
     name: 'Estúdio ZENO Vision',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Visão & Artes',
     description: 'Especialista em IA visual, geração direta de imagens, edição, variações, OCR e análise visual.',
     category: 'vision',
@@ -192,7 +192,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   code: {
     id: 'code',
     name: 'ZENO Código',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Programação',
     description: 'Especialista em React, Next, TypeScript, Python, Node, SQL, Flutter, Java, C#, HTML, CSS e arquitetura.',
     category: 'think',
@@ -229,7 +229,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   pdf: {
     id: 'pdf',
     name: 'PDF',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Análise Documental',
     description: 'Especialista em leitura, interpretação, resumo e extração de tabelas de documentos PDF.',
     category: 'search',
@@ -266,7 +266,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   strategy: {
     id: 'strategy',
     name: 'Plano Estratégico',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Planejamento',
     description: 'Especialista em planejamento de negócios, marketing, roadmaps, produtos e cronogramas executivos.',
     category: 'general',
@@ -303,7 +303,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   summary: {
     id: 'summary',
     name: 'Resumo Executivo',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Síntese',
     description: 'Especialista em síntese profissional, relatórios executivos, resumos de alto impacto e documentos.',
     category: 'general',
@@ -340,21 +340,21 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   smart: {
     id: 'smart',
     name: 'ZENO Smart',
-    apiModel: 'gemini-3.6-flash',
-    badge: 'Autônomo',
-    description: 'Roteamento inteligente automático para o melhor modelo conforme a tarefa.',
+    apiModel: 'gemini-flash-latest',
+    badge: 'Inteligente',
+    description: 'Modo Automático: O ZENO AI analisa sua tarefa e seleciona dinamicamente o melhor modelo (Flash ou Pro) para garantir velocidade e precisão máxima.',
     category: 'general',
     color: '#3B82F6',
-    systemPrompt: 'Você é ZENO Smart, um assistente inteligente com roteamento dinâmico que seleciona a melhor estratégia cognitiva para cada consulta do usuário.',
+    systemPrompt: 'Você é ZENO Smart, um assistente inteligente com roteamento dinâmico. Você atua como o cérebro central que decide qual estratégia cognitiva é melhor para cada consulta do usuário.',
     temperature: 0.7,
     top_p: 0.9,
     top_k: 40,
     frequencyPenalty: 0.0,
     presencePenalty: 0.0,
-    maxContextTokens: 32000,
+    maxContextTokens: 128000,
     maxOutputTokens: 8192,
-    priority: 9,
-    tools: ['Router', 'Chat', 'Memória', 'Gerador de Imagens'],
+    priority: 0, // Highest priority to appear first
+    tools: ['Router', 'Chat', 'Memória', 'Gerador de Imagens', 'Grounding'],
     blockedTools: [],
     permissions: ['chat:read', 'chat:write', 'image:generate'],
     capabilities: {
@@ -368,7 +368,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
       vision: true,
       reasoning: true
     },
-    dailyLimit: 50,
+    dailyLimit: null,
     isPro: false,
     requiredPlan: 'free',
     speed: 'Dinâmico',
@@ -377,7 +377,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   fast: {
     id: 'fast',
     name: 'ZENO Fast',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Velocidade',
     description: 'Respostas instantâneas de alta velocidade para conversas rápidas.',
     category: 'general',
@@ -414,7 +414,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   mega: {
     id: 'mega',
     name: 'ZENO Mega',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Avançado',
     description: 'Potência máxima analítica e criativa.',
     category: 'think',
@@ -451,7 +451,7 @@ export const ZENO_MODELS_CONFIG: Record<ModelType, ModelConfig> = {
   image: {
     id: 'image',
     name: 'Gerador de Imagens',
-    apiModel: 'gemini-3.6-flash',
+    apiModel: 'gemini-flash-latest',
     badge: 'Visual',
     description: 'Criação especializada de imagens por IA.',
     category: 'vision',

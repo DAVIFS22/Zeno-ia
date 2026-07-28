@@ -3,16 +3,20 @@
 @layer base {
   :root {
     --bg-main-light: #ffffff;
-    --bg-card-light: #f4f4f6;
-    --border-light: #e2e2e8;
-    --text-primary-light: #0f0f12;
-    --text-secondary-light: #6b6e7b;
+    --bg-card-light: #f8f8fa;
+    --border-light: #e4e4e7;
+    --border-subtle-light: rgba(228, 228, 231, 0.8);
+    --text-primary-light: #09090b;
+    --text-secondary-light: #52525b;
+    --text-muted-light: #71717a;
 
-    --bg-main-dark: #0b0b0d;
-    --bg-card-dark: #161619;
-    --border-dark: #26262d;
-    --text-primary-dark: #f0f0f4;
-    --text-secondary-dark: #8e8e9a;
+    --bg-main-dark: #09090b;
+    --bg-card-dark: #18181b;
+    --border-dark: #27272a;
+    --border-subtle-dark: rgba(39, 39, 42, 0.8);
+    --text-primary-dark: #f4f4f5;
+    --text-secondary-dark: #a1a1aa;
+    --text-muted-dark: #71717a;
   }
 }
 
@@ -33,11 +37,19 @@
     background: transparent;
   }
   .scrollbar-custom::-webkit-scrollbar-thumb {
-    background: #33333b;
+    background: #27272a;
     border-radius: 9999px;
   }
   .scrollbar-custom::-webkit-scrollbar-thumb:hover {
-    background: #4a4a56;
+    background: #3f3f46;
+  }
+
+  /* Refined neutral borders & focus states */
+  .border-subtle-light {
+    border-color: rgba(228, 228, 231, 0.7);
+  }
+  .border-subtle-dark {
+    border-color: rgba(39, 39, 42, 0.7);
   }
 
   /* Micro-interactions transition speed */

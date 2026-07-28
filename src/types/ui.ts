@@ -2,6 +2,7 @@ export type ModalId =
   | 'settings'
   | 'imageStudio'
   | 'imageLibrary'
+  | 'musicStudio'
   | 'projects'
   | 'plugins'
   | 'more'
@@ -73,6 +74,11 @@ export interface UIContextType {
   openImageLibrary: (data?: any) => void;
   closeImageLibrary: () => void;
   toggleImageLibrary: () => void;
+
+  isMusicStudioOpen: boolean;
+  openMusicStudio: (data?: any) => void;
+  closeMusicStudio: () => void;
+  toggleMusicStudio: () => void;
 
   isSubscriptionOpen: boolean;
   openSubscription: (data?: any) => void;

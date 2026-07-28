@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { FileAttachment, UserPlan, ModelType, DailyUsage } from '../types';
 import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 interface ComposerInputProps {
   input: string;
@@ -54,11 +55,11 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
 
   const isDark = theme === 'dark';
-  const isPro = plan === 'ZENO Pro';
+  const { isPro } = useSubscription();
 
   const currentModel = getModelDef(speed);
 
-  const handleModelClick = (modelId: ModelType, isModelPro: boolean, modelName: string) => {
+  const handleModelClick = (modelId: ModelType, isModelPro: boolean) => {
     setIsSpeedMenuOpen(false);
     if (isModelPro && !isPro) {
       if (onOpenProFeatureModal) {
@@ -144,49 +145,62 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`fixed bottom-0 left-0 right-0 md:left-[270px] z-30 pt-3 pb-4 pb-[env(safe-area-inset-bottom)] px-3 sm:px-6 pointer-events-none transition-all ${
+      className={`fixed bottom-0 left-0 right-0 md:left-[260px] z-30 pt-2 pb-4 pb-[env(safe-area-inset-bottom)] px-3 sm:px-6 pointer-events-none transition-all ${
         isDark 
-          ? 'bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/95 to-transparent' 
+          ? 'bg-gradient-to-t from-[#0f0f11] via-[#0f0f11]/95 to-transparent' 
           : 'bg-gradient-to-t from-white via-white/95 to-transparent'
       }`}
     >
       <div className="max-w-3xl mx-auto relative px-1 sm:px-0 pointer-events-auto">
         
-        {/* Model Indicator & Vision Studio Link (Above Capsule Bar) */}
-        <div className="flex items-center justify-between mb-2 px-2">
+        {/* Model Indicator */}
+        <div className="flex items-center justify-between mb-1.5 px-2">
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-              className={`text-[11px] transition-colors flex items-center gap-1.5 font-medium ${
-                isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
+              className={`text-xs transition-colors flex items-center gap-1.5 font-medium ${
+                isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
               <span>Modelo:</span>
-              <span className={`font-bold flex items-center gap-1 ${
-                isDark ? 'text-neutral-200' : 'text-neutral-800'
+              <span className={`font-semibold flex items-center gap-1 ${
+                isDark ? 'text-neutral-200' : 'text-neutral-900'
               }`}>
                 {currentModel.name}
                 {currentModel.isPro && !isPro && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">
                     <Lock className="w-2.5 h-2.5" /> PRO
                   </span>
                 )}
               </span>
-              <ChevronDown className="w-3 h-3 text-neutral-500" />
+              <ChevronDown className="w-3 h-3 text-neutral-400" />
             </button>
 
+            {/* Model Selection Menu */}
             {isSpeedMenuOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setIsSpeedMenuOpen(false)} />
-                <div className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-2xl border shadow-2xl z-40 animate-fadeIn ${
-                  isDark ? 'bg-[#1e1e24] border-neutral-800 text-white' : 'bg-white border-neutral-200 text-black'
+                <div className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-xl border shadow-xl z-40 animate-fadeIn ${
+                  isDark ? 'bg-[#18181b] border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
                 }`}>
-                  <div className={`px-2.5 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
+                  <div className={`px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
                     isDark ? 'text-neutral-400 border-neutral-800' : 'text-neutral-500 border-neutral-100'
                   }`}>
-                    <span>Modelos ZENO</span>
-                    <span className="text-neutral-500">{isPro ? 'Plano Pro' : 'Plano Free'}</span>
+                    <span>Modo Inteligente</span>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectSpeed('smart');
+                      }}
+                      className={`px-1.5 py-0.5 rounded transition-colors ${
+                        speed === 'smart' 
+                          ? 'bg-blue-600 text-white' 
+                          : isDark ? 'bg-neutral-800 text-neutral-400' : 'bg-neutral-100 text-neutral-500'
+                      }`}
+                    >
+                      {speed === 'smart' ? 'Ativo' : 'Ativar'}
+                    </button>
                   </div>
 
                   {ZENO_MODELS.map(m => {
@@ -197,37 +211,29 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                       <button
                         key={m.id}
                         type="button"
-                        onClick={() => handleModelClick(m.id, m.isPro, m.name)}
-                        className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between group ${
+                        onClick={() => handleModelClick(m.id, m.isPro)}
+                        className={`w-full text-left p-2 rounded-lg transition-all flex items-center justify-between group ${
                           isSelected
-                            ? isDark ? 'bg-neutral-800 text-neutral-100 font-bold' : 'bg-neutral-100 text-neutral-900 font-bold'
-                            : isDark ? 'hover:bg-neutral-800/60 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                            ? isDark ? 'bg-neutral-800 text-white font-medium' : 'bg-neutral-100 text-neutral-900 font-medium'
+                            : isDark ? 'hover:bg-neutral-800/50 text-neutral-300' : 'hover:bg-neutral-50 text-neutral-700'
                         }`}
                       >
                         <div className="flex-1 pr-2">
-                          <div className="text-xs font-semibold flex items-center gap-1.5">
+                          <div className="text-xs font-medium flex items-center gap-1.5">
                             <span>{m.name}</span>
-                            {m.badge && (
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium border ${
-                                isDark ? 'bg-neutral-800 text-neutral-400 border-neutral-700' : 'bg-neutral-100 text-neutral-600 border-neutral-200'
-                              }`}>
-                                {m.badge}
-                              </span>
-                            )}
                           </div>
                           <div className="text-[10px] text-neutral-400 mt-0.5 leading-tight">{m.description}</div>
                         </div>
 
                         {isLocked ? (
-                          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 border ${
-                            isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-300' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
+                          <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                            isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
                           }`}>
-                            <Lock className="w-3 h-3 text-neutral-400" />
-                            <span>PRO</span>
+                            <Lock className="w-2.5 h-2.5" /> PRO
                           </div>
                         ) : isSelected ? (
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            isDark ? 'bg-neutral-200' : 'bg-neutral-800'
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            isDark ? 'bg-white' : 'bg-neutral-900'
                           }`} />
                         ) : null}
                       </button>
@@ -247,36 +253,35 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 onOpenImageStudio();
               }
             }}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium transition-colors ${
               isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
             }`}
           >
             <Wand2 className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Estúdio ZENO Vision</span>
-            {!isPro && <Lock className="w-3 h-3 text-neutral-400 ml-1" />}
+            <span>Gerar Imagem</span>
           </button>
         </div>
 
-        {/* Daily Limit Banner for Free users */}
+        {/* Daily Limit Warning */}
         {!isPro && (isAtLimit || isNearLimit) && (
-          <div className={`mb-2 px-4 py-2 rounded-2xl text-xs flex items-center justify-between border animate-fadeIn ${
+          <div className={`mb-2 px-3.5 py-1.5 rounded-xl text-xs flex items-center justify-between border ${
             isAtLimit 
               ? isDark ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
               : isDark ? 'bg-neutral-900/60 border-neutral-800 text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-700'
           }`}>
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
               <span>
                 {isAtLimit 
-                  ? `Você atingiu o limite de ${FREE_LIMITS.MESSAGES_PER_DAY} mensagens diárias do plano Free.` 
-                  : `Você usou ${messagesCount}/${FREE_LIMITS.MESSAGES_PER_DAY} mensagens gratuitas de hoje.`}
+                  ? `Limite de ${FREE_LIMITS.MESSAGES_PER_DAY} mensagens diárias atingido.` 
+                  : `${messagesCount}/${FREE_LIMITS.MESSAGES_PER_DAY} mensagens grátis utilizadas.`}
               </span>
             </div>
             {onOpenProFeatureModal && (
               <button
                 type="button"
                 onClick={() => onOpenProFeatureModal()}
-                className="px-3 py-1 rounded-xl text-[11px] font-bold bg-neutral-200 hover:bg-white text-neutral-950 transition-all shadow-xs ml-2 flex-shrink-0"
+                className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-200 hover:bg-white text-neutral-950 transition-all ml-2"
               >
                 Upgrade Pro
               </button>
@@ -286,45 +291,45 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
         {/* Speech Error Banner */}
         {speechError && (
-          <div className="mb-2 px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs flex items-center gap-2 animate-fadeIn">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-neutral-400" />
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
             <span>{speechError}</span>
           </div>
         )}
 
-        {/* Voice Recording Active Bar */}
+        {/* Voice Active Bar */}
         {isListening && (
-          <div className="mb-2 px-4 py-1.5 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs inline-flex items-center gap-2 shadow-sm animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-            <span className="font-semibold">Ouvindo sua voz... Fale agora</span>
+          <div className="mb-2 px-3 py-1 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <span>Ouvindo...</span>
             <button
               type="button"
               onClick={onToggleListening}
-              className="ml-2 font-bold hover:underline text-neutral-300"
+              className="ml-2 font-semibold hover:underline"
             >
               Concluir
             </button>
           </div>
         )}
 
-        {/* Attached Files Chips */}
+        {/* Attached Files */}
         {attachments.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mb-2 px-2">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
             {attachments.map(att => (
               <div
                 key={att.id}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border shadow-xs ${
-                  isDark ? 'bg-[#2F2F2F] border-[#3F3F46] text-neutral-200' : 'bg-white border-neutral-300 text-neutral-800'
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                  isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
                 }`}
               >
                 {att.type === 'image' && att.url ? (
-                  <img src={att.url} alt={att.name} className="w-4 h-4 rounded object-cover" />
+                  <img src={att.url} alt={att.name} className="w-3.5 h-3.5 rounded object-cover" />
                 ) : att.type === 'code' ? (
                   <Code className="w-3.5 h-3.5 text-neutral-400" />
                 ) : (
                   <FileText className="w-3.5 h-3.5 text-neutral-400" />
                 )}
-                <span className="truncate max-w-[140px]">{att.name}</span>
+                <span className="truncate max-w-[120px]">{att.name}</span>
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(att.id)}
@@ -337,7 +342,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           </div>
         )}
 
-        {/* ChatGPT Style Pill Capsule Input Bar */}
+        {/* Input Bar */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -345,29 +350,29 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               onSubmit(e);
             }
           }}
-          className={`relative flex items-center gap-2 rounded-[9999px] min-h-[56px] max-h-[180px] px-4 py-2 transition-all duration-300 border ${
+          className={`relative flex items-center gap-2 rounded-2xl min-h-[52px] max-h-[180px] px-3.5 py-2 transition-all duration-200 border ${
             isDragging 
               ? isDark 
-                ? 'ring-2 ring-neutral-700 border-neutral-600 bg-[#252529]'
-                : 'ring-2 ring-neutral-450 border-neutral-400 bg-neutral-50' 
+                ? 'border-neutral-600 bg-neutral-800'
+                : 'border-neutral-400 bg-neutral-50' 
               : isDark
-                ? 'bg-[#1e1e24] border-neutral-800/80 focus-within:ring-1 focus-within:ring-neutral-700 focus-within:border-neutral-700 shadow-none'
-                : 'bg-white border-neutral-200/90 focus-within:ring-1 focus-within:ring-neutral-400 focus-within:border-neutral-400 shadow-md shadow-neutral-100/50'
-          } ${isListening ? 'ring-2 ring-neutral-500/30' : ''}`}
+                ? 'bg-[#151518] border-neutral-800 focus-within:border-neutral-700'
+                : 'bg-white border-neutral-200/90 focus-within:border-neutral-400 shadow-2xs'
+          }`}
         >
-          {/* Paperclip Button (Far Left) */}
+          {/* File Attachment */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
             title="Anexar arquivo"
-            className={`p-2 rounded-full transition-colors duration-200 flex items-center justify-center flex-shrink-0 ${
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
               isDark
-                ? 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60'
+                ? 'text-neutral-400 hover:text-white hover:bg-neutral-800'
                 : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
-            <Paperclip className="w-5 h-5" />
+            <Paperclip className="w-4 h-4" />
           </button>
           <input
             type="file"
@@ -378,7 +383,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
           />
 
-          {/* Text Area (Spans full available width) */}
+          {/* Text Area */}
           <textarea
             ref={textareaRef}
             value={input}
@@ -393,71 +398,71 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             }}
             placeholder={
               isDragging ? "Solte seus arquivos aqui..." :
-              isListening ? "Fale agora, o áudio será transcrito..." :
-              "Pergunte qualquer coisa"
+              isListening ? "Fale agora..." :
+              "Enviar mensagem para ZENO..."
             }
             disabled={isLoading}
             rows={1}
-            className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-[15px] sm:text-base leading-snug py-1.5 px-1 font-normal ${
+            className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-sm py-1 font-normal ${
               isDark 
-                ? 'text-white placeholder-[#8e8e9a]' 
+                ? 'text-white placeholder-neutral-500' 
                 : 'text-neutral-900 placeholder-neutral-400'
             }`}
           />
 
-          {/* Microphone Button (Right side, next to send) */}
+          {/* Voice Input */}
           <button
             type="button"
             onClick={onToggleListening}
             disabled={isLoading}
-            title={isListening ? "Parar de ouvir" : "Falar com ZENO"}
-            className={`p-2 rounded-full transition-colors duration-200 flex items-center justify-center flex-shrink-0 ${
+            title={isListening ? "Parar de ouvir" : "Falar"}
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
               isListening
                 ? isDark
-                  ? 'bg-neutral-100 text-neutral-950 animate-pulse'
-                  : 'bg-neutral-900 text-white animate-pulse'
+                  ? 'bg-neutral-100 text-neutral-950'
+                  : 'bg-neutral-900 text-white'
                 : isDark
-                  ? 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60'
+                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-800'
                   : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
 
-          {/* Circular Send / Stop Button */}
+          {/* Submit / Stop Button */}
           {isLoading ? (
             <button
               type="button"
               onClick={onStopGeneration}
               title="Parar geração"
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-200 flex items-center justify-center flex-shrink-0 shadow-xs ${
-                isDark ? 'bg-neutral-100 hover:bg-white text-neutral-950' : 'bg-neutral-900 hover:bg-neutral-950 text-white'
+              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
+                isDark ? 'bg-white text-black' : 'bg-neutral-900 text-white'
               }`}
             >
-              <Square className={`w-4 h-4 fill-current ${isDark ? 'text-neutral-950' : 'text-white'}`} />
+              <Square className="w-3.5 h-3.5 fill-current" />
             </button>
           ) : (
             <button
               type="submit"
               disabled={!hasContent}
               title="Enviar mensagem"
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-200 flex items-center justify-center flex-shrink-0 ${
+              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
                 hasContent
                   ? isDark
-                    ? 'bg-neutral-100 hover:bg-white text-neutral-950 shadow-sm cursor-pointer hover:scale-102 active:scale-98'
-                    : 'bg-neutral-900 hover:bg-neutral-950 text-white shadow-sm cursor-pointer hover:scale-102 active:scale-98'
+                    ? 'bg-white text-black cursor-pointer'
+                    : 'bg-neutral-900 text-white cursor-pointer'
                   : isDark
-                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed opacity-60'
+                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
                     : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
               }`}
             >
-              <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
             </button>
           )}
         </form>
 
-        <div className="text-center text-[11px] text-neutral-500 mt-2 font-medium">
-          ZENO pode cometer erros. Recomenda-se checar informações críticas.
+        <div className="text-center text-[10px] text-neutral-500 mt-1.5">
+          ZENO pode apresentar imprecisões. Valide informações importantes.
         </div>
       </div>
     </div>
@@ -465,4 +470,3 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 });
 
 ComposerInput.displayName = 'ComposerInput';
-

@@ -101,3 +101,13 @@ export function useImageStudioUI() {
     toggle: ui.toggleImageStudio,
   };
 }
+
+export function useMusicStudioUI() {
+  const ui = useUIState();
+  return {
+    isOpen: ui.isMusicStudioOpen,
+    open: ui.openMusicStudio,
+    close: ui.closeMusicStudio,
+    toggle: ui.toggleMusicStudio,
+  };
+}

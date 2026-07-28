@@ -2,6 +2,7 @@ import React from 'react';
 import { PanelLeftOpen, Sparkles, Sun, Moon, Settings, Plus, User } from 'lucide-react';
 import { UserSettings } from '../types';
 import { ZenoLogo } from './ZenoLogo';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 interface AppHeaderProps {
   theme: 'dark' | 'light';
@@ -29,44 +30,57 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   user
 }) => {
   const isDark = theme === 'dark';
-  const bgMain = isDark ? 'bg-[#0D0D0D]/95 text-white border-[#303030]' : 'bg-white/95 text-neutral-900 border-neutral-200';
-  const hoverBtn = isDark ? 'hover:bg-[#242424] hover:text-white' : 'hover:bg-neutral-100 hover:text-neutral-900';
-  const textBtn = isDark ? 'text-[#A8A8A8]' : 'text-neutral-500';
-  const bgBadge = isDark ? 'bg-[#242424] border-[#303030] text-white hover:bg-[#2F2F2F]' : 'bg-neutral-100 border-neutral-200 text-neutral-800 hover:bg-neutral-200/60';
+  const { isPro } = useSubscription();
 
   return (
-    <header className={`h-12 flex items-center justify-between px-3 sm:px-4 border-b flex-shrink-0 z-20 backdrop-blur-md transition-colors duration-150 ${bgMain}`}>
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+    <header className={`h-13 flex items-center justify-between px-4 sm:px-6 border-b flex-shrink-0 z-20 backdrop-blur-md transition-colors duration-200 ${
+      isDark ? 'bg-[#0f0f11]/90 text-white border-neutral-800/80' : 'bg-white/90 text-neutral-900 border-neutral-200/80'
+    }`}>
+      <div className="flex items-center gap-3 min-w-0">
         <button 
-          className={`p-1.5 ${hoverBtn} rounded-lg transition-colors ${textBtn} ${
-            isSidebarCollapsed ? 'block' : 'md:hidden'
-          }`}
+          className={`p-1.5 rounded-lg transition-colors ${
+            isDark 
+              ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' 
+              : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
+          } ${isSidebarCollapsed ? 'block' : 'md:hidden'}`}
           onClick={onOpenSidebar}
           title="Abrir barra lateral"
         >
           <PanelLeftOpen className="w-4 h-4" />
         </button>
 
-        {/* Header Title */}
-        <div className="flex items-center gap-2">
+        {/* Minimal Header Brand Logo */}
+        <div className="flex items-center gap-2 cursor-pointer" onClick={onNewChat}>
           <ZenoLogo size={20} variant={logoVariant} theme={theme} />
-          <span className={`font-semibold text-xs sm:text-sm tracking-tight ${isDark ? 'text-white' : 'text-neutral-900'}`}>ZENO AI</span>
+          <span className={`font-semibold text-xs sm:text-sm tracking-tight ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
+            ZENO AI
+          </span>
         </div>
       </div>
 
-      {/* Right Header Controls */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <button
-          onClick={() => onOpenSubscriptionModal()}
-          className={`px-2.5 py-1 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 border ${bgBadge}`}
-        >
-          <Sparkles className={`w-3.5 h-3.5 ${isDark ? 'text-white' : 'text-amber-500'}`} />
-          <span>{userSettings.plan === 'ZENO Pro' ? 'ZENO Pro' : 'Upgrade Pro'}</span>
-        </button>
+      {/* Header Actions */}
+      <div className="flex items-center gap-2">
+        {!isPro && (
+          <button
+            onClick={() => onOpenSubscriptionModal()}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 border ${
+              isDark 
+                ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border-neutral-800 hover:border-neutral-700' 
+                : 'bg-neutral-50 hover:bg-neutral-100 text-neutral-800 border-neutral-200 hover:border-neutral-300'
+            }`}
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isDark ? 'text-amber-400' : 'text-amber-500'}`} />
+            <span>Upgrade Pro</span>
+          </button>
+        )}
 
         <button
           onClick={onToggleTheme}
-          className={`p-1.5 rounded-lg transition-colors ${hoverBtn} ${textBtn}`}
+          className={`p-2 rounded-lg transition-colors ${
+            isDark 
+              ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' 
+              : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
+          }`}
           title="Alternar Tema"
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -74,34 +88,34 @@ export const AppHeader = React.memo<AppHeaderProps>(({
 
         <button
           onClick={onOpenSettings}
-          className={`p-0.5 rounded-lg transition-colors ${hoverBtn} ${textBtn} flex items-center`}
+          className={`p-1 rounded-lg transition-colors ${
+            isDark 
+              ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' 
+              : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
+          }`}
           title="Configurações"
         >
-          {user ? (
-            <div className="w-7 h-7 rounded-lg overflow-hidden border border-neutral-700/30">
-              {user.photoURL ? (
-                <img 
-                  src={user.photoURL} 
-                  alt={user.displayName || 'User'} 
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className={`w-full h-full flex items-center justify-center ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              )}
+          {user?.photoURL ? (
+            <div className="w-6 h-6 rounded-full overflow-hidden border border-neutral-700/40">
+              <img 
+                src={user.photoURL} 
+                alt={user.displayName || 'User'} 
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover"
+              />
             </div>
           ) : (
-            <div className="p-1">
-              <Settings className="w-4 h-4" />
-            </div>
+            <Settings className="w-4 h-4" />
           )}
         </button>
 
         <button
           onClick={onNewChat}
-          className={`p-1.5 rounded-lg transition-colors ${hoverBtn} ${textBtn}`}
+          className={`p-2 rounded-lg transition-colors ${
+            isDark 
+              ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' 
+              : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
+          }`}
           title="Nova conversa"
         >
           <Plus className="w-4 h-4" />

@@ -35,24 +35,33 @@ export function useCloudSync(
         console.log('[CLOUD SYNC] Puxando dados isolados da nuvem para UID:', userId);
         
         // Fetch Settings
-        const settingsRes = await fetch(`/api/sync/settings?userId=${userId}`);
-        const settingsData = await settingsRes.json();
-        if (isSubscribed && settingsData.settings) {
-          setSettings(settingsData.settings);
+        try {
+          const settingsRes = await fetch(`/api/sync/settings?userId=${encodeURIComponent(userId)}`);
+          if (settingsRes.ok) {
+            const settingsData = await settingsRes.json().catch(() => ({}));
+            if (isSubscribed && settingsData?.settings) {
+              setSettings(settingsData.settings);
+            }
+          }
+        } catch (e) {
+          // Graceful fallback when cloud sync endpoint is unavailable
         }
 
         // Fetch Sessions - strictly replace sessions for this UID
-        const sessionsRes = await fetch(`/api/sync/sessions?userId=${userId}`);
-        const sessionsData = await sessionsRes.json();
-        if (isSubscribed) {
-          if (Array.isArray(sessionsData.sessions)) {
-            const sorted = [...sessionsData.sessions].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-            setSessions(sorted);
-            lastSessionsStr.current = JSON.stringify(sorted);
-          } else {
-            setSessions([]);
-            lastSessionsStr.current = JSON.stringify([]);
+        try {
+          const sessionsRes = await fetch(`/api/sync/sessions?userId=${encodeURIComponent(userId)}`);
+          if (sessionsRes.ok) {
+            const sessionsData = await sessionsRes.json().catch(() => ({}));
+            if (isSubscribed) {
+              if (Array.isArray(sessionsData?.sessions)) {
+                const sorted = [...sessionsData.sessions].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                setSessions(sorted);
+                lastSessionsStr.current = JSON.stringify(sorted);
+              }
+            }
           }
+        } catch (e) {
+          // Graceful fallback when cloud sync endpoint is unavailable
         }
         
         if (isSubscribed) {
@@ -60,7 +69,7 @@ export function useCloudSync(
           lastSettingsStr.current = JSON.stringify(settings);
         }
       } catch (err) {
-        console.error('[CLOUD SYNC] Erro ao sincronizar dados da nuvem:', err);
+        // Fall back gracefully to local storage
       }
     };
 
@@ -79,14 +88,16 @@ export function useCloudSync(
     if (currentSessionsStr !== lastSessionsStr.current) {
       const pushSessions = async () => {
         try {
-          await fetch('/api/sync/sessions', {
+          const res = await fetch('/api/sync/sessions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId, sessions })
           });
-          lastSessionsStr.current = currentSessionsStr;
+          if (res.ok) {
+            lastSessionsStr.current = currentSessionsStr;
+          }
         } catch (err) {
-          console.error('[CLOUD SYNC] Erro ao salvar sessões na nuvem:', err);
+          // Local storage fallback maintained silently
         }
       };
       
@@ -102,14 +113,16 @@ export function useCloudSync(
     if (currentSettingsStr !== lastSettingsStr.current) {
       const pushSettings = async () => {
         try {
-          await fetch('/api/sync/settings', {
+          const res = await fetch('/api/sync/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId, settings })
           });
-          lastSettingsStr.current = currentSettingsStr;
+          if (res.ok) {
+            lastSettingsStr.current = currentSettingsStr;
+          }
         } catch (err) {
-          console.error('[CLOUD SYNC] Erro ao salvar configurações na nuvem:', err);
+          // Local storage fallback maintained silently
         }
       };
 

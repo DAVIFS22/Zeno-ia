@@ -112,7 +112,7 @@ export class SubscriptionManager {
       },
       lastInvoice: payload.lastInvoice || '',
       paymentStatus: payload.paymentStatus,
-      paymentMethod: payload.paymentMethod || { brand: 'visa', last4: '4242' },
+      paymentMethod: payload.paymentMethod || null,
       currency: payload.currency || 'BRL',
       amount: payload.amount || 3990,
       updatedAt: serverTimestamp, // Required server timestamp

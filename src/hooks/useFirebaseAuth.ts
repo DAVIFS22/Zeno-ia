@@ -9,10 +9,11 @@ import {
   browserSessionPersistence,
   setPersistence
 } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, googleProvider, db } from '../lib/firebase';
 import { syncUserProfile } from '../lib/firebase';
 import { ConnectedAccount, MultiAccountSession } from '../types';
-import { getUserRole, isAdminUser } from '../config/admin';
+import { getUserRole, isAdminUser, ADMIN_EMAIL } from '../config/admin';
 
 const STORAGE_KEY = 'zeno_auth_session';
 
@@ -46,6 +47,41 @@ export function useFirebaseAuth() {
       if (firebaseUser) {
         await syncUserProfile(firebaseUser);
         const token = await getIdToken(firebaseUser);
+        const email = firebaseUser.email || '';
+        let isAdmin = isAdminUser(email) || email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        let isPro = isAdmin;
+        let unlimited = isAdmin;
+        let role = isAdmin ? 'owner' : getUserRole(email);
+
+        try {
+          const adminDocRef = doc(db, 'admins', email.toLowerCase());
+          const adminSnap = await getDoc(adminDocRef);
+          if (adminSnap.exists()) {
+            const data = adminSnap.data();
+            if (data.isAdmin || data.role === 'owner') {
+              isAdmin = true;
+              isPro = true;
+              unlimited = true;
+              role = data.role || 'owner';
+            }
+          } else if (isAdmin) {
+            await setDoc(adminDocRef, {
+              role: 'owner',
+              isAdmin: true,
+              isPro: true,
+              unlimited: true,
+              email: ADMIN_EMAIL,
+              createdAt: serverTimestamp()
+            }, { merge: true });
+          }
+        } catch (e) {
+          console.error('Error checking admin doc:', e);
+        }
+
+        if (isAdmin) {
+          console.log("ADMIN:", firebaseUser.email);
+        }
+
         const newAccount: ConnectedAccount = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
@@ -53,8 +89,12 @@ export function useFirebaseAuth() {
           photoURL: firebaseUser.photoURL || '',
           accessToken: token, // Using ID token as access token for Firebase
           expiresAt: Date.now() + 3600 * 1000, // Firebase tokens roughly 1h
-          role: getUserRole(firebaseUser.email),
-          isAdmin: isAdminUser(firebaseUser.email),
+          role: role as any,
+          isAdmin,
+          isPro,
+          unlimited,
+          bypassStripe: isAdmin,
+          subscriptionStatus: isAdmin ? 'active' : 'free',
         };
 
         setSession(prev => {

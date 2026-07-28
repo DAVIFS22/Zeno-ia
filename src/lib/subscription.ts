@@ -1,5 +1,6 @@
 import { UserPlan, DailyUsage, ModelType } from '../types';
 import { ZENO_MODELS_CONFIG, getModelConfig } from './models';
+import { hasPremiumAccess } from '../config/admin';
 
 export interface ModelDef {
   id: ModelType;
@@ -11,7 +12,8 @@ export interface ModelDef {
 }
 
 export const ZENO_MODELS: ModelDef[] = Object.values(ZENO_MODELS_CONFIG)
-  .filter(m => ['zeno', 'think', 'search', 'vision', 'code', 'strategy', 'summary', 'pdf'].includes(m.id))
+  .filter(m => ['smart', 'zeno', 'think', 'search', 'vision', 'code', 'mega', 'fast'].includes(m.id))
+  .sort((a, b) => a.priority - b.priority)
   .map(m => ({
     id: m.id,
     name: m.name,
@@ -25,7 +27,8 @@ export const FREE_LIMITS = {
   MESSAGES_PER_DAY: 15,
   IMAGES_PER_DAY: 2,
   SEARCHES_PER_DAY: 3,
-  DOCS_PER_DAY: 2
+  DOCS_PER_DAY: 2,
+  MUSIC_PER_DAY: 3
 };
 
 export function getTodayString(): string {
@@ -39,17 +42,19 @@ export function getInitialUsage(): DailyUsage {
     messagesCount: 0,
     imageGenCount: 0,
     webSearchCount: 0,
-    docUploadCount: 0
+    docUploadCount: 0,
+    musicGenCount: 0
   };
 }
 
 export function normalizeModelId(model: ModelType | string): ModelType {
-  const m = (model || 'zeno') as ModelType;
+  const m = (model || 'smart') as ModelType;
   if (ZENO_MODELS_CONFIG[m]) return m;
-  if (m === 'smart' || m === 'fast') return 'zeno';
-  if (m === 'mega') return 'search';
-  if (m === 'image') return 'vision';
-  return 'zeno';
+  if (m === 'smart') return 'smart';
+  if (m === 'fast') return 'fast';
+  if (m === 'mega') return 'mega';
+  if (m === 'image') return 'image';
+  return 'smart';
 }
 
 export function isModelPro(model: ModelType | string): boolean {
@@ -75,7 +80,7 @@ export function checkModelAccess(plan: UserPlan, model: ModelType | string): { a
   const norm = normalizeModelId(model);
   const cfg = getModelConfig(norm);
   const isProRequired = cfg ? (cfg.requiredPlan === 'pro' || cfg.isPro) : false;
-  if (isProRequired && plan !== 'ZENO Pro') {
+  if (isProRequired && !hasPremiumAccess(plan)) {
     return { allowed: false, needsPro: true };
   }
   return { allowed: true, needsPro: false };
@@ -84,13 +89,13 @@ export function checkModelAccess(plan: UserPlan, model: ModelType | string): { a
 export function checkUsageLimit(
   plan: UserPlan,
   usage: DailyUsage,
-  action: 'message' | 'image' | 'search' | 'doc'
+  action: 'message' | 'image' | 'search' | 'doc' | 'music'
 ): { allowed: boolean; current: number; limit: number; remaining: number } {
   // Ensure date matches today, else reset
   const today = getTodayString();
   const currentUsage = usage.date === today ? usage : getInitialUsage();
 
-  if (plan === 'ZENO Pro') {
+  if (hasPremiumAccess(plan)) {
     return { allowed: true, current: 0, limit: Infinity, remaining: Infinity };
   }
 
@@ -128,6 +133,16 @@ export function checkUsageLimit(
     case 'doc': {
       const current = currentUsage.docUploadCount;
       const limit = FREE_LIMITS.DOCS_PER_DAY;
+      return {
+        allowed: current < limit,
+        current,
+        limit,
+        remaining: Math.max(0, limit - current)
+      };
+    }
+    case 'music': {
+      const current = currentUsage.musicGenCount;
+      const limit = FREE_LIMITS.MUSIC_PER_DAY;
       return {
         allowed: current < limit,
         current,

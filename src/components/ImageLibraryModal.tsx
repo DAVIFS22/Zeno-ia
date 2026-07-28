@@ -13,6 +13,7 @@ import {
   getStoredCollections, 
   addStoredCollection
 } from '../lib/imageLibraryStorage';
+import { hasPremiumAccess } from '../config/admin';
 
 interface ImageLibraryModalProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isPro = userPlan === 'ZENO Pro';
+  const isPro = hasPremiumAccess(userPlan);
 
   // Toggle favorite
   const handleToggleFavorite = (id: string, e?: React.MouseEvent) => {

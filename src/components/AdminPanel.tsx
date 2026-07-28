@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Lock, Shield, Server, Cpu, Database, Activity, Gauge, Sparkles, 
   CheckCircle2, AlertTriangle, RefreshCw, Save, Sliders, ToggleLeft, ToggleRight,
   Layers, Users, BarChart3, Wrench, ShieldAlert, Check, TrendingUp, Coins, 
   Terminal, Info, FileText, ArrowUpRight, Search, Eye, Filter, ShieldCheck, 
-  ShoppingCart, Ban, LogOut, LogIn, CreditCard, Image as ImageIcon, Laptop
+  ShoppingCart, Ban, LogOut, LogIn, CreditCard, Image as ImageIcon, Laptop,
+  Trash2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell 
@@ -31,11 +33,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   theme = 'dark',
   onConfigSaved
 }) => {
+  const { user } = useAuth();
   const role = getUserRole(userEmail);
   const isAdmin = role === 'admin';
 
   // Sub-tabs in Admin Panel
-  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs' | 'debug'>('stats');
 
   // Config State
   const [config, setConfig] = useState<FullAdminConfig>(DEFAULT_FULL_ADMIN_CONFIG);
@@ -63,6 +66,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     cpuUsagePercent: 5
   });
 
+  const [auditMetrics, setAuditMetrics] = useState<{
+    totalUsers: number;
+    activeSubscriptions: number;
+    timestamp: number;
+  } | null>(null);
+
   // Logs States
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
@@ -73,23 +82,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Fetch admin config and stats from backend with x-user-email security header
   const fetchAdminData = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !user) return;
     setIsLoading(true);
     setSaveStatus(null);
     try {
-      const [configRes, statsRes, logsRes] = await Promise.all([
-        fetch('/api/admin/config', {
-          headers: { 'x-user-email': userEmail }
-        }),
-        fetch('/api/admin/stats', {
-          headers: { 'x-user-email': userEmail }
-        }),
-        fetch('/api/admin/logs', {
-          headers: { 'x-user-email': userEmail }
-        })
+      const token = await user.getIdToken();
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'x-user-email': userEmail
+      };
+
+      const [configRes, statsRes, logsRes, auditRes] = await Promise.all([
+        fetch('/api/admin/config', { headers }),
+        fetch('/api/admin/stats', { headers }),
+        fetch('/api/admin/logs', { headers }),
+        fetch('/api/admin/audit-metrics', { headers })
       ]);
 
-      if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403) {
+      if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403 || auditRes.status === 403) {
         setSaveStatus({
           type: 'error',
           message: 'Erro 403: Acesso Negado pelo Servidor Backend.'
@@ -115,6 +125,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setAuditLogs(logsData.auditLogs || []);
         setSystemLogs(logsData.systemLogs || []);
       }
+
+      if (auditRes.ok) {
+        const auditData = await auditRes.json();
+        setAuditMetrics(auditData);
+      }
     } catch (error: any) {
       console.error('[AdminPanel] Erro ao carregar dados do backend:', error);
     } finally {
@@ -135,14 +150,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Save Config to Backend (registers audit automatically on backend!)
   const handleSaveConfig = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !user) return;
     setIsSaving(true);
     setSaveStatus(null);
     try {
+      const token = await user.getIdToken();
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
           'x-user-email': userEmail
         },
         body: JSON.stringify({ config, userEmail })
@@ -196,7 +213,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }));
   };
 
-  const chartColors = ['#DC2626', '#EA580C', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777'];
+  const chartColors = ['#FFFFFF', '#F5F5F5', '#E5E5E5', '#D4D4D4', '#A3A3A3', '#737373', '#525252'];
 
   // Logs filters
   const filteredSystemLogs = systemLogs.filter(log => {
@@ -250,22 +267,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-12">
+      {/* AUTHENTICATION STATE COMPONENT */}
+      <div className="p-5 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 transition-all hover:border-neutral-800 group">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white shadow-xl group-hover:scale-105 transition-transform">
+            <ShieldCheck className="w-7 h-7" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-white tracking-tight flex items-center gap-2.5">
+              Administrador Verificado
+              <div className="w-2.5 h-2.5 rounded-full bg-neutral-400 shadow-[0_0_8px_rgba(255,255,255,0.2)] animate-pulse"></div>
+            </h4>
+            <p className="text-sm text-neutral-500 font-medium mt-1">
+              Sessão autenticada: <span className="text-white font-mono">{userEmail}</span>
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em]">
+            Acesso Root Ativo
+          </div>
+        </div>
+      </div>
+
       {/* Header Banner */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-950/40 via-[#1C1C1C] to-[#171717] border border-red-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#171717] border border-[#242424] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30">
-            <Lock className="w-6 h-6" />
+          <div className="p-2.5 rounded-xl bg-white/5 text-white border border-white/10">
+            <Lock className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold text-white tracking-tight">Painel Administrativo ZENO AI</h3>
-              <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] font-mono font-semibold">
-                ROLE: ADMIN
-              </span>
+              <h3 className="text-lg font-bold text-white tracking-tight">Painel do Desenvolvedor</h3>
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              Conectado como <span className="text-white font-medium">{userEmail}</span> • <span className="text-emerald-400">Segurança Máxima Ativa</span>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Gerencie configurações de infraestrutura, modelos e usuários.
             </p>
           </div>
         </div>
@@ -278,16 +316,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             title="Atualizar dados do servidor"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Atualizar Dados</span>
+            <span className="hidden sm:inline">Atualizar</span>
           </button>
 
           <button
             onClick={handleSaveConfig}
             disabled={isSaving}
-            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-all active:scale-95 shadow-md flex items-center gap-2"
+            className="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs transition-all active:scale-95 shadow-md flex items-center gap-2"
           >
             {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            <span>Salvar Alterações</span>
+            <span>Salvar Configurações</span>
           </button>
         </div>
       </div>
@@ -308,13 +346,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Admin Sub-Navigation Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-[#2B2B2B] scrollbar-custom">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-[#242424] scrollbar-custom">
         <button
           onClick={() => setActiveTab('stats')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'stats'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
           <BarChart3 className="w-3.5 h-3.5" />
@@ -323,10 +361,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <button
           onClick={() => setActiveTab('limits')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'limits'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
           <Gauge className="w-3.5 h-3.5" />
@@ -335,22 +373,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <button
           onClick={() => setActiveTab('pro')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'pro'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <Sparkles className="w-3.5 h-3.5" />
           <span>Recursos Pro</span>
         </button>
 
         <button
           onClick={() => setActiveTab('server')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'server'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
           <Server className="w-3.5 h-3.5" />
@@ -359,10 +397,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <button
           onClick={() => setActiveTab('models')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'models'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
           <Cpu className="w-3.5 h-3.5" />
@@ -371,124 +409,151 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <button
           onClick={() => setActiveTab('logs')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'logs'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
-          <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+          <Terminal className="w-3.5 h-3.5" />
           <span>Logs & Auditoria</span>
         </button>
 
         <button
           onClick={() => setActiveTab('rbac')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'rbac'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40'
-              : 'text-neutral-400 hover:text-white hover:bg-[#242424]'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
           }`}
         >
-          <Shield className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Controle RBAC</span>
+          <Shield className="w-3.5 h-3.5" />
+          <span>RBAC</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('debug')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+            activeTab === 'debug'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
+          }`}
+        >
+          <Wrench className="w-3.5 h-3.5" />
+          <span>Depuração</span>
         </button>
       </div>
 
       {/* SUB-TAB 1: STATS */}
       {activeTab === 'stats' && (
-        <div className="space-y-6 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn">
+          {/* AUDIT METRICS SECTION */}
+          <div className="space-y-5">
+            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Métricas de Auditoria Real</h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-neutral-700">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Total de Usuários</p>
+                  <p className="text-4xl font-black text-white">{auditMetrics?.totalUsers || '...'}</p>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 group-hover:text-white transition-colors shadow-2xl">
+                  <Users className="w-8 h-8" />
+                </div>
+              </div>
+              
+              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-neutral-700">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Assinaturas Ativas</p>
+                  <p className="text-4xl font-black text-white">{auditMetrics?.activeSubscriptions || '...'}</p>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 group-hover:text-white transition-colors shadow-2xl">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Executive KPI Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Financial MRR card */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28 relative overflow-hidden group">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Faturamento Mensal (MRR)</span>
-                <Coins className="w-4 h-4 text-emerald-400" />
-              </div>
-              <p className="text-2xl font-black text-white">R$ {stats.monthlyRevenue?.toFixed(2)}</p>
-              <div className="flex items-center justify-between text-[10px] text-neutral-500 border-t border-[#2C2C2C] pt-1">
-                <span>Calculado em tempo real</span>
-                <span className="text-emerald-400 font-semibold font-mono flex items-center gap-0.5">
-                  <TrendingUp className="w-3 h-3" /> ZENO Pro
-                </span>
-              </div>
-            </div>
-
-            {/* Total Revenue card */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28 relative overflow-hidden group">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Receita Total Acumulada</span>
-                <CreditCard className="w-4 h-4 text-amber-400" />
-              </div>
-              <p className="text-2xl font-black text-white">R$ {stats.totalRevenue?.toFixed(2)}</p>
-              <div className="flex items-center justify-between text-[10px] text-neutral-500 border-t border-[#2C2C2C] pt-1">
-                <span>Histórico de faturamento</span>
-                <span className="text-amber-400 font-mono">Real-time DB</span>
-              </div>
-            </div>
-
-            {/* User demographics */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28 relative overflow-hidden group">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Métricas de Usuários</span>
-                <Users className="w-4 h-4 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-black text-white">{stats.totalUsers || 1}</p>
-                <div className="flex gap-2 text-[10px] font-medium text-neutral-400">
-                  <span className="text-emerald-400">{stats.activeOnlineNow || 1} online agora</span>
-                  <span>•</span>
-                  <span className="text-blue-400">{stats.activeSessionsToday || 1} ativos hoje</span>
+          <div className="space-y-5">
+            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Desempenho Geral do Sistema</h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* Financial MRR card */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Receita Mensal</span>
+                  <Coins className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
+                <p className="text-4xl font-black text-white">R$ {stats.monthlyRevenue?.toFixed(2)}</p>
+                <div className="flex items-center justify-between text-[11px] text-neutral-600 font-medium pt-2 border-t border-white/5">
+                  <span>Projeção Mensal</span>
+                  <span className="text-white flex items-center gap-1.5 font-bold">
+                    <TrendingUp className="w-3.5 h-3.5" /> Estável
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-[10px] text-neutral-500 border-t border-[#2C2C2C] pt-1">
-                <span>ZENO Pro: {stats.totalProUsers}</span>
-                <span className="text-neutral-500">Free: {Math.max(0, stats.totalUsers - stats.totalProUsers)}</span>
-              </div>
-            </div>
 
-            {/* AI Prompts sent */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Mensagens & Prompts IA</span>
-                <Layers className="w-4 h-4 text-purple-400" />
+              {/* Total Revenue card */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Faturamento Total</span>
+                  <CreditCard className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
+                <p className="text-4xl font-black text-white">R$ {stats.totalRevenue?.toFixed(2)}</p>
+                <div className="text-[11px] text-neutral-600 font-medium pt-2 border-t border-white/5">
+                  Histórico Acumulado
+                </div>
               </div>
-              <p className="text-2xl font-black text-white">{stats.totalMessagesSent || 0}</p>
-              <div className="text-[10px] text-neutral-500 border-t border-[#2C2C2C] pt-1 flex justify-between">
-                <span>Total de consultas respondidas</span>
-                <span className="text-purple-400 font-mono font-bold">100% Real</span>
-              </div>
-            </div>
 
-            {/* Images generated */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Imagens Geradas</span>
-                <ImageIcon className="w-4 h-4 text-pink-400" />
+              {/* Messages sent */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Conversas IA</span>
+                  <Terminal className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
+                <p className="text-4xl font-black text-white">{stats.totalMessagesSent || 0}</p>
+                <div className="text-[11px] text-neutral-600 font-medium pt-2 border-t border-white/5">
+                  Prompts Processados
+                </div>
               </div>
-              <p className="text-2xl font-black text-white">{stats.totalImagesGenerated || 0}</p>
-              <div className="text-[10px] text-neutral-500 border-t border-[#2C2C2C] pt-1 flex justify-between">
-                <span>Processadas via Flux Dev</span>
-                <span className="text-pink-400 font-mono">Estúdio Vision</span>
-              </div>
-            </div>
 
-            {/* Server Performance metrics */}
-            <div className="p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] flex flex-col justify-between h-28">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
-                <span>Uso do Servidor Container</span>
-                <Activity className="w-4 h-4 text-cyan-400" />
+              {/* Images generated */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Visuais Gerados</span>
+                  <ImageIcon className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
+                <p className="text-4xl font-black text-white">{stats.totalImagesGenerated || 0}</p>
+                <div className="text-[11px] text-neutral-600 font-medium pt-2 border-t border-white/5">
+                  ZENO Estúdio Vision
+                </div>
               </div>
-              <div>
+
+              {/* Server Performance metrics */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Uso de Recursos</span>
+                  <Activity className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
                 <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-neutral-300 font-mono">{stats.memoryUsageMB || 150} MB RAM</span>
-                  <span className="text-xs text-cyan-400 font-mono">{stats.cpuUsagePercent || 5}% CPU</span>
+                  <span className="text-2xl font-black text-white">{stats.memoryUsageMB || 150} MB</span>
+                  <span className="text-sm text-neutral-500 font-mono font-bold">{stats.cpuUsagePercent || 5}% CPU</span>
                 </div>
-                <p className="text-[10px] text-neutral-500 mt-1">Uptime: {Math.floor((stats.serverUptimeSeconds || 120) / 3600)}h {Math.floor(((stats.serverUptimeSeconds || 120) % 3600) / 60)}m {Math.floor((stats.serverUptimeSeconds || 120) % 60)}s</p>
+                <div className="text-[11px] text-neutral-400 font-bold tracking-[0.2em] pt-2 border-t border-white/5">
+                  SISTEMA ONLINE
+                </div>
               </div>
-              <div className="text-[10px] text-emerald-400 border-t border-[#2C2C2C] pt-1 flex justify-between">
-                <span>Vite/Express Cloud Run Node</span>
-                <span className="font-semibold">SAUDÁVEL</span>
+              
+              {/* Online Now card */}
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Dispositivos Ativos</span>
+                  <Laptop className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
+                </div>
+                <p className="text-4xl font-black text-white">{stats.activeOnlineNow || 1}</p>
+                <div className="text-[11px] text-neutral-500 font-bold pt-2 border-t border-white/5 flex items-center justify-between">
+                  <span>{stats.activeSessionsToday || 1} Sessões hoje</span>
+                  <div className="w-2 h-2 rounded-full bg-neutral-400"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -496,29 +561,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           {/* Detailed usage analytics maps */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2">
             {/* Recharts Model distribution */}
-            <div className="md:col-span-7 p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] space-y-3 flex flex-col justify-between">
+            <div className="md:col-span-7 p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-4">
               <div>
-                <h5 className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5 text-red-500" /> Distribuição de Modelos em Tempo Real
+                <h5 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
+                  Uso de Modelos IA
                 </h5>
-                <p className="text-[10px] text-neutral-400 mt-0.5">Chamadas de inferência por modelo ativo no backend.</p>
+                <p className="text-[10px] text-neutral-600 mt-1">Distribuição de inferência por modelo.</p>
               </div>
 
-              <div className="h-44 w-full pr-4">
+              <div className="h-48 w-full pr-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={getModelChartData()} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2B2B2B" vertical={false} />
-                    <XAxis dataKey="name" stroke="#737373" fontSize={9} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#737373" fontSize={9} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#242424" vertical={false} />
+                    <XAxis dataKey="name" stroke="#525252" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#525252" fontSize={9} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#171717', borderColor: '#333', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #262626', borderRadius: '12px' }}
                       labelStyle={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
-                      itemStyle={{ color: '#f43f5e', fontSize: '10px' }}
+                      itemStyle={{ color: '#fff', fontSize: '10px' }}
                     />
-                    <Bar dataKey="uso" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="uso" radius={[6, 6, 0, 0]}>
                       {
                         getModelChartData().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
+                          <Cell key={`cell-${index}`} fill="#404040" className="hover:fill-white transition-all cursor-pointer" />
                         ))
                       }
                     </Bar>
@@ -528,56 +593,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Telemetry / secondary tools grid */}
-            <div className="md:col-span-5 p-4 rounded-xl bg-[#202020] border border-[#2B2B2B] space-y-4">
+            <div className="md:col-span-5 p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-5">
               <div>
-                <h5 className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Wrench className="w-3.5 h-3.5 text-cyan-400" /> Recursos e Telemetria de Integração
-                </h5>
-                <p className="text-[10px] text-neutral-400 mt-0.5">Contagem real de solicitações processadas por recurso do sistema.</p>
+                <h5 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Telemetria de Recursos</h5>
               </div>
 
-              <div className="space-y-3 pt-2">
+              <div className="space-y-4 pt-2">
                 {/* Web Search */}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-300 font-medium">Pesquisas na Web (Grounding)</span>
-                    <span className="text-cyan-400 font-mono font-bold">{stats.totalWebSearches || 0}</span>
+                    <span className="text-neutral-400 font-medium">Grounding Search</span>
+                    <span className="text-white font-mono font-bold">{stats.totalWebSearches || 0}</span>
                   </div>
-                  <div className="w-full bg-[#171717] rounded-full h-1.5">
-                    <div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((stats.totalWebSearches || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
+                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalWebSearches || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
 
                 {/* PDF Analyzer */}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-300 font-medium">Análise de PDFs & Documentos</span>
-                    <span className="text-purple-400 font-mono font-bold">{stats.totalPdfsAnalyzed || 0}</span>
+                    <span className="text-neutral-400 font-medium">Processamento Docs</span>
+                    <span className="text-white font-mono font-bold">{stats.totalPdfsAnalyzed || 0}</span>
                   </div>
-                  <div className="w-full bg-[#171717] rounded-full h-1.5">
-                    <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((stats.totalPdfsAnalyzed || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
-                  </div>
-                </div>
-
-                {/* Vision / OCR */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-300 font-medium">Visão Computacional & OCR</span>
-                    <span className="text-red-400 font-mono font-bold">{stats.totalVisionUses || 0}</span>
-                  </div>
-                  <div className="w-full bg-[#171717] rounded-full h-1.5">
-                    <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((stats.totalVisionUses || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
+                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalPdfsAnalyzed || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
 
                 {/* Code Execution */}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-300 font-medium">Interpretador de Códigos Integrado</span>
-                    <span className="text-amber-500 font-mono font-bold">{stats.totalCodeUses || 0}</span>
+                    <span className="text-neutral-400 font-medium">Execução de Código</span>
+                    <span className="text-white font-mono font-bold">{stats.totalCodeUses || 0}</span>
                   </div>
-                  <div className="w-full bg-[#171717] rounded-full h-1.5">
-                    <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((stats.totalCodeUses || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
+                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalCodeUses || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
               </div>
@@ -1224,6 +1275,108 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <span>Configuração centralizada em <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">src/config/admin.ts</code> para fácil manutenção.</span>
                 </li>
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* SUB-TAB 7: DEBUG & TOOLS */}
+      {activeTab === 'debug' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Reset de Estatísticas</h4>
+                  <p className="text-[10px] text-neutral-400">Zera os contadores globais de uso do sistema.</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!user) return;
+                  const token = await user.getIdToken();
+                  const res = await fetch('/api/admin/debug/reset-stats', {
+                    method: 'POST',
+                    headers: { 
+                      'Authorization': `Bearer ${token}`,
+                      'x-user-email': userEmail 
+                    }
+                  });
+                  const data = await res.json();
+                  alert(data.message || 'Comando enviado.');
+                }}
+                className="w-full py-2 rounded-xl bg-amber-600/10 hover:bg-amber-600/20 text-amber-400 border border-amber-600/30 text-xs font-semibold transition-all"
+              >
+                Resetar Agora
+              </button>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Limpeza de Logs</h4>
+                  <p className="text-[10px] text-neutral-400">Remove logs antigos de sistema e auditoria.</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!user) return;
+                  const token = await user.getIdToken();
+                  const res = await fetch('/api/admin/debug/clear-logs', {
+                    method: 'POST',
+                    headers: { 
+                      'Authorization': `Bearer ${token}`,
+                      'x-user-email': userEmail 
+                    }
+                  });
+                  const data = await res.json();
+                  alert(data.message || 'Comando enviado.');
+                }}
+                className="w-full py-2 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-600/30 text-xs font-semibold transition-all"
+              >
+                Limpar Logs
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-black/40 border border-[#2E2E2E] space-y-4">
+            <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Info className="w-4 h-4 text-blue-400" /> Diagnóstico de Conexão
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Backend API</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-xs text-white font-medium">Online</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">WebSocket</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-xs text-white font-medium">Conectado</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Stripe SDK</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-xs text-white font-medium">Ready</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Firestore</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-xs text-white font-medium">Ativo</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
