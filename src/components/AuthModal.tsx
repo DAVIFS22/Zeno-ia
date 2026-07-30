@@ -67,12 +67,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-            className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[440px] border border-neutral-800/50 overflow-hidden z-10"
+            className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[440px] border border-[#2C2C2E]/50 overflow-hidden z-10"
             onClick={e => e.stopPropagation()}
           >
             <button 
               onClick={onClose} 
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-800 text-neutral-500 transition-colors z-20"
+              className="absolute top-5 right-5 p-2 rounded-full hover:bg-[#232326] text-neutral-500 transition-colors z-20"
             >
               <X className="w-5 h-5" />
             </button>
@@ -95,7 +95,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
               <div className="space-y-4">
                 <button 
                   onClick={handleGoogleSignIn} 
-                  className="w-full h-[52px] flex items-center justify-center gap-3 rounded-full border border-neutral-800 bg-transparent text-white hover:bg-neutral-900 transition-all font-medium text-[15px]"
+                  className="w-full h-[52px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[15px]"
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -107,9 +107,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                 </button>
 
                 <div className="flex items-center gap-4 py-2">
-                  <div className="flex-1 h-[1px] bg-neutral-900"></div>
+                  <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
                   <span className="text-[12px] text-neutral-600 font-medium tracking-widest uppercase">ou</span>
-                  <div className="flex-1 h-[1px] bg-neutral-900"></div>
+                  <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -119,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                       placeholder="Email" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
-                      className="w-full px-5 h-[52px] rounded-[16px] bg-[#1a1a1a] text-white border border-neutral-800 focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
+                      className="w-full px-5 h-[52px] rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
                     />
                     
                     <div className="relative">
@@ -128,7 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                         placeholder="Senha" 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        className="w-full px-5 h-[52px] pr-12 rounded-[16px] bg-[#1a1a1a] text-white border border-neutral-800 focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
+                        className="w-full px-5 h-[52px] pr-12 rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
                       />
                       <button
                         type="button"

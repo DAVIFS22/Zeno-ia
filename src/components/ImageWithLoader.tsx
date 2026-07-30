@@ -151,23 +151,29 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     }
   }, [currentSrc]);
 
-  // Smooth simulated progress up to 93% while waiting for browser image load
+  // Smooth simulated progress up to 93% using requestAnimationFrame (120Hz/60Hz optimized)
   useEffect(() => {
     if (!isLoading) return;
+    let animId: number;
+    let lastTime = performance.now();
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 93) {
-          clearInterval(interval);
-          return 93;
-        }
-        // Smooth logarithmic deceleration as it nears 90%
-        const diff = (95 - prev) * 0.08;
-        return Math.min(93, Math.round(prev + Math.max(1, diff)));
-      });
-    }, 200);
+    const tick = (now: number) => {
+      if (now - lastTime >= 150) {
+        lastTime = now;
+        setProgress((prev) => {
+          if (prev >= 93) return 93;
+          const diff = (95 - prev) * 0.08;
+          return Math.min(93, Math.round(prev + Math.max(1, diff)));
+        });
+      }
+      animId = requestAnimationFrame(tick);
+    };
 
-    return () => clearInterval(interval);
+    animId = requestAnimationFrame(tick);
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
   }, [isLoading]);
 
   const handleImageLoad = () => {
@@ -230,7 +236,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   if (!isIntersecting) {
     return (
-      <span ref={containerRef} className="block my-4 relative max-w-xl min-h-[220px] rounded-2xl bg-neutral-800/30 border border-neutral-800/60 animate-pulse flex flex-col items-center justify-center p-6 text-center select-none">
+      <span ref={containerRef} className="block my-4 relative max-w-xl min-h-[220px] rounded-2xl bg-[#232326]/30 border border-[#2C2C2E]/60 animate-pulse flex flex-col items-center justify-center p-6 text-center select-none">
         <Sparkles className="w-5 h-5 text-neutral-500 mb-1" />
         <span className="text-xs text-neutral-500 font-medium">Carregando imagem...</span>
       </span>
@@ -238,18 +244,18 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   }
 
   return (
-    <span ref={containerRef} className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-neutral-700/60 shadow-2xl bg-[#171717]">
+    <span ref={containerRef} className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-[#2C2C2E]/60 shadow-2xl bg-[#171717]">
       {/* Loading Container */}
       {isLoading && (
         <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative overflow-hidden select-none">
           {/* Subtle Ambient Highlight */}
-          <span className="absolute inset-0 bg-neutral-800/20 animate-pulse blur-2xl" />
+          <span className="absolute inset-0 bg-[#232326]/20 animate-pulse blur-2xl" />
 
           {/* Central AI Orb */}
           <span className="relative z-10 flex flex-col items-center text-center space-y-4">
             <span className="relative flex items-center justify-center">
               {/* Neutral icon box */}
-              <span className="w-16 h-16 rounded-2xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-200 shadow-lg">
+              <span className="w-16 h-16 rounded-2xl bg-[#232326] border border-[#2C2C2E] flex items-center justify-center text-neutral-200 shadow-lg">
                 <Wand2 className="w-8 h-8 text-neutral-300 animate-pulse" />
               </span>
               <Sparkles className="w-4 h-4 text-neutral-400 absolute -top-1.5 -right-1.5" />
@@ -276,13 +282,13 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
                 <span className="font-mono text-neutral-300">{progress}%</span>
               </span>
 
-              {/* Progress Track */}
-              <span className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden relative border border-neutral-700 block">
+              {/* Progress Track (120fps GPU accelerated scaleX) */}
+              <span className="w-full h-1.5 bg-[#232326] rounded-full overflow-hidden relative border border-[#2C2C2E] block contain-render">
                 <span
-                  className="h-full bg-neutral-200 rounded-full transition-all duration-300 ease-out block relative overflow-hidden"
-                  style={{ width: `${progress}%` }}
+                  className="h-full w-full bg-neutral-200 rounded-full transition-transform duration-300 ease-out block relative overflow-hidden will-change-transform origin-left"
+                  style={{ transform: `scaleX(${progress / 100})` }}
                 >
-                  <span className="absolute inset-0 bg-white/20 animate-shimmer block" />
+                  <span className="absolute inset-0 bg-white/20 animate-shimmer block gpu-accelerated" />
                 </span>
               </span>
             </span>
@@ -300,7 +306,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
           </span>
           <button
             onClick={handleManualRetry}
-            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-semibold transition-all"
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-200 text-xs font-semibold transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Tentar Novamente</span>
@@ -329,21 +335,21 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
       {/* Action Buttons Row */}
       {!isLoading && !hasError && (
-        <span className="block border-t border-neutral-800 bg-[#16161a] p-2 flex flex-wrap items-center justify-between gap-1.5">
+        <span className="block border-t border-[#2C2C2E] bg-[#16161a] p-2 flex flex-wrap items-center justify-between gap-1.5">
           <span className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={handleDownload}
               disabled={isDownloading}
-              className={`p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold ${
-                downloadSuccess ? 'text-emerald-400 font-bold' : ''
+              className={`p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                downloadSuccess ? 'text-sky-400 font-bold' : ''
               }`}
               title="Baixar imagem em alta resolução"
             >
               {isDownloading ? (
                 <RefreshCw className="w-3.5 h-3.5 text-neutral-300 animate-spin" />
               ) : downloadSuccess ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <Check className="w-3.5 h-3.5 text-sky-400" />
               ) : (
                 <Download className="w-3.5 h-3.5 text-neutral-400" />
               )}
@@ -361,11 +367,11 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
                   setTimeout(() => setShareSuccess(false), 2000);
                 }
               }}
-              className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+              className="p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
               title="Compartilhar imagem (copiar link)"
             >
               {shareSuccess ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <Check className="w-3.5 h-3.5 text-sky-400" />
               ) : (
                 <Share2 className="w-3.5 h-3.5 text-neutral-400" />
               )}
@@ -377,12 +383,12 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               onClick={handleToggleFavorite}
               className={`p-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold ${
                 isFavorite 
-                  ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' 
-                  : 'text-neutral-200 hover:bg-neutral-800 hover:text-white'
+                  ? 'text-neutral-400 bg-neutral-500/10 border border-neutral-500/20' 
+                  : 'text-neutral-200 hover:bg-[#232326] hover:text-white'
               }`}
               title={isFavorite ? "Remover dos Favoritos" : "Favoritar Imagem"}
             >
-              <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-rose-400 text-rose-400' : 'text-neutral-400'}`} />
+              <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-neutral-400 text-neutral-400' : 'text-neutral-400'}`} />
               <span className="hidden sm:inline">{isFavorite ? "Favorito" : "Favoritar"}</span>
             </button>
           </span>
@@ -392,7 +398,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               <button
                 type="button"
                 onClick={onRegenerate}
-                className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+                className="p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
                 title="Regenerar imagem com o mesmo prompt"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
@@ -416,7 +422,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               <button
                 type="button"
                 onClick={onEdit}
-                className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+                className="p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
                 title="Editar prompt"
               >
                 <Edit3 className="w-3.5 h-3.5 text-neutral-400" />
@@ -428,7 +434,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               href={currentSrc}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-xl text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all flex items-center justify-center text-xs font-semibold"
+              className="p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center justify-center text-xs font-semibold"
               title="Abrir imagem em nova aba"
             >
               <Eye className="w-4 h-4 text-neutral-300" />

@@ -83,7 +83,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
       {/* Model Selector Card (Only shown when starting a new chat) */}
       <div className={`w-full p-4 sm:p-5 rounded-2xl border transition-all mb-6 text-left ${
         isDark 
-          ? 'bg-[#151518] border-neutral-800/80 text-white' 
+          ? 'bg-[#151518] border-[#2C2C2E]/80 text-white' 
           : 'bg-white border-neutral-200/90 text-neutral-900 shadow-xs'
       }`}>
         <div className="flex items-center justify-between mb-2">
@@ -92,7 +92,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
             <span className="text-sm font-semibold tracking-tight">{currentModelDef.name}</span>
           </div>
           {currentModelDef.isPro && !isPro && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
               <Lock className="w-2.5 h-2.5" /> PRO
             </span>
           )}
@@ -111,7 +111,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
               onClick={() => onSelectPrompt(s.prompt)}
               className={`group flex items-center justify-between p-3 rounded-xl border text-left transition-all text-xs font-normal ${
                 isDark
-                  ? 'bg-[#151518] hover:bg-neutral-800/80 border-neutral-800/80 text-neutral-300 hover:text-white'
+                  ? 'bg-[#151518] hover:bg-[#232326]/80 border-[#2C2C2E]/80 text-neutral-300 hover:text-white'
                   : 'bg-white hover:bg-neutral-50 border-neutral-200/90 text-neutral-700 hover:text-neutral-900 shadow-2xs'
               }`}
             >
@@ -147,7 +147,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
             disabled={authLoading}
             className={`px-4 py-2 rounded-xl text-xs font-medium transition-all border ${
               isDark 
-                ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border-neutral-800' 
+                ? 'bg-[#1C1C1E] hover:bg-[#232326] text-neutral-300 border-[#2C2C2E]' 
                 : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-neutral-200'
             }`}
           >

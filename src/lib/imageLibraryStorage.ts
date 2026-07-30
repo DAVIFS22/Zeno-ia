@@ -9,13 +9,13 @@ function getCollectionsKey(userId?: string) {
 }
 
 export const DEFAULT_COLLECTIONS: ImageCollection[] = [
-  { id: 'geral', name: 'Geral', icon: '📁', color: '#3B82F6' },
-  { id: 'logos', name: 'Logos & Marcas', icon: '🏷️', color: '#EC4899' },
-  { id: 'anime', name: 'Anime & Ilustração', icon: '🎨', color: '#8B5CF6' },
-  { id: 'wallpapers', name: 'Wallpapers & Telas', icon: '🖼️', color: '#10B981' },
-  { id: 'produtos', name: 'Produtos & Mockups', icon: '📦', color: '#F59E0B' },
-  { id: 'personagens', name: 'Personagens & Avatares', icon: '👤', color: '#6366F1' },
-  { id: 'projetos', name: 'Projetos', icon: '💼', color: '#14B8A6' },
+  { id: 'geral', name: 'Geral', icon: 'Folder', color: '#3B82F6' },
+  { id: 'logos', name: 'Logos & Marcas', icon: 'Tag', color: '#EC4899' },
+  { id: 'anime', name: 'Anime & Ilustração', icon: 'Palette', color: '#8B5CF6' },
+  { id: 'wallpapers', name: 'Wallpapers & Telas', icon: 'Image', color: '#10B981' },
+  { id: 'produtos', name: 'Produtos & Mockups', icon: 'Box', color: '#F59E0B' },
+  { id: 'personagens', name: 'Personagens & Avatares', icon: 'User', color: '#6366F1' },
+  { id: 'projetos', name: 'Projetos', icon: 'Briefcase', color: '#14B8A6' },
 ];
 
 export function getStoredImages(userId?: string): GeneratedImage[] {
@@ -143,7 +143,7 @@ export function getStoredCollections(userId?: string): ImageCollection[] {
   return DEFAULT_COLLECTIONS;
 }
 
-export function addStoredCollection(name: string, icon = '📁', color = '#3B82F6', userId?: string): ImageCollection[] {
+export function addStoredCollection(name: string, icon = 'Folder', color = '#3B82F6', userId?: string): ImageCollection[] {
   const collections = getStoredCollections(userId);
   const newCol: ImageCollection = {
     id: 'col-' + Date.now(),

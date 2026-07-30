@@ -21,51 +21,51 @@ interface LanguageMeta {
 }
 
 const LANGUAGE_MAP: Record<string, LanguageMeta> = {
-  js: { name: 'JavaScript', extension: 'js', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  javascript: { name: 'JavaScript', extension: 'js', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  ts: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  typescript: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  jsx: { name: 'React JSX', extension: 'jsx', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  tsx: { name: 'React TSX', extension: 'tsx', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  py: { name: 'Python', extension: 'py', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  python: { name: 'Python', extension: 'py', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  html: { name: 'HTML5', extension: 'html', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  css: { name: 'CSS3', extension: 'css', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  scss: { name: 'SCSS', extension: 'scss', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  json: { name: 'JSON', extension: 'json', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  yaml: { name: 'YAML', extension: 'yaml', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  yml: { name: 'YAML', extension: 'yml', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  xml: { name: 'XML', extension: 'xml', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  sql: { name: 'SQL', extension: 'sql', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  bash: { name: 'Bash', extension: 'sh', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  sh: { name: 'Shell', extension: 'sh', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  zsh: { name: 'Zsh', extension: 'zsh', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  powershell: { name: 'PowerShell', extension: 'ps1', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  ps1: { name: 'PowerShell', extension: 'ps1', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  docker: { name: 'Dockerfile', extension: 'dockerfile', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  dockerfile: { name: 'Dockerfile', extension: 'dockerfile', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  c: { name: 'C', extension: 'c', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  cpp: { name: 'C++', extension: 'cpp', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  'c++': { name: 'C++', extension: 'cpp', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  csharp: { name: 'C#', extension: 'cs', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  cs: { name: 'C#', extension: 'cs', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  java: { name: 'Java', extension: 'java', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  kotlin: { name: 'Kotlin', extension: 'kt', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  kt: { name: 'Kotlin', extension: 'kt', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  swift: { name: 'Swift', extension: 'swift', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-go: { name: 'Go', extension: 'go', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  golang: { name: 'Go', extension: 'go', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  rust: { name: 'Rust', extension: 'rs', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  rs: { name: 'Rust', extension: 'rs', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  php: { name: 'PHP', extension: 'php', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  ruby: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  rb: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  dart: { name: 'Dart', extension: 'dart', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  lua: { name: 'Lua', extension: 'lua', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  r: { name: 'R', extension: 'r', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  perl: { name: 'Perl', extension: 'pl', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  markdown: { name: 'Markdown', extension: 'md', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
-  md: { name: 'Markdown', extension: 'md', badgeBg: 'bg-neutral-800 border-neutral-700 text-neutral-300', badgeText: 'text-neutral-400' },
+  js: { name: 'JavaScript', extension: 'js', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  javascript: { name: 'JavaScript', extension: 'js', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  ts: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  typescript: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  jsx: { name: 'React JSX', extension: 'jsx', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  tsx: { name: 'React TSX', extension: 'tsx', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  py: { name: 'Python', extension: 'py', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  python: { name: 'Python', extension: 'py', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  html: { name: 'HTML5', extension: 'html', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  css: { name: 'CSS3', extension: 'css', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  scss: { name: 'SCSS', extension: 'scss', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  json: { name: 'JSON', extension: 'json', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  yaml: { name: 'YAML', extension: 'yaml', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  yml: { name: 'YAML', extension: 'yml', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  xml: { name: 'XML', extension: 'xml', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  sql: { name: 'SQL', extension: 'sql', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  bash: { name: 'Bash', extension: 'sh', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  sh: { name: 'Shell', extension: 'sh', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  zsh: { name: 'Zsh', extension: 'zsh', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  powershell: { name: 'PowerShell', extension: 'ps1', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  ps1: { name: 'PowerShell', extension: 'ps1', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  docker: { name: 'Dockerfile', extension: 'dockerfile', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  dockerfile: { name: 'Dockerfile', extension: 'dockerfile', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  c: { name: 'C', extension: 'c', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  cpp: { name: 'C++', extension: 'cpp', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  'c++': { name: 'C++', extension: 'cpp', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  csharp: { name: 'C#', extension: 'cs', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  cs: { name: 'C#', extension: 'cs', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  java: { name: 'Java', extension: 'java', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  kotlin: { name: 'Kotlin', extension: 'kt', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  kt: { name: 'Kotlin', extension: 'kt', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  swift: { name: 'Swift', extension: 'swift', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+go: { name: 'Go', extension: 'go', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  golang: { name: 'Go', extension: 'go', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  rust: { name: 'Rust', extension: 'rs', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  rs: { name: 'Rust', extension: 'rs', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  php: { name: 'PHP', extension: 'php', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  ruby: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  rb: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  dart: { name: 'Dart', extension: 'dart', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  lua: { name: 'Lua', extension: 'lua', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  r: { name: 'R', extension: 'r', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  perl: { name: 'Perl', extension: 'pl', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  markdown: { name: 'Markdown', extension: 'md', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  md: { name: 'Markdown', extension: 'md', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
 };
 
 /**
@@ -154,8 +154,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
   const langMeta = LANGUAGE_MAP[detectedLang] || {
     name: detectedLang ? detectedLang.toUpperCase() : 'CÓDIGO',
     extension: detectedLang || 'txt',
-    badgeBg: 'bg-purple-500/10 border-purple-500/30 text-purple-300',
-    badgeText: 'text-purple-300'
+    badgeBg: 'bg-neutral-500/10 border-neutral-500/30 text-neutral-300',
+    badgeText: 'text-neutral-300'
   };
 
   const formattedSize = useMemo(() => {
@@ -223,14 +223,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
       <div className="flex text-xs sm:text-sm font-code leading-relaxed">
         {/* Line Numbers Column */}
         {showLineNumbers && (
-          <div className="select-none py-3 pr-3.5 pl-3 text-right font-mono text-neutral-600 border-r border-neutral-800/80 bg-black/20 flex flex-col min-w-[2.75rem]">
+          <div className="select-none py-3 pr-3.5 pl-3 text-right font-mono text-neutral-600 border-r border-[#2C2C2E]/80 bg-black/20 flex flex-col min-w-[2.75rem]">
             {rawLines.map((_, idx) => {
               const isMatch = lineMatchesSearch(rawLines[idx]);
               return (
                 <span 
                   key={idx} 
                   className={`leading-relaxed transition-colors ${
-                    isMatch ? 'text-amber-400 font-bold' : 'hover:text-neutral-400'
+                    isMatch ? 'text-neutral-400 font-bold' : 'hover:text-neutral-400'
                   }`}
                 >
                   {idx + 1}
@@ -251,7 +251,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 key={idx} 
                 className={`group flex items-center min-h-[1.5rem] rounded-sm px-1.5 transition-colors ${
                   isMatch 
-                    ? 'bg-amber-500/20 border-l-2 border-amber-400 text-amber-100 font-semibold' 
+                    ? 'bg-neutral-500/20 border-l-2 border-neutral-400 text-neutral-100 font-semibold' 
                     : 'hover:bg-white/[0.04]'
                 }`}
                 style={{ fontSize: `${fontSize}px` }}
@@ -276,11 +276,11 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
       {/* Standard Embedded CodeBlock Card */}
       <div className={`my-4 rounded-2xl overflow-hidden border shadow-xl transition-all font-sans code-theme-dark ${
         theme === 'dark' 
-          ? 'bg-[#0b0c10] border-neutral-800/90 text-neutral-200 shadow-black/40' 
-          : 'bg-[#0f1117] border-neutral-700/80 text-neutral-100 shadow-black/30'
+          ? 'bg-[#0b0c10] border-[#2C2C2E]/90 text-neutral-200 shadow-black/40' 
+          : 'bg-[#0f1117] border-[#2C2C2E]/80 text-neutral-100 shadow-black/30'
       }`}>
         {/* Code Block Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-[#212121] border-b border-neutral-700/60 text-xs font-medium text-neutral-400">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-[#212121] border-b border-[#2C2C2E]/60 text-xs font-medium text-neutral-400">
           
           {/* Left Side: Language Tag & Metadata */}
           <div className="flex items-center gap-2.5">
@@ -302,7 +302,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
             </span>
 
             {isAutoDetected && !language && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400 font-mono hidden md:inline">
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#232326] text-neutral-400 font-mono hidden md:inline">
                 auto
               </span>
             )}
@@ -317,7 +317,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
               className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
                 wordWrap 
                   ? 'bg-neutral-700 text-neutral-100 border border-neutral-600' 
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
+                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326]'
               }`}
               title={wordWrap ? 'Desativar Quebra de Linhas' : 'Ativar Quebra de Linhas'}
               aria-label="Alternar quebra de linhas"
@@ -332,7 +332,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
               className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
                 showLineNumbers 
                   ? 'bg-neutral-700 text-neutral-100 border border-neutral-600' 
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
+                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326]'
               }`}
               title={showLineNumbers ? 'Ocultar Números de Linha' : 'Mostrar Números de Linha'}
               aria-label="Alternar números de linha"
@@ -344,7 +344,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
             <button
               type="button"
               onClick={() => setIsExpanded(true)}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] transition-colors"
               title="Expandir em Tela Cheia"
               aria-label="Expandir visualizador de código"
             >
@@ -355,7 +355,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
             <button
               type="button"
               onClick={handleDownload}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] transition-colors"
               title="Baixar Arquivo de Código"
               aria-label="Baixar código como arquivo"
             >
@@ -368,15 +368,15 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
               onClick={handleCopy}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs transition-all shadow-sm ${
                 copied
-                  ? 'bg-neutral-700 border border-neutral-600 text-emerald-400 font-semibold'
-                  : 'bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 hover:text-white'
+                  ? 'bg-neutral-700 border border-neutral-600 text-sky-400 font-semibold'
+                  : 'bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-300 hover:text-white'
               }`}
               title="Copiar código"
               aria-label="Copiar código para área de transferência"
             >
               {copied ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
                   <span className="font-sans">Copiado!</span>
                 </>
               ) : (
@@ -398,10 +398,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
       {/* Fullscreen IDE Code Modal */}
       {isExpanded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-5xl h-[88vh] flex flex-col rounded-2xl bg-[#171717] border border-neutral-700 shadow-2xl overflow-hidden code-theme-dark">
+          <div className="w-full max-w-5xl h-[88vh] flex flex-col rounded-2xl bg-[#171717] border border-[#2C2C2E] shadow-2xl overflow-hidden code-theme-dark">
             
             {/* Modal Header Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#212121] border-b border-neutral-700 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#212121] border-b border-[#2C2C2E] text-sm">
               <div className="flex items-center gap-3">
                 <span className={`px-2.5 py-1 rounded-md border text-xs font-bold font-mono ${langMeta.badgeBg}`}>
                   {langMeta.name}
@@ -425,7 +425,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                   placeholder="Pesquisar no código..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-7 py-1 rounded-md bg-neutral-800 border border-neutral-700 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500 transition-all"
+                  className="w-full pl-8 pr-7 py-1 rounded-md bg-[#232326] border border-[#2C2C2E] text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500 transition-all"
                 />
                 {searchQuery && (
                   <button 
@@ -440,7 +440,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
               {/* Right: Controls & Actions */}
               <div className="flex items-center gap-1.5">
                 {/* Font Size Adjusters */}
-                <div className="flex items-center bg-neutral-800 border border-neutral-700 rounded-md p-0.5 text-xs text-neutral-400">
+                <div className="flex items-center bg-[#232326] border border-[#2C2C2E] rounded-md p-0.5 text-xs text-neutral-400">
                   <button
                     onClick={() => setFontSize(prev => Math.max(10, prev - 1))}
                     className="p-1 hover:text-neutral-200"
@@ -465,7 +465,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                   className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 border ${
                     isRawView
                       ? 'bg-neutral-700 text-neutral-100 border-neutral-600'
-                      : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700'
+                      : 'bg-[#232326] text-neutral-300 border-[#2C2C2E] hover:bg-neutral-700'
                   }`}
                   title={isRawView ? 'Ver Destacado' : 'Ver Texto Puro'}
                 >
@@ -477,7 +477,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 <button
                   type="button"
                   onClick={handleDownload}
-                  className="p-1.5 rounded-md bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700 transition-colors"
+                  className="p-1.5 rounded-md bg-[#232326] text-neutral-300 border border-[#2C2C2E] hover:bg-neutral-700 transition-colors"
                   title="Baixar Arquivo de Código"
                 >
                   <Download className="w-4 h-4 text-neutral-300" />
@@ -489,11 +489,11 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                   onClick={handleCopy}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium text-xs transition-all ${
                     copied
-                      ? 'bg-neutral-700 border border-neutral-600 text-emerald-400 font-semibold'
-                      : 'bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 shadow-sm'
+                      ? 'bg-neutral-700 border border-neutral-600 text-sky-400 font-semibold'
+                      : 'bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-200 shadow-sm'
                   }`}
                 >
-                  {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copied ? 'Copiado!' : 'Copiar'}</span>
                 </button>
 
@@ -501,7 +501,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 <button
                   type="button"
                   onClick={() => setIsExpanded(false)}
-                  className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors ml-1"
+                  className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-[#232326] transition-colors ml-1"
                   title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />

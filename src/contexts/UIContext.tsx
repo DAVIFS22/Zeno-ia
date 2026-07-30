@@ -49,6 +49,27 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     activeModalCountRef.current = activeCount;
   }, [modals]);
 
+  // Intercept back button (popstate) to close open modals or sidebar smoothly
+  useEffect(() => {
+    const handlePopState = () => {
+      const openModalKeys = Object.keys(modals).filter(k => modals[k]?.isOpen);
+      if (openModalKeys.length > 0) {
+        const topModal = uiService.getTopActiveModal(modals);
+        if (topModal) {
+          setModals(prev => ({
+            ...prev,
+            [topModal.id]: { ...prev[topModal.id], isOpen: false }
+          }));
+        }
+      } else if (isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [modals, isSidebarOpen]);
+
   // Open Modal
   const openModal = useCallback((id: ModalId, options?: ModalOptions) => {
     const timestamp = Date.now();

@@ -240,27 +240,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // HARD SECURITY CHECK: If user is not admin, DO NOT RENDER ANY ADMINISTRATIVE CONTENT!
   if (!isAdmin) {
     return (
-      <div className="w-full p-6 sm:p-8 rounded-2xl bg-rose-950/30 border border-rose-500/40 text-white space-y-5 animate-fadeIn">
-        <div className="flex items-center gap-3 text-rose-400">
+      <div className="w-full p-6 sm:p-8 rounded-2xl bg-[#121212]/30 border border-neutral-500/40 text-white space-y-5 animate-fadeIn">
+        <div className="flex items-center gap-3 text-neutral-400">
           <ShieldAlert className="w-8 h-8 flex-shrink-0" />
           <div>
             <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
-            <p className="text-xs text-rose-300 font-mono mt-0.5">Role Atual: {role} | Usuário: {userEmail || 'Anônimo'}</p>
+            <p className="text-xs text-neutral-300 font-mono mt-0.5">Role Atual: {role} | Usuário: {userEmail || 'Anônimo'}</p>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-black/40 border border-rose-500/20 text-sm leading-relaxed text-rose-100/90 space-y-2">
+        <div className="p-4 rounded-xl bg-black/40 border border-neutral-500/20 text-sm leading-relaxed text-neutral-100/90 space-y-2">
           <p>
             Você não possui permissões administrativas para visualizar ou alterar o Painel Administrativo do ZENO AI.
           </p>
-          <p className="text-xs text-rose-300/80">
+          <p className="text-xs text-neutral-300/80">
             Apenas a conta administradora principal (<span className="font-mono text-white underline">{ADMIN_EMAIL}</span>) recebe acesso irrestrito às funções de gerenciamento de servidor, modelos e limites.
           </p>
         </div>
 
-        <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-rose-500/20">
+        <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-neutral-500/20">
           <span>Verificação de Segurança Backend & Frontend Ativa</span>
-          <span className="font-mono text-rose-400">HTTP 403 FORBIDDEN</span>
+          <span className="font-mono text-neutral-400">HTTP 403 FORBIDDEN</span>
         </div>
       </div>
     );
@@ -269,7 +269,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* AUTHENTICATION STATE COMPONENT */}
-      <div className="p-5 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 transition-all hover:border-neutral-800 group">
+      <div className="p-5 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 transition-all hover:border-[#2C2C2E] group">
         <div className="flex items-center gap-5">
           <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white shadow-xl group-hover:scale-105 transition-transform">
             <ShieldCheck className="w-7 h-7" />
@@ -334,11 +334,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {saveStatus && (
         <div className={`p-3.5 rounded-xl text-xs font-medium border flex items-center justify-between animate-fadeIn ${
           saveStatus.type === 'success' 
-            ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30' 
-            : 'bg-rose-950/40 text-rose-300 border-rose-500/30'
+            ? 'bg-sky-950/40 text-sky-300 border-sky-500/30' 
+            : 'bg-[#121212]/40 text-neutral-300 border-neutral-500/30'
         }`}>
           <div className="flex items-center gap-2">
-            {saveStatus.type === 'success' ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-rose-400" />}
+            {saveStatus.type === 'success' ? <Check className="w-4 h-4 text-sky-400" /> : <AlertTriangle className="w-4 h-4 text-neutral-400" />}
             <span>{saveStatus.message}</span>
           </div>
           <button onClick={() => setSaveStatus(null)} className="text-xs hover:underline opacity-80">Fechar</button>
@@ -451,7 +451,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="space-y-5">
             <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Métricas de Auditoria Real</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-neutral-700">
+              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-[#2C2C2E]">
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Total de Usuários</p>
                   <p className="text-4xl font-black text-white">{auditMetrics?.totalUsers || '...'}</p>
@@ -461,7 +461,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
               
-              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-neutral-700">
+              <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-[#2C2C2E]">
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Assinaturas Ativas</p>
                   <p className="text-4xl font-black text-white">{auditMetrics?.activeSubscriptions || '...'}</p>
@@ -478,7 +478,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Desempenho Geral do Sistema</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* Financial MRR card */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Receita Mensal</span>
                   <Coins className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -493,7 +493,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               {/* Total Revenue card */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Faturamento Total</span>
                   <CreditCard className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -505,7 +505,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               {/* Messages sent */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Conversas IA</span>
                   <Terminal className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -517,7 +517,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               {/* Images generated */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Visuais Gerados</span>
                   <ImageIcon className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -529,7 +529,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               {/* Server Performance metrics */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Uso de Recursos</span>
                   <Activity className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -544,7 +544,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
               
               {/* Online Now card */}
-              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-neutral-700">
+              <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Dispositivos Ativos</span>
                   <Laptop className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -605,7 +605,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span className="text-neutral-400 font-medium">Grounding Search</span>
                     <span className="text-white font-mono font-bold">{stats.totalWebSearches || 0}</span>
                   </div>
-                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-[#232326] rounded-full h-1.5 overflow-hidden">
                     <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalWebSearches || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
@@ -616,7 +616,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span className="text-neutral-400 font-medium">Processamento Docs</span>
                     <span className="text-white font-mono font-bold">{stats.totalPdfsAnalyzed || 0}</span>
                   </div>
-                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-[#232326] rounded-full h-1.5 overflow-hidden">
                     <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalPdfsAnalyzed || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
@@ -627,7 +627,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span className="text-neutral-400 font-medium">Execução de Código</span>
                     <span className="text-white font-mono font-bold">{stats.totalCodeUses || 0}</span>
                   </div>
-                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-[#232326] rounded-full h-1.5 overflow-hidden">
                     <div className="bg-white h-1.5" style={{ width: `${Math.min(100, ((stats.totalCodeUses || 0) / Math.max(1, stats.totalMessagesSent)) * 100)}%` }} />
                   </div>
                 </div>
@@ -660,7 +660,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   limits: { ...config.limits, messages: Math.max(0, Number(e.target.value)) }
                 })} 
-                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-red-500" 
+                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
               />
             </div>
 
@@ -678,7 +678,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   limits: { ...config.limits, search: Math.max(0, Number(e.target.value)) }
                 })} 
-                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-red-500" 
+                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
               />
             </div>
 
@@ -696,7 +696,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   limits: { ...config.limits, image: Math.max(0, Number(e.target.value)) }
                 })} 
-                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-red-500" 
+                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
               />
             </div>
 
@@ -714,7 +714,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   limits: { ...config.limits, doc: Math.max(0, Number(e.target.value)) }
                 })} 
-                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-red-500" 
+                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
               />
             </div>
 
@@ -732,7 +732,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   limits: { ...config.limits, vision: Math.max(0, Number(e.target.value)) }
                 })} 
-                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-red-500" 
+                className="w-24 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
               />
             </div>
           </div>
@@ -754,7 +754,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <span className="text-xs text-neutral-400">Aumenta os limites diários de base</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-amber-400 font-mono font-bold">{config.proFeatures.limitMultiplier}x</span>
+                <span className="text-xs text-neutral-400 font-mono font-bold">{config.proFeatures.limitMultiplier}x</span>
                 <input 
                   type="number" 
                   min="2"
@@ -764,7 +764,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ...config,
                     proFeatures: { ...config.proFeatures, limitMultiplier: Number(e.target.value) }
                   })} 
-                  className="w-20 bg-[#171717] border border-[#333] rounded-xl px-2 py-1 text-sm text-white font-semibold text-center outline-none focus:border-amber-500" 
+                  className="w-20 bg-[#171717] border border-[#333] rounded-xl px-2 py-1 text-sm text-white font-semibold text-center outline-none focus:border-neutral-500" 
                 />
               </div>
             </div>
@@ -779,7 +779,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   proFeatures: { ...config.proFeatures, priorityQueue: !config.proFeatures.priorityQueue }
                 })}
-                className="text-amber-400 hover:text-amber-300"
+                className="text-neutral-400 hover:text-neutral-300"
               >
                 {config.proFeatures.priorityQueue ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
@@ -795,7 +795,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   proFeatures: { ...config.proFeatures, unlimitedImageGen: !config.proFeatures.unlimitedImageGen }
                 })}
-                className="text-amber-400 hover:text-amber-300"
+                className="text-neutral-400 hover:text-neutral-300"
               >
                 {config.proFeatures.unlimitedImageGen ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
@@ -811,7 +811,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   proFeatures: { ...config.proFeatures, exclusiveModelsAccess: !config.proFeatures.exclusiveModelsAccess }
                 })}
-                className="text-amber-400 hover:text-amber-300"
+                className="text-neutral-400 hover:text-neutral-300"
               >
                 {config.proFeatures.exclusiveModelsAccess ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
@@ -832,16 +832,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
                 <span className="text-sm font-medium text-white block">Modo de Manutenção</span>
-                <span className="text-xs text-rose-400 font-bold">Bloqueia temporariamente novas requisições de usuários comuns</span>
+                <span className="text-xs text-neutral-400 font-bold">Bloqueia temporariamente novas requisições de usuários comuns</span>
               </div>
               <button
                 onClick={() => setConfig({
                   ...config,
                   serverSettings: { ...config.serverSettings, maintenanceMode: !config.serverSettings.maintenanceMode }
                 })}
-                className="text-rose-500 hover:text-rose-400"
+                className="text-neutral-500 hover:text-neutral-400"
               >
-                {config.serverSettings.maintenanceMode ? <ToggleRight className="w-8 h-8 text-rose-500" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
+                {config.serverSettings.maintenanceMode ? <ToggleRight className="w-8 h-8 text-neutral-500" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
             </div>
 
@@ -856,7 +856,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   serverSettings: { ...config.serverSettings, maxContextLength: Number(e.target.value) }
                 })}
-                className="bg-[#171717] border border-[#333] text-white text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-red-500"
+                className="bg-[#171717] border border-[#333] text-white text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-neutral-500"
               >
                 <option value={16000}>16.000 tokens</option>
                 <option value={32000}>32.000 tokens</option>
@@ -875,9 +875,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   serverSettings: { ...config.serverSettings, enableVectorMemory: !config.serverSettings.enableVectorMemory }
                 })}
-                className="text-emerald-400 hover:text-emerald-300"
+                className="text-sky-400 hover:text-sky-300"
               >
-                {config.serverSettings.enableVectorMemory ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
+                {config.serverSettings.enableVectorMemory ? <ToggleRight className="w-8 h-8 text-sky-400" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
             </div>
 
@@ -894,7 +894,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   serverSettings: { ...config.serverSettings, requestTimeoutMs: Number(e.target.value) }
                 })}
-                className="w-28 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-xs text-white font-mono text-center outline-none focus:border-red-500"
+                className="w-28 bg-[#171717] border border-[#333] rounded-xl px-3 py-1.5 text-xs text-white font-mono text-center outline-none focus:border-neutral-500"
               />
             </div>
           </div>
@@ -916,7 +916,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white">{model.name}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono uppercase ${
-                      model.requiredPlan === 'pro' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      model.requiredPlan === 'pro' ? 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
                     }`}>
                       {model.requiredPlan === 'pro' ? 'Plano Pro' : 'Gratuito'}
                     </span>
@@ -947,7 +947,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl border transition-colors"
                   >
                     {model.enabled ? (
-                      <span className="text-emerald-400 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Ativo</span>
+                      <span className="text-sky-400 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Ativo</span>
                     ) : (
                       <span className="text-neutral-500 flex items-center gap-1">Inativo</span>
                     )}
@@ -972,13 +972,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex rounded-xl bg-[#202020] p-1 border border-[#333] flex-shrink-0">
               <button
                 onClick={() => { setActiveLogSubTab('system'); setLogSearch(''); }}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'system' ? 'bg-cyan-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'system' ? 'bg-sky-600 text-white' : 'text-neutral-400 hover:text-white'}`}
               >
                 Logs do Sistema
               </button>
               <button
                 onClick={() => { setActiveLogSubTab('audit'); setLogSearch(''); }}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'audit' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'audit' ? 'bg-neutral-600 text-white' : 'text-neutral-400 hover:text-white'}`}
               >
                 Auditoria Admin
               </button>
@@ -994,7 +994,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 placeholder={activeLogSubTab === 'system' ? "Buscar logs por e-mail, ação, descrição, IP..." : "Buscar auditoria por admin, ação, IP..."}
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
-                className="w-full bg-[#202020] border border-[#2E2E2E] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                className="w-full bg-[#202020] border border-[#2E2E2E] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
@@ -1007,11 +1007,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   className="bg-transparent border-none text-xs text-neutral-300 focus:outline-none cursor-pointer"
                 >
                   <option value="all">Todas Categorias</option>
-                  <option value="auth">🔑 Autenticação</option>
-                  <option value="info">⚙️ Sistema/Admin</option>
-                  <option value="ia">🤖 inferência IA</option>
-                  <option value="payment">💳 Pagamentos</option>
-                  <option value="error">❌ Erros e Falhas</option>
+                  <option value="auth">Autenticação</option>
+                  <option value="info">Sistema/Admin</option>
+                  <option value="ia">Inferência IA</option>
+                  <option value="payment">Pagamentos</option>
+                  <option value="error">Erros e Falhas</option>
                 </select>
               </div>
             )}
@@ -1039,12 +1039,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </tr>
                     ) : (
                       filteredSystemLogs.map((log) => {
-                        let badgeColor = "bg-neutral-800 text-neutral-400 border-neutral-700/50";
-                        if (log.type === "auth") badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/20";
-                        else if (log.type === "info") badgeColor = "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
-                        else if (log.type === "ia") badgeColor = "bg-purple-500/10 text-purple-400 border-purple-500/20";
-                        else if (log.type === "payment") badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-                        else if (log.type === "error") badgeColor = "bg-rose-500/10 text-rose-400 border-rose-500/20 font-bold animate-pulse";
+                        let badgeColor = "bg-[#232326] text-neutral-400 border-[#2C2C2E]/50";
+                        if (log.type === "auth") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                        else if (log.type === "info") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                        else if (log.type === "ia") badgeColor = "bg-neutral-500/10 text-neutral-400 border-neutral-500/20";
+                        else if (log.type === "payment") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                        else if (log.type === "error") badgeColor = "bg-neutral-500/10 text-neutral-400 border-neutral-500/20 font-bold animate-pulse";
 
                         return (
                           <tr key={log.id} className="hover:bg-[#252525]/60 transition-colors">
@@ -1053,11 +1053,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </td>
                             <td className="p-3 whitespace-nowrap">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono border uppercase ${badgeColor}`}>
-                                {log.type === 'auth' && '🔑 '}
-                                {log.type === 'info' && '⚙️ '}
-                                {log.type === 'ia' && '🤖 '}
-                                {log.type === 'payment' && '💳 '}
-                                {log.type === 'error' && '❌ '}
+                                
+                                
+                                
+                                
+                                
                                 {log.type}
                               </span>
                             </td>
@@ -1107,7 +1107,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <td className="p-3 font-mono whitespace-nowrap text-neutral-400">
                             {log.date} <span className="text-[10px] opacity-60 block">{log.time}</span>
                           </td>
-                          <td className="p-3 font-mono text-emerald-400 font-bold whitespace-nowrap">
+                          <td className="p-3 font-mono text-sky-400 font-bold whitespace-nowrap">
                             {log.adminEmail}
                           </td>
                           <td className="p-3 font-semibold text-white">
@@ -1122,7 +1122,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <td className="p-3 text-right whitespace-nowrap">
                             <button
                               onClick={() => setSelectedAuditLog(log)}
-                              className="px-2.5 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 transition-colors font-semibold flex items-center gap-1 ml-auto"
+                              className="px-2.5 py-1 rounded-lg bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-500/30 transition-colors font-semibold flex items-center gap-1 ml-auto"
                             >
                               <Eye className="w-3 h-3" />
                               <span>Inspecionar</span>
@@ -1141,9 +1141,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           {selectedAuditLog && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fadeIn backdrop-blur-xs">
               <div className="bg-[#171717] border border-[#2E2E2E] rounded-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-4 bg-red-950/20 border-b border-red-500/20 flex items-center justify-between">
+                <div className="p-4 bg-[#121212]/20 border-b border-neutral-500/20 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-red-500" />
+                    <ShieldCheck className="w-5 h-5 text-neutral-500" />
                     <div>
                       <h3 className="text-sm font-bold text-white">Inspecionar Alteração - Auditoria de Segurança</h3>
                       <p className="text-[10px] text-neutral-400">Log ID: {selectedAuditLog.id}</p>
@@ -1179,13 +1179,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   <div className="space-y-1">
                     <span className="text-neutral-400 font-semibold block">Ação Executada:</span>
-                    <p className="p-2.5 rounded-lg bg-red-600/10 text-red-200 border border-red-500/20 font-bold">{selectedAuditLog.action}</p>
+                    <p className="p-2.5 rounded-lg bg-neutral-600/10 text-neutral-200 border border-neutral-500/20 font-bold">{selectedAuditLog.action}</p>
                   </div>
 
                   {selectedAuditLog.details && (
                     <div className="space-y-1 animate-fadeIn">
                       <span className="text-neutral-400 font-semibold block">Campos Modificados (Detalhamento):</span>
-                      <pre className="p-2.5 rounded-lg bg-[#202020]/90 border border-[#2E2E2E] text-amber-300 whitespace-pre-wrap font-mono text-[10px] leading-relaxed">
+                      <pre className="p-2.5 rounded-lg bg-[#202020]/90 border border-[#2E2E2E] text-neutral-300 whitespace-pre-wrap font-mono text-[10px] leading-relaxed">
                         {selectedAuditLog.details}
                       </pre>
                     </div>
@@ -1206,8 +1206,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-emerald-500 font-bold block">Valor Novo:</span>
-                      <pre className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-emerald-200 overflow-x-auto font-mono text-[10px] leading-relaxed max-h-48">
+                      <span className="text-sky-500 font-bold block">Valor Novo:</span>
+                      <pre className="p-2.5 rounded-lg bg-sky-950/20 border border-sky-500/20 text-sky-200 overflow-x-auto font-mono text-[10px] leading-relaxed max-h-48">
                         {(() => {
                           try {
                             return JSON.stringify(JSON.parse(selectedAuditLog.newValue), null, 2);
@@ -1223,7 +1223,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="p-3 bg-[#1e1e1e] border-t border-[#2E2E2E] flex justify-end">
                   <button
                     onClick={() => setSelectedAuditLog(null)}
-                    className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs active:scale-95 transition-all"
+                    className="px-4 py-1.5 rounded-xl bg-neutral-600 hover:bg-neutral-700 text-white font-bold text-xs active:scale-95 transition-all"
                   >
                     Fechar Inspeção
                   </button>
@@ -1246,7 +1246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
                 <span className="text-neutral-400 block mb-1">Administrador Único Configurado</span>
-                <span className="font-mono text-emerald-400 font-semibold">{ADMIN_EMAIL}</span>
+                <span className="font-mono text-sky-400 font-semibold">{ADMIN_EMAIL}</span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
@@ -1259,20 +1259,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-xs font-semibold text-neutral-300 block">Regras Obrigatórias de Permissão:</span>
               <ul className="space-y-1.5 text-xs text-neutral-400">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <span>Apenas o e-mail <code className="text-white bg-black/40 px-1 py-0.5 rounded">{ADMIN_EMAIL}</code> recebe a role <code className="text-red-400">admin</code>.</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <span>Apenas o e-mail <code className="text-white bg-black/40 px-1 py-0.5 rounded">{ADMIN_EMAIL}</code> recebe a role <code className="text-neutral-400">admin</code>.</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <span>Todos os demais e-mails recebem automaticamente a role <code className="text-blue-400">user</code>.</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <span>Todos os demais e-mails recebem automaticamente a role <code className="text-sky-400">user</code>.</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
                   <span>Requisições sem permissão de admin retornam erro HTTP 403 (Acesso Negado) no backend.</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <span>Configuração centralizada em <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">src/config/admin.ts</code> para fácil manutenção.</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <span>Configuração centralizada em <code className="text-neutral-300 bg-black/40 px-1 py-0.5 rounded">src/config/admin.ts</code> para fácil manutenção.</span>
                 </li>
               </ul>
             </div>
@@ -1285,7 +1285,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                <div className="p-2 rounded-lg bg-neutral-500/10 text-neutral-500">
                   <RefreshCw className="w-5 h-5" />
                 </div>
                 <div>
@@ -1307,7 +1307,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   const data = await res.json();
                   alert(data.message || 'Comando enviado.');
                 }}
-                className="w-full py-2 rounded-xl bg-amber-600/10 hover:bg-amber-600/20 text-amber-400 border border-amber-600/30 text-xs font-semibold transition-all"
+                className="w-full py-2 rounded-xl bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-600/30 text-xs font-semibold transition-all"
               >
                 Resetar Agora
               </button>
@@ -1315,7 +1315,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+                <div className="p-2 rounded-lg bg-neutral-500/10 text-neutral-500">
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
@@ -1337,7 +1337,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   const data = await res.json();
                   alert(data.message || 'Comando enviado.');
                 }}
-                className="w-full py-2 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-600/30 text-xs font-semibold transition-all"
+                className="w-full py-2 rounded-xl bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-600/30 text-xs font-semibold transition-all"
               >
                 Limpar Logs
               </button>
@@ -1346,34 +1346,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           <div className="p-6 rounded-2xl bg-black/40 border border-[#2E2E2E] space-y-4">
             <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Info className="w-4 h-4 text-blue-400" /> Diagnóstico de Conexão
+              <Info className="w-4 h-4 text-sky-400" /> Diagnóstico de Conexão
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Backend API</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Online</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">WebSocket</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Conectado</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Stripe SDK</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Ready</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Firestore</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Ativo</span>
                 </div>
               </div>

@@ -43,7 +43,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
-  const [newCollectionIcon, setNewCollectionIcon] = useState('📁');
+  const [newCollectionIcon, setNewCollectionIcon] = useState('Folder');
 
   // Load images and collections
   useEffect(() => {
@@ -368,7 +368,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <span>{col.icon || '📁'}</span>
+                        <span>{<Folder className="w-5 h-5 text-neutral-400" />}</span>
                         <span className="truncate">{col.name}</span>
                       </div>
                       <span className="text-[10px] text-[#A8A8A8] font-mono">{count}</span>

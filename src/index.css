@@ -44,6 +44,16 @@
     background: #3f3f46;
   }
 
+  /* 120Hz GPU Acceleration & Layout Containment Utilities */
+  .gpu-accelerated {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+
+  .contain-render {
+    contain: layout style paint;
+  }
+
   /* Refined neutral borders & focus states */
   .border-subtle-light {
     border-color: rgba(228, 228, 231, 0.7);

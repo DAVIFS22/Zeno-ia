@@ -310,7 +310,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   if (isLoadingStatus) {
     return (
       <div className="p-12 text-center text-xs text-neutral-400 space-y-3 animate-pulse">
-        <Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-400" />
+        <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
         <p className="font-medium">Carregando dados da sua assinatura ZENO Pro...</p>
       </div>
     );
@@ -320,10 +320,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
     <div className="space-y-6 text-neutral-100 max-w-4xl mx-auto">
       
       {/* Component Title & Scope */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2C2C2E] pb-4">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-400" />
+            <Sparkles className="w-5 h-5 text-neutral-400" />
             <span>Gerenciar Assinatura</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
@@ -346,32 +346,32 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
       {feedback && (
         <div className={`p-4 rounded-2xl border text-xs sm:text-sm flex items-start gap-3 animate-fadeIn ${
           feedback.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+            ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
             : feedback.type === 'error'
-            ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-            : 'bg-blue-500/10 border-blue-500/30 text-blue-200'
+            ? 'bg-neutral-500/10 border-neutral-500/30 text-neutral-200'
+            : 'bg-sky-500/10 border-sky-500/30 text-sky-200'
         }`}>
-          {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />}
-          {feedback.type === 'error' && <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />}
-          {feedback.type === 'info' && <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />}
+          {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />}
+          {feedback.type === 'error' && <XCircle className="w-5 h-5 text-neutral-400 flex-shrink-0 mt-0.5" />}
+          {feedback.type === 'info' && <AlertTriangle className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />}
           <div className="leading-relaxed font-medium">{feedback.message}</div>
         </div>
       )}
 
       {/* Expired Plan Banner */}
       {isExpired && (
-        <div className="p-5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+        <div className="p-5 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 text-neutral-200 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
           <div className="flex items-center gap-3">
-            <XCircle className="w-6 h-6 text-rose-400 flex-shrink-0" />
+            <XCircle className="w-6 h-6 text-neutral-400 flex-shrink-0" />
             <div>
-              <strong className="block text-rose-300 font-bold text-base">Seu plano ZENO Pro expirou.</strong>
-              <p className="text-rose-200/80 text-xs">Renove agora para recuperar respostas ilimitadas sem restrições.</p>
+              <strong className="block text-neutral-300 font-bold text-base">Seu plano ZENO Pro expirou.</strong>
+              <p className="text-neutral-200/80 text-xs">Renove agora para recuperar respostas ilimitadas sem restrições.</p>
             </div>
           </div>
           {onOpenCheckout && (
             <button
               onClick={() => onOpenCheckout('monthly')}
-              className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all shadow-md whitespace-nowrap self-stretch sm:self-auto text-center"
+              className="px-5 py-2.5 rounded-xl bg-neutral-600 hover:bg-neutral-500 text-white font-bold text-xs transition-all shadow-md whitespace-nowrap self-stretch sm:self-auto text-center"
             >
               Renovar Assinatura
             </button>
@@ -381,11 +381,11 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
       {/* Trial Banner */}
       {isTrialing && (
-        <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs sm:text-sm flex items-center gap-3 shadow-lg">
-          <Sparkles className="w-6 h-6 text-amber-400 flex-shrink-0" />
+        <div className="p-5 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 text-neutral-200 text-xs sm:text-sm flex items-center gap-3 shadow-lg">
+          <Sparkles className="w-6 h-6 text-neutral-400 flex-shrink-0" />
           <div>
-            <strong className="block text-amber-300 font-bold text-base">Teste Grátis de 30 dias Ativo</strong>
-            <p className="text-amber-200/80 text-xs mt-0.5">
+            <strong className="block text-neutral-300 font-bold text-base">Teste Grátis de 30 dias Ativo</strong>
+            <p className="text-neutral-200/80 text-xs mt-0.5">
               Você está aproveitando todos os recursos Pro sem custos. O primeiro pagamento só será cobrado em {formattedTrialEnd || '30 dias'}.
             </p>
           </div>
@@ -404,14 +404,14 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               </h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                 isExpired 
-                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                  ? 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
                   : isTrialing
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  ? 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
                   : isCancelled 
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                  ? 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' 
                   : isPro 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                  ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                  : 'bg-[#232326] text-neutral-400 border-[#2C2C2E]'
               }`}>
                 {isExpired ? 'Expirada' : isTrialing ? 'Teste Grátis 30 Dias' : isCancelled ? 'Cancelada' : isPro ? 'Ativa' : 'Gratuito'}
               </span>
@@ -439,23 +439,23 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isTrialing ? (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-amber-400 font-bold">Teste grátis de 30 dias</span>
+                  <Sparkles className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="text-neutral-400 font-bold">Teste grátis de 30 dias</span>
                 </>
               ) : isCancelled ? (
                 <>
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-amber-400 font-bold">Renovação cancelada</span>
+                  <AlertTriangle className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="text-neutral-400 font-bold">Renovação cancelada</span>
                 </>
               ) : isPro ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold">Ativa</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                  <span className="text-sky-400 font-bold">Ativa</span>
                 </>
               ) : isExpired ? (
                 <>
-                  <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                  <span className="text-rose-400 font-bold">Expirada</span>
+                  <XCircle className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="text-neutral-400 font-bold">Expirada</span>
                 </>
               ) : (
                 <span className="text-neutral-400">Gratuito</span>
@@ -493,7 +493,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32] gap-3">
               {paymentMethod && paymentMethod.last4 ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 flex-shrink-0">
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <div>
@@ -507,7 +507,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-400 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-[#232326] border border-[#2C2C2E] flex items-center justify-center text-neutral-400 flex-shrink-0">
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <div>
@@ -525,7 +525,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleOpenStripePortal}
                 disabled={actionType === 'portal'}
-                className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-[#28282e] hover:bg-[#32323a] text-white font-semibold text-xs border border-neutral-700/60 transition-colors flex items-center justify-center gap-1.5"
+                className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-[#28282e] hover:bg-[#32323a] text-white font-semibold text-xs border border-[#2C2C2E]/60 transition-colors flex items-center justify-center gap-1.5"
               >
                 {actionType === 'portal' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -546,7 +546,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleReactivateAutoRenew}
                 disabled={actionType === 'reactivate'}
-                className="w-full py-3 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 px-5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {actionType === 'reactivate' ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -560,7 +560,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleOpenCancelConfirmation}
                 disabled={actionType === 'cancel'}
-                className="w-full py-3 px-5 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 border border-rose-500/40 disabled:opacity-50"
+                className="w-full py-3 px-5 rounded-xl bg-neutral-600/90 hover:bg-neutral-600 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 border border-neutral-500/40 disabled:opacity-50"
               >
                 {actionType === 'cancel' ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -577,7 +577,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
       {/* Payment History & Receipts */}
       <div className="p-6 rounded-2xl bg-[#161619] border border-[#27272a] space-y-4 shadow-xl">
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+        <div className="flex items-center justify-between border-b border-[#2C2C2E] pb-3">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <FileText className="w-4 h-4 text-neutral-400" />
             <span>Histórico de Pagamentos e Comprovantes</span>
@@ -624,8 +624,8 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                       <p className="font-bold text-white text-sm">{invAmountStr}</p>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                         inv.status === 'succeeded' || inv.status === 'paid' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                          : 'bg-rose-500/10 text-rose-400'
+                          ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' 
+                          : 'bg-neutral-500/10 text-neutral-400'
                       }`}>
                         {inv.status === 'succeeded' || inv.status === 'paid' ? 'Pago' : 'Pendente'}
                       </span>
@@ -637,7 +637,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           href={inv.hostedUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 flex items-center gap-1 text-[11px]"
+                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
                           title="Ver recibo do pagamento"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -650,7 +650,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           href={inv.pdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 flex items-center gap-1 text-[11px]"
+                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
                           title="Baixar PDF da Fatura"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -660,7 +660,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => alert(`Comprovante ${inv.number || inv.id}: Pagamento de ${invAmountStr} efetuado com sucesso em ${invDateStr}.`)}
-                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 flex items-center gap-1 text-[11px]"
+                          className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
                         >
                           <FileText className="w-3.5 h-3.5" />
                           <span>Ver Comprovante</span>
@@ -680,7 +680,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#1c1c20] border border-[#2d2d32] shadow-2xl space-y-4 text-left">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-blue-400" />
+              <CreditCard className="w-5 h-5 text-sky-400" />
               <span>Atualizar Cartão de Crédito</span>
             </h3>
             <p className="text-xs text-neutral-400">
@@ -693,7 +693,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 <select
                   value={cardForm.brand}
                   onChange={e => setCardForm({ ...cardForm, brand: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-[#121215] border border-neutral-700 text-white text-xs font-medium"
+                  className="w-full p-2.5 rounded-xl bg-[#121215] border border-[#2C2C2E] text-white text-xs font-medium"
                 >
                   <option value="visa">Visa</option>
                   <option value="mastercard">Mastercard</option>
@@ -709,7 +709,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   maxLength={4}
                   value={cardForm.last4}
                   onChange={e => setCardForm({ ...cardForm, last4: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-[#121215] border border-neutral-700 text-white text-xs font-medium"
+                  className="w-full p-2.5 rounded-xl bg-[#121215] border border-[#2C2C2E] text-white text-xs font-medium"
                   placeholder="4242"
                 />
               </div>
@@ -722,7 +722,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                     maxLength={2}
                     value={cardForm.expMonth}
                     onChange={e => setCardForm({ ...cardForm, expMonth: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#121215] border border-neutral-700 text-white text-xs font-medium"
+                    className="w-full p-2.5 rounded-xl bg-[#121215] border border-[#2C2C2E] text-white text-xs font-medium"
                     placeholder="12"
                   />
                 </div>
@@ -733,7 +733,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                     maxLength={4}
                     value={cardForm.expYear}
                     onChange={e => setCardForm({ ...cardForm, expYear: e.target.value })}
-                    className="w-full p-2.5 rounded-xl bg-[#121215] border border-neutral-700 text-white text-xs font-medium"
+                    className="w-full p-2.5 rounded-xl bg-[#121215] border border-[#2C2C2E] text-white text-xs font-medium"
                     placeholder="2028"
                   />
                 </div>
@@ -752,7 +752,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleSaveCardMethod}
                 disabled={actionType === 'update_card'}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 {actionType === 'update_card' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -767,10 +767,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
       {/* Confirmation Modal for Auto-Renew Cancellation */}
       {showCancelConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="relative w-full max-w-md rounded-2xl bg-[#18181b] border border-neutral-700/80 p-6 shadow-2xl text-neutral-100 space-y-5">
-            <div className="flex items-center gap-3 text-amber-400">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-5 h-5 text-amber-400" />
+          <div className="relative w-full max-w-md rounded-2xl bg-[#18181b] border border-[#2C2C2E]/80 p-6 shadow-2xl text-neutral-100 space-y-5">
+            <div className="flex items-center gap-3 text-neutral-400">
+              <div className="w-10 h-10 rounded-xl bg-neutral-500/10 border border-neutral-500/20 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-neutral-400" />
               </div>
               <h3 className="text-base font-bold text-white">Cancelar Renovação Automática</h3>
             </div>
@@ -779,18 +779,18 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               Tem certeza de que deseja cancelar a renovação automática? Seu plano continuará ativo até o fim do período já pago.
             </p>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2C2C2E]">
               <button
                 type="button"
                 onClick={() => setShowCancelConfirmModal(false)}
-                className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-semibold text-xs sm:text-sm transition-colors"
+                className="px-4 py-2.5 rounded-xl bg-[#232326] hover:bg-neutral-700 text-neutral-200 font-semibold text-xs sm:text-sm transition-colors"
               >
                 Voltar
               </button>
               <button
                 type="button"
                 onClick={executeCancelAutoRenew}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm transition-colors shadow-md"
+                className="px-4 py-2.5 rounded-xl bg-neutral-600 hover:bg-neutral-500 text-white font-bold text-xs sm:text-sm transition-colors shadow-md"
               >
                 Confirmar cancelamento
               </button>

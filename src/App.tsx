@@ -3,7 +3,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { getOrCreateUserId } from './lib/userId';
 import { Sparkles, AlertCircle } from 'lucide-react';
-import { Message, ChatSession, FileAttachment, UserSettings, ModelType, DailyUsage } from './types';
+import { Message, ChatSession, FileAttachment, UserSettings, ModelType, DailyUsage, AdaptiveLearningProfile } from './types';
+import { DEFAULT_ADAPTIVE_PROFILE } from './lib/adaptiveLearning';
 import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
 import { CodeBlock } from './components/CodeBlock';
 import { ImageWithLoader } from './components/ImageWithLoader';
@@ -17,6 +18,7 @@ import { YouTubeProcessor } from './components/YouTubeProcessor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AuthScreen } from './components/AuthScreen';
 import { useCloudSync } from './hooks/useCloudSync';
+import { useDraftManager } from './hooks/useDraftManager';
 import { useRealtimeSubscription } from './hooks/useRealtimeSubscription';
 import { MessageList } from './components/MessageList';
 import { AppHeader } from './components/AppHeader';
@@ -140,6 +142,53 @@ function MainAppInner() {
   }, [isPro, profile, userSettings.userEmail]);
 
   const userId = getOrCreateUserId(profile?.uid);
+
+  // Adaptive Learning Profile State & Effects
+  const [adaptiveProfile, setAdaptiveProfile] = useState<AdaptiveLearningProfile>(DEFAULT_ADAPTIVE_PROFILE);
+
+  useEffect(() => {
+    if (userId) {
+      fetch(`/api/adaptive/profile?userId=${encodeURIComponent(userId)}`)
+        .then(async res => {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            return res.json();
+          }
+          return { profile: DEFAULT_ADAPTIVE_PROFILE };
+        })
+        .then(data => {
+          if (data && data.profile) {
+            setAdaptiveProfile(data.profile);
+          }
+        })
+        .catch(err => console.error('Erro ao carregar perfil adaptativo:', err));
+    }
+  }, [userId]);
+
+  const handleSendAdaptiveFeedback = useCallback(async (msgId: string, type: 'up' | 'down', tags: string[], comment?: string) => {
+    try {
+      const res = await fetch('/api/adaptive/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          feedback: {
+            messageId: msgId,
+            type,
+            tags,
+            userComment: comment,
+            timestamp: Date.now()
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.profile) {
+        setAdaptiveProfile(data.profile);
+      }
+    } catch (err) {
+      console.error('Erro ao enviar feedback adaptativo:', err);
+    }
+  }, [userId]);
 
   // Switch context reset & server init when userId changes
   const prevUserIdRef = useRef<string>(userId);
@@ -521,6 +570,19 @@ function MainAppInner() {
     handleUpdateSettings
   );
 
+  // Multi-layer Draft Manager Integration (LocalStorage + Cloud Sync)
+  const {
+    cloudDraftPrompt,
+    acceptCloudDraft,
+    dismissCloudDraft,
+    clearDraft,
+  } = useDraftManager({
+    userId,
+    sessionId: currentSessionId,
+    input,
+    setInput,
+  });
+
   // Session renaming
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -536,6 +598,31 @@ function MainAppInner() {
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Text-To-Speech
+  const toggleSpeech = useCallback((id: string, text: string) => {
+    if (!('speechSynthesis' in window)) {
+      alert('Seu navegador não suporta leitura de áudio em voz alta.');
+      return;
+    }
+
+    if (speakingMessageId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = userSettings.speechLanguage || 'pt-BR';
+    utterance.rate = userSettings.voiceSpeed || 1.0;
+
+    utterance.onend = () => setSpeakingMessageId(null);
+    utterance.onerror = () => setSpeakingMessageId(null);
+
+    setSpeakingMessageId(id);
+    window.speechSynthesis.speak(utterance);
+  }, [speakingMessageId, userSettings.speechLanguage, userSettings.voiceSpeed]);
 
   // Active Session helper
   const activeSession = useMemo(() => {
@@ -711,7 +798,7 @@ function MainAppInner() {
   }, []);
 
   // Main Submit Handler
-  const handleSubmit = async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
+  const handleSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
     if (e) e.preventDefault();
     setIsNewChat(false);
 
@@ -745,6 +832,7 @@ function MainAppInner() {
     if (overrideText === undefined) {
       setInput('');
       setAttachments([]);
+      clearDraft();
     }
 
     let sessionId = currentSessionId;
@@ -777,13 +865,23 @@ function MainAppInner() {
     const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
     const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
 
+    const msgLower = currentInput.toLowerCase();
+    const clientSearchTriggers = [
+      'buscar', 'pesquisar', 'procurar', 'notícias sobre', 'noticias sobre',
+      'o que é', 'o que e', 'quem é', 'quem e', 'últimas notícias', 'ultimas noticias',
+      'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje'
+    ];
+    const isClientSearch = speed === 'search' || clientSearchTriggers.some(t => msgLower.includes(t));
+
     const initialModelMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: 'model',
       text: youtubeUrl ? '' : '', // Placeholder
       timestamp: Date.now(),
-      modelSpeed: speed,
+      modelSpeed: isClientSearch ? 'search' : speed,
       youtubeUrl: youtubeUrl,
+      isSearching: isClientSearch,
+      isSearch: isClientSearch,
     };
 
     setSessions(prev =>
@@ -801,6 +899,11 @@ function MainAppInner() {
 
     setIsLoading(true);
     abortControllerRef.current = new AbortController();
+    const chatTimeoutId = setTimeout(() => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    }, 120000); // 2 minute timeout safety
 
     try {
       const token = user ? await user.getIdToken() : null;
@@ -826,15 +929,30 @@ function MainAppInner() {
           }),
         })
       );
+      clearTimeout(chatTimeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Erro ao se conectar com o servidor ZENO.' }));
+        let errorMsg = `Ocorreu uma instabilidade ao conectar com o servidor ZENO (HTTP ${response.status}). Por favor, tente novamente em instantes.`;
+        try {
+          const errorData = await response.json();
+          console.error('[ZENO API ERROR DETAILED - Status ' + response.status + ']:', errorData);
+          if (errorData) {
+            errorMsg = typeof errorData.error === 'string' ? errorData.error : (errorData.message || JSON.stringify(errorData) || errorMsg);
+          }
+        } catch (e) {
+          const errText = await response.text().catch(() => '');
+          console.error('[ZENO API ERROR NON-JSON - Status ' + response.status + ']:', errText);
+        }
         if (response.status === 429) {
           handleLimitReached();
           setIsLoading(false);
           return;
         }
-        throw new Error(errorData.message || errorData.error || `Erro HTTP ${response.status}`);
+        if (response.status === 403) {
+          // If 403 is due to Pro plan requirement for models like search/mega/vision/think
+          handleOpenProFeatureModal();
+        }
+        throw new Error(errorMsg);
       }
 
       const reader = response.body?.getReader();
@@ -889,6 +1007,26 @@ function MainAppInner() {
                     accumulatedText = data.error;
                     textUpdated = true;
                     continue;
+                  }
+                  if (data.isSearch !== undefined || data.sources !== undefined) {
+                    setSessions(prev =>
+                      prev.map(s => {
+                        if (s.id === sessionId) {
+                          const updatedMsgs = [...s.messages];
+                          const lastIdx = updatedMsgs.length - 1;
+                          if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
+                            updatedMsgs[lastIdx] = {
+                              ...updatedMsgs[lastIdx],
+                              isSearch: data.isSearch !== undefined ? data.isSearch : updatedMsgs[lastIdx].isSearch,
+                              searchSources: data.sources || updatedMsgs[lastIdx].searchSources,
+                              isSearching: false,
+                            };
+                          }
+                          return { ...s, messages: updatedMsgs };
+                        }
+                        return s;
+                      })
+                    );
                   }
                   if (data.text !== undefined) {
                     // Replace full text (since server often sends full text replacements)
@@ -959,7 +1097,24 @@ function MainAppInner() {
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log('Geração cancelada pelo usuário.');
+        console.log('Geração cancelada ou tempo limite atingido.');
+        setSessions(prev =>
+          prev.map(s => {
+            if (s.id === sessionId) {
+              const updatedMsgs = [...s.messages];
+              const lastIdx = updatedMsgs.length - 1;
+              if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model' && !updatedMsgs[lastIdx].text) {
+                updatedMsgs[lastIdx] = {
+                  ...updatedMsgs[lastIdx],
+                  hasError: true,
+                  errorMessage: 'Tempo limite de resposta excedido ou geração interrompida.',
+                };
+              }
+              return { ...s, messages: updatedMsgs };
+            }
+            return s;
+          })
+        );
       } else {
         console.error('Erro na requisição da IA:', err);
         setSessions(prev =>
@@ -985,7 +1140,36 @@ function MainAppInner() {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  };
+  }, [
+    input, 
+    attachments, 
+    isLoading, 
+    speed, 
+    isPro, 
+    dailyUsage, 
+    userSettings, 
+    currentSessionId, 
+    userId, 
+    user, 
+    messages, 
+    activeSession?.title, 
+    handleOpenProFeatureModal, 
+    handleLimitReached, 
+    toggleSpeech
+  ]);
+
+  // Attachment & Modal Handlers (Memoized)
+  const handleAddAttachment = useCallback((att: FileAttachment) => {
+    setAttachments(prev => [...prev, att]);
+  }, []);
+
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  const handleOpenImageStudioModal = useCallback(() => {
+    ui.openModal('imageStudio');
+  }, [ui]);
 
   // Regenerate Response
   const handleRegenerate = useCallback(async () => {
@@ -1051,7 +1235,7 @@ function MainAppInner() {
     handleSubmit(undefined, newText);
   }, [editingMessageText, currentSessionId]);
 
-  const handleYouTubeAction = async (action: string, transcript: string, metadata: any) => {
+  const handleYouTubeAction = useCallback(async (action: string, transcript: string, metadata: any) => {
     let prompt = "";
     const videoTitle = metadata?.title || "este vídeo";
     
@@ -1067,7 +1251,7 @@ function MainAppInner() {
     
     const contextWithTranscript = `[TRANSCRICÃO DO VÍDEO DO YOUTUBE "${videoTitle}"]:\n${transcript}\n\n`;
     handleSubmit(undefined, prompt, contextWithTranscript);
-  };
+  }, [handleSubmit]);
 
   // Copy to Clipboard
   const copyToClipboard = useCallback((id: string, text: string) => {
@@ -1075,31 +1259,6 @@ function MainAppInner() {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
-
-  // Text-To-Speech
-  const toggleSpeech = useCallback((id: string, text: string) => {
-    if (!('speechSynthesis' in window)) {
-      alert('Seu navegador não suporta leitura de áudio em voz alta.');
-      return;
-    }
-
-    if (speakingMessageId === id) {
-      window.speechSynthesis.cancel();
-      setSpeakingMessageId(null);
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = userSettings.speechLanguage || 'pt-BR';
-    utterance.rate = userSettings.voiceSpeed || 1.0;
-
-    utterance.onend = () => setSpeakingMessageId(null);
-    utterance.onerror = () => setSpeakingMessageId(null);
-
-    setSpeakingMessageId(id);
-    window.speechSynthesis.speak(utterance);
-  }, [speakingMessageId, userSettings.speechLanguage, userSettings.voiceSpeed]);
 
   // Memoized ReactMarkdown Custom Components
   const markdownComponents = useMemo(() => ({
@@ -1330,7 +1489,7 @@ function MainAppInner() {
                 if (remaining <= 10 && remaining > 0) {
                   return (
                     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mb-2">
-                      <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm py-2.5 px-4 rounded-xl flex items-center justify-between border border-amber-200 dark:border-amber-800/50">
+                      <div className="bg-neutral-50 dark:bg-[#1C1C1E]/20 text-neutral-800 dark:text-neutral-200 text-sm py-2.5 px-4 rounded-xl flex items-center justify-between border border-neutral-200 dark:border-[#2C2C2E]/50">
                         <div className="flex items-center space-x-2">
                           <span className="font-medium">Restam apenas {remaining} mensage{remaining === 1 ? 'm' : 'ns'} hoje.</span>
                           <span className="hidden sm:inline opacity-80">Faça upgrade para o ZENO Pro para continuar sem interrupções.</span>
@@ -1403,6 +1562,7 @@ function MainAppInner() {
               userId={userId}
               userToken={session?.access_token || null}
               onYouTubeAction={handleYouTubeAction}
+              onSendAdaptiveFeedback={handleSendAdaptiveFeedback}
             />
           </div>
         </div>
@@ -1411,25 +1571,28 @@ function MainAppInner() {
         <div className="flex-shrink-0 w-full flex flex-col">
           <ComposerInput
             input={input}
-          setInput={setInput}
-          isLoading={isLoading}
-          isListening={isListening}
-          speechError={speechError}
-          attachments={attachments}
-          onAddAttachment={(att) => setAttachments(prev => [...prev, att])}
-          onRemoveAttachment={(id) => setAttachments(prev => prev.filter(a => a.id !== id))}
-          onToggleListening={toggleListening}
-          onSubmit={handleSubmit}
-          onStopGeneration={handleStopGeneration}
-          onOpenImageStudio={() => ui.openModal('imageStudio')}
-          speed={speed}
-          onSelectSpeed={handleSelectSpeed}
-          theme={theme}
-          plan={userSettings.plan}
-          onOpenSubscriptionModal={handleOpenSubscriptionModal}
-          onOpenProFeatureModal={handleOpenProFeatureModal}
-          dailyUsage={dailyUsage}
-        />
+            setInput={setInput}
+            isLoading={isLoading}
+            isListening={isListening}
+            speechError={speechError}
+            attachments={attachments}
+            onAddAttachment={handleAddAttachment}
+            onRemoveAttachment={handleRemoveAttachment}
+            onToggleListening={toggleListening}
+            onSubmit={handleSubmit}
+            onStopGeneration={handleStopGeneration}
+            onOpenImageStudio={handleOpenImageStudioModal}
+            speed={speed}
+            onSelectSpeed={handleSelectSpeed}
+            theme={theme}
+            plan={userSettings.plan}
+            onOpenSubscriptionModal={handleOpenSubscriptionModal}
+            onOpenProFeatureModal={handleOpenProFeatureModal}
+            dailyUsage={dailyUsage}
+            cloudDraftPrompt={cloudDraftPrompt}
+            onAcceptCloudDraft={acceptCloudDraft}
+            onDismissCloudDraft={dismissCloudDraft}
+          />
         </div>
       </main>
 
@@ -1438,6 +1601,8 @@ function MainAppInner() {
         theme={theme}
         userSettings={userSettings}
         onUpdateSettings={handleUpdateSettings}
+        adaptiveProfile={adaptiveProfile}
+        onUpdateAdaptiveProfile={setAdaptiveProfile}
         userId={userId}
         profile={profile}
         session={session}

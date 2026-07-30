@@ -90,7 +90,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           {subscription.isPro && subscription.status === 'active' ? (
             <div className="max-w-xl mx-auto border border-neutral-100 rounded-3xl p-8 bg-neutral-50/50">
               <div className="flex items-center justify-between mb-8">
-                <span className="bg-neutral-900 text-white text-xs font-medium px-3 py-1 rounded-full uppercase tracking-wider">Plano Atual</span>
+                <span className="bg-[#1C1C1E] text-white text-xs font-medium px-3 py-1 rounded-full uppercase tracking-wider">Plano Atual</span>
                 <span className="text-sm text-neutral-500 font-medium">{subscription.plan}</span>
               </div>
               <div className="space-y-4 text-sm text-neutral-700">
@@ -109,7 +109,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
               <button 
                 onClick={handleOpenPortal}
-                className="w-full mt-10 py-4 bg-neutral-900 text-white rounded-2xl hover:bg-neutral-800 transition-all font-medium text-sm"
+                className="w-full mt-10 py-4 bg-[#1C1C1E] text-white rounded-2xl hover:bg-[#232326] transition-all font-medium text-sm"
               >
                 Gerenciar Assinatura
               </button>
@@ -144,7 +144,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 </div>
 
                 {/* Annual */}
-                <div className="border border-neutral-900 rounded-3xl p-8 flex flex-col relative bg-neutral-900 text-white">
+                <div className="border border-neutral-900 rounded-3xl p-8 flex flex-col relative bg-[#1C1C1E] text-white">
                   <div className="absolute -top-3 left-6 bg-white text-neutral-900 text-[10px] uppercase tracking-wider px-3 py-1 rounded-full font-bold">⭐ Melhor custo-benefício</div>
                   <h3 className="text-lg font-medium mb-1">Plano Anual</h3>
                   <p className="text-neutral-400 text-xs mb-4">Cobrança anual</p>

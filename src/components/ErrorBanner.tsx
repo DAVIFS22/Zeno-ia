@@ -24,16 +24,16 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
   return (
     <div className={`my-3 p-4 rounded-2xl border transition-all animate-fadeIn ${
       isDark
-        ? 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-        : 'bg-rose-50 border-rose-200 text-rose-900'
+        ? 'bg-[#121212]/20 border-neutral-500/30 text-neutral-200'
+        : 'bg-neutral-50 border-neutral-200 text-neutral-900'
     }`}>
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 flex-shrink-0 mt-0.5">
+        <div className="p-2 rounded-xl bg-neutral-500/20 text-neutral-400 flex-shrink-0 mt-0.5">
           <AlertTriangle className="w-5 h-5" />
         </div>
 
         <div className="flex-1 min-w-0">
-          <h4 className="font-bold text-sm text-rose-400">Não foi possível concluir a solicitação</h4>
+          <h4 className="font-bold text-sm text-neutral-400">Não foi possível concluir a solicitação</h4>
           <p className="text-xs sm:text-sm mt-1 leading-relaxed opacity-90">
             {errorMessage || 'Ocorreu um problema temporário na conexão com os servidores do ZENO.'}
           </p>
@@ -43,7 +43,7 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
             {onRetry && (
               <button
                 onClick={onRetry}
-                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs"
+                className="px-3.5 py-1.5 rounded-xl bg-neutral-600 hover:bg-neutral-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Tentar novamente</span>
@@ -55,8 +55,8 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
                 onClick={() => setShowDetails(!showDetails)}
                 className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1 transition-all ${
                   isDark
-                    ? 'border-rose-500/30 hover:bg-rose-500/10 text-rose-300'
-                    : 'border-rose-300 hover:bg-rose-100 text-rose-800'
+                    ? 'border-neutral-500/30 hover:bg-neutral-500/10 text-neutral-300'
+                    : 'border-neutral-300 hover:bg-neutral-100 text-neutral-800'
                 }`}
               >
                 <span>{showDetails ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
@@ -69,15 +69,15 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
               disabled={reportSent}
               className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all ${
                 reportSent
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                  ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
                   : isDark
-                    ? 'border-neutral-700 hover:bg-neutral-800 text-neutral-300'
+                    ? 'border-[#2C2C2E] hover:bg-[#232326] text-neutral-300'
                     : 'border-neutral-300 hover:bg-neutral-100 text-neutral-700'
               }`}
             >
               {reportSent ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
                   <span>Relatório enviado à Zeno Inc.</span>
                 </>
               ) : (
@@ -92,7 +92,7 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
           {/* Collapsible Details */}
           {showDetails && rawDetails && (
             <div className={`mt-3 p-3 rounded-xl font-mono text-[11px] overflow-x-auto max-h-36 scrollbar-custom border ${
-              isDark ? 'bg-black/50 border-rose-500/20 text-rose-300' : 'bg-rose-100/50 border-rose-300 text-rose-950'
+              isDark ? 'bg-black/50 border-neutral-500/20 text-neutral-300' : 'bg-neutral-100/50 border-neutral-300 text-neutral-950'
             }`}>
               {rawDetails}
             </div>

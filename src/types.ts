@@ -9,6 +9,12 @@ export type FileAttachment = {
 
 export type ModelType = 'zeno' | 'think' | 'search' | 'vision' | 'smart' | 'fast' | 'mega' | 'image' | 'code' | 'strategy' | 'summary' | 'pdf';
 
+export type SearchSource = {
+  title: string;
+  url: string;
+  domain?: string;
+};
+
 export type Message = {
   id: string;
   role: 'user' | 'model';
@@ -21,6 +27,9 @@ export type Message = {
   rawErrorDetails?: string;
   isLimitWarning?: boolean;
   youtubeUrl?: string;
+  isSearch?: boolean;
+  searchSources?: SearchSource[];
+  isSearching?: boolean;
 };
 
 export type ChatSession = {
@@ -117,6 +126,44 @@ export type StripeSubscriptionInfo = {
   lastRenewalStatus?: 'success' | 'failed' | 'pending';
 };
 
+export type KnowledgeLevel = 'iniciante' | 'intermediario' | 'avancado' | 'especialista';
+export type CommunicationStyle = 'conciso' | 'equilibrado' | 'detalhado' | 'didatico';
+export type TonePreference = 'tecnico' | 'amigavel' | 'formal' | 'descontraido';
+export type ApproachBias = 'preciso' | 'equilibrado' | 'criativo';
+
+export interface AdaptiveFeedback {
+  id: string;
+  msgId: string;
+  type: 'up' | 'down';
+  tags: string[];
+  comment?: string;
+  timestamp: number;
+  topic?: string;
+  adjustedComplexity?: 'aumentar' | 'manter' | 'diminuir';
+}
+
+export interface AdaptiveLearningProfile {
+  globalKnowledgeLevel: KnowledgeLevel;
+  domainLevels: {
+    programacao: KnowledgeLevel;
+    negocios: KnowledgeLevel;
+    ciencia_tech: KnowledgeLevel;
+    historia_geografia?: KnowledgeLevel;
+    ciencias_naturais?: KnowledgeLevel;
+    escrita_criativa: KnowledgeLevel;
+    geral: KnowledgeLevel;
+  };
+  communicationStyle: CommunicationStyle;
+  tonePreference: TonePreference;
+  approachBias: ApproachBias;
+  autoAdapt: boolean;
+  learnedInsights: string[];
+  feedbackCount: number;
+  positiveCount: number;
+  negativeCount: number;
+  lastUpdated: number;
+}
+
 export type DailyUsage = {
   date: string; // YYYY-MM-DD
   messagesCount: number;
@@ -142,10 +189,11 @@ export type UserSettings = {
   showHomeSuggestions?: boolean;
   logoVariant: 'monochrome' | 'gradient';
   fontSize: 'normal' | 'large' | 'compact';
-  // IA
+  // IA & Aprendizado Adaptativo
   defaultSpeed: ModelType;
   temperature: number;
   systemInstruction: string;
+  adaptiveProfile?: AdaptiveLearningProfile;
   // Voz
   autoRead: boolean;
   voiceSpeed: number;

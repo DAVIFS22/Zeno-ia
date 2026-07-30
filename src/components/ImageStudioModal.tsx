@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, Image as ImageIcon, Sparkles, Download, Copy, Check, 
-  RefreshCw, Sliders, Layers, Maximize2, ExternalLink, Wand2, Palette,
-  Heart, Trash2, Search, RotateCcw, Edit3, Filter, Users, Clock, XCircle
-} from 'lucide-react';
+import { X, Image as ImageIcon, Sparkles, Download, Copy, Check, RefreshCw, Sliders, Layers, Maximize2, ExternalLink, Wand2, Palette, Heart, Trash2, Search, RotateCcw, Edit3, Filter, Users, Clock, XCircle, Camera, PenTool, Flower, Clapperboard, Box, Building2, Flame, Rocket, Image, Brush, Triangle, Tag, Diamond, Circle, Hexagon, Square, Monitor, Smartphone } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 import { GeneratedImage } from '../types';
 import { addImageToLibrary, getStoredImages, saveStoredImages } from '../lib/imageLibraryStorage';
@@ -21,32 +17,32 @@ interface ImageStudioModalProps {
 }
 
 const STYLES = [
-  { id: 'photorealistic', name: 'Fotorealista', icon: '📸', desc: 'Fotografia profissional 8K e luzes cinematográficas' },
-  { id: 'ultra-realista', name: 'Ultra Realista', icon: '📷', desc: 'Textura ultra detalhada, lente DSLR e profundidade' },
-  { id: 'anime', name: 'Anime', icon: '🎨', desc: 'Estilo de animação japonesa moderna' },
-  { id: 'manga', name: 'Mangá', icon: '✏️', desc: 'Traços em preto e branco marcantes' },
-  { id: 'ghibli', name: 'Studio Ghibli', icon: '🌸', desc: 'Cenários poéticos desenhados à mão' },
-  { id: 'pixar', name: 'Pixar / Disney', icon: '🎬', desc: 'Personagens 3D carismáticos e iluminação suave' },
-  { id: '3d-render', name: 'Render 3D', icon: '🧊', desc: 'Unreal Engine 5, Ray Tracing e Octane' },
-  { id: 'cyberpunk', name: 'Cyberpunk', icon: '🌆', desc: 'Neon cintilante e metrópole futurista' },
-  { id: 'fantasy', name: 'Fantasia', icon: '🐉', desc: 'Mundos mágicos e trajes detalhados' },
-  { id: 'scifi', name: 'Sci-Fi', icon: '🚀', desc: 'Tecnologia avançada e paisagens cósmicas' },
-  { id: 'concept-art', name: 'Concept Art', icon: '🖼️', desc: 'Ilustração conceitual para cinema e jogos' },
-  { id: 'digital', name: 'Pintura Digital', icon: '🖌️', desc: 'Pinceladas expressivas e cores ricas' },
-  { id: 'watercolor', name: 'Aquarela', icon: '🎨', desc: 'Pinceladas suaves de água e tons pastéis' },
-  { id: 'vector', name: 'Vetorial', icon: '📐', desc: 'Ilustração plana e formas geométricas limpas' },
-  { id: 'logo', name: 'Logotipo', icon: '🏷️', desc: 'Design de marca minimalista e escalável' },
-  { id: 'icon', name: 'Ícone 3D', icon: '💎', desc: 'Símbolo em relevo para aplicativos e UI' },
-  { id: 'minimalist', name: 'Minimalista', icon: '⚪', desc: 'Composição limpa com espaço negativo' },
-  { id: 'low-poly', name: 'Low Poly', icon: '🔷', desc: 'Arte em polígonos geométricos estilizados' }
+  { id: 'photorealistic', name: 'Fotorealista', icon: Camera, desc: 'Fotografia profissional 8K e luzes cinematográficas' },
+  { id: 'ultra-realista', name: 'Ultra Realista', icon: Camera, desc: 'Textura ultra detalhada, lente DSLR e profundidade' },
+  { id: 'anime', name: 'Anime', icon: Palette, desc: 'Estilo de animação japonesa moderna' },
+  { id: 'manga', name: 'Mangá', icon: PenTool, desc: 'Traços em preto e branco marcantes' },
+  { id: 'ghibli', name: 'Studio Ghibli', icon: Flower, desc: 'Cenários poéticos desenhados à mão' },
+  { id: 'pixar', name: 'Pixar / Disney', icon: Clapperboard, desc: 'Personagens 3D carismáticos e iluminação suave' },
+  { id: '3d-render', name: 'Render 3D', icon: Box, desc: 'Unreal Engine 5, Ray Tracing e Octane' },
+  { id: 'cyberpunk', name: 'Cyberpunk', icon: Building2, desc: 'Neon cintilante e metrópole futurista' },
+  { id: 'fantasy', name: 'Fantasia', icon: Flame, desc: 'Mundos mágicos e trajes detalhados' },
+  { id: 'scifi', name: 'Sci-Fi', icon: Rocket, desc: 'Tecnologia avançada e paisagens cósmicas' },
+  { id: 'concept-art', name: 'Concept Art', icon: Image, desc: 'Ilustração conceitual para cinema e jogos' },
+  { id: 'digital', name: 'Pintura Digital', icon: Brush, desc: 'Pinceladas expressivas e cores ricas' },
+  { id: 'watercolor', name: 'Aquarela', icon: Palette, desc: 'Pinceladas suaves de água e tons pastéis' },
+  { id: 'vector', name: 'Vetorial', icon: Triangle, desc: 'Ilustração plana e formas geométricas limpas' },
+  { id: 'logo', name: 'Logotipo', icon: Tag, desc: 'Design de marca minimalista e escalável' },
+  { id: 'icon', name: 'Ícone 3D', icon: Diamond, desc: 'Símbolo em relevo para aplicativos e UI' },
+  { id: 'minimalist', name: 'Minimalista', icon: Circle, desc: 'Composição limpa com espaço negativo' },
+  { id: 'low-poly', name: 'Low Poly', icon: Hexagon, desc: 'Arte em polígonos geométricos estilizados' }
 ];
 
 const ASPECT_RATIOS = [
-  { id: '1:1', name: 'Quadrado (1:1)', icon: '⬛' },
-  { id: '16:9', name: 'Widescreen (16:9)', icon: '📺' },
-  { id: '9:16', name: 'Stories (9:16)', icon: '📱' },
-  { id: '4:3', name: 'Clássico (4:3)', icon: '🖼️' },
-  { id: '3:2', name: 'Foto (3:2)', icon: '📷' }
+  { id: '1:1', name: 'Quadrado (1:1)', icon: Square },
+  { id: '16:9', name: 'Widescreen (16:9)', icon: Monitor },
+  { id: '9:16', name: 'Stories (9:16)', icon: Smartphone },
+  { id: '4:3', name: 'Clássico (4:3)', icon: Image },
+  { id: '3:2', name: 'Foto (3:2)', icon: Camera }
 ];
 
 export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
@@ -108,15 +104,26 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   useEffect(() => {
     if (!isGenerating) return;
     setGenProgress(10);
-    const interval = setInterval(() => {
-      setGenProgress((prev) => {
-        if (prev >= 92) return 92;
-        const step = Math.max(1, Math.round((95 - prev) * 0.1));
-        return Math.min(92, prev + step);
-      });
-    }, 200);
+    let animId: number;
+    let lastTime = performance.now();
 
-    return () => clearInterval(interval);
+    const tick = (now: number) => {
+      if (now - lastTime >= 150) {
+        lastTime = now;
+        setGenProgress((prev) => {
+          if (prev >= 92) return 92;
+          const step = Math.max(1, Math.round((95 - prev) * 0.1));
+          return Math.min(92, prev + step);
+        });
+      }
+      animId = requestAnimationFrame(tick);
+    };
+
+    animId = requestAnimationFrame(tick);
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
   }, [isGenerating]);
 
   if (!isOpen) return null;
@@ -318,20 +325,20 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-fadeIn">
       <div className={`relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden ${
-        theme === 'dark' ? 'bg-[#18181c] border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
+        theme === 'dark' ? 'bg-[#18181c] border-[#2C2C2E] text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
       }`}>
         {/* Header */}
         <div className={`flex items-center justify-between px-6 py-4 border-b ${
-          theme === 'dark' ? 'border-neutral-800 bg-[#171717]' : 'border-neutral-200 bg-neutral-50'
+          theme === 'dark' ? 'border-[#2C2C2E] bg-[#171717]' : 'border-neutral-200 bg-neutral-50'
         }`}>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-200 shadow-md">
+            <div className="p-2.5 rounded-xl bg-[#232326] border border-[#2C2C2E] text-neutral-200 shadow-md">
               <Wand2 className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
                 ZENO Vision Studio
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
                   Gerador de Imagens IA
                 </span>
               </h2>
@@ -343,7 +350,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+            className="p-2 rounded-xl text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -360,7 +367,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                 <span className="text-[11px] text-neutral-400 font-normal">Prompt com IA</span>
               </label>
               <div className={`relative rounded-2xl border transition-all ${
-                theme === 'dark' ? 'bg-[#212121] border-neutral-700 focus-within:border-neutral-500' : 'bg-neutral-50 border-neutral-300 focus-within:border-neutral-500'
+                theme === 'dark' ? 'bg-[#212121] border-[#2C2C2E] focus-within:border-neutral-500' : 'bg-neutral-50 border-neutral-300 focus-within:border-neutral-500'
               }`}>
                 <textarea
                   value={prompt}
@@ -387,11 +394,11 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       selectedStyle === style.id
                         ? 'bg-neutral-700 border-neutral-500 text-neutral-100 font-semibold shadow-xs'
                         : theme === 'dark'
-                          ? 'bg-[#212121] border-neutral-800 hover:border-neutral-700 text-neutral-300'
+                          ? 'bg-[#212121] border-[#2C2C2E] hover:border-[#2C2C2E] text-neutral-300'
                           : 'bg-neutral-100 border-neutral-200 hover:border-neutral-300 text-neutral-700'
                     }`}
                   >
-                    <span className="text-base">{style.icon}</span>
+                    <style.icon className="w-5 h-5" />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-medium truncate">{style.name}</div>
                     </div>
@@ -415,11 +422,11 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       selectedRatio === ratio.id
                         ? 'bg-neutral-700 border-neutral-500 text-neutral-100 shadow-xs'
                         : theme === 'dark'
-                          ? 'bg-[#212121] border-neutral-800 hover:border-neutral-700 text-neutral-400'
+                          ? 'bg-[#212121] border-[#2C2C2E] hover:border-[#2C2C2E] text-neutral-400'
                           : 'bg-neutral-100 border-neutral-200 hover:border-neutral-300 text-neutral-600'
                     }`}
                   >
-                    <span>{ratio.icon}</span>
+                    <ratio.icon className="w-4 h-4" />
                     <span>{ratio.name}</span>
                   </button>
                 ))}
@@ -432,7 +439,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
               disabled={!prompt.trim() || isGenerating}
               className={`w-full py-3.5 px-4 rounded-2xl font-semibold flex items-center justify-center gap-2.5 transition-all shadow-lg ${
                 !prompt.trim() || isGenerating
-                  ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700'
+                  ? 'bg-[#232326] text-neutral-500 cursor-not-allowed border border-[#2C2C2E]'
                   : 'bg-neutral-200 hover:bg-neutral-100 text-neutral-900 shadow-md active:scale-[0.99]'
               }`}
             >
@@ -453,11 +460,11 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
           {/* Right Display Area (7 cols) */}
           <div className="lg:col-span-7 flex flex-col space-y-4">
             <div className={`flex-1 min-h-[360px] rounded-2xl border flex flex-col items-center justify-center p-4 relative overflow-hidden group ${
-              theme === 'dark' ? 'bg-[#1e1e1e] border-neutral-700' : 'bg-neutral-100 border-neutral-200'
+              theme === 'dark' ? 'bg-[#1e1e1e] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
             }`}>
               {queueError ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 w-full relative z-10">
-                  <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-neutral-500/20 text-neutral-400 flex items-center justify-center">
                     <XCircle className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
@@ -469,7 +476,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       setQueueError(null);
                       handleGenerate();
                     }}
-                    className="py-1.5 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold rounded-xl transition-all"
+                    className="py-1.5 px-4 bg-[#232326] hover:bg-neutral-700 text-neutral-200 border border-[#2C2C2E] text-xs font-semibold rounded-xl transition-all"
                   >
                     Tentar Novamente
                   </button>
@@ -477,11 +484,11 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
               ) : isGenerating ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 space-y-5 w-full relative">
                   {/* Subtle highlight */}
-                  <div className="absolute inset-0 bg-neutral-800/20 blur-2xl animate-pulse rounded-2xl" />
+                  <div className="absolute inset-0 bg-[#232326]/20 blur-2xl animate-pulse rounded-2xl" />
 
                   {/* Animated Center Icon */}
                   <div className="relative">
-                    <div className="w-16 h-16 rounded-2xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-200 shadow-xl">
+                    <div className="w-16 h-16 rounded-2xl bg-[#232326] border border-[#2C2C2E] flex items-center justify-center text-neutral-200 shadow-xl">
                       <Wand2 className="w-8 h-8 animate-pulse text-neutral-300" />
                     </div>
                     <Sparkles className="w-4 h-4 text-neutral-400 absolute -top-1.5 -right-1.5" />
@@ -507,25 +514,25 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       <span className="font-mono text-neutral-300">{genProgress}%</span>
                     </div>
 
-                    <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden relative border border-neutral-700">
+                    <div className="w-full h-1.5 bg-[#232326] rounded-full overflow-hidden relative border border-[#2C2C2E] contain-render">
                       <div
-                        className="h-full bg-neutral-200 rounded-full transition-all duration-300 ease-out relative overflow-hidden"
-                        style={{ width: `${genProgress}%` }}
+                        className="h-full w-full bg-neutral-200 rounded-full transition-transform duration-300 ease-out relative overflow-hidden will-change-transform origin-left"
+                        style={{ transform: `scaleX(${genProgress / 100})` }}
                       >
-                        <div className="absolute inset-0 bg-white/20 animate-shimmer" />
+                        <div className="absolute inset-0 bg-white/20 animate-shimmer gpu-accelerated" />
                       </div>
                     </div>
                   </div>
 
                   {/* QUEUE STATUS DASHBOARD FOR FREE USERS */}
                   {queuePosition !== null && (
-                    <div className="z-10 bg-[#252525] border border-neutral-800 p-4 rounded-xl max-w-xs w-full shadow-lg space-y-3.5 transition-all mt-3">
+                    <div className="z-10 bg-[#252525] border border-[#2C2C2E] p-4 rounded-xl max-w-xs w-full shadow-lg space-y-3.5 transition-all mt-3">
                       <div className="flex items-center justify-between text-xs text-neutral-300">
                         <span className="flex items-center gap-1.5 font-medium text-neutral-400">
                           <Users className="w-4 h-4 text-neutral-500" />
                           Posição na Fila:
                         </span>
-                        <span className="font-extrabold text-neutral-100 bg-neutral-800 px-2.5 py-1 rounded-lg border border-neutral-700 font-mono">
+                        <span className="font-extrabold text-neutral-100 bg-[#232326] px-2.5 py-1 rounded-lg border border-[#2C2C2E] font-mono">
                           #{queuePosition}
                         </span>
                       </div>
@@ -534,16 +541,16 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                           <Clock className="w-4 h-4 text-neutral-500" />
                           Tempo Estimado:
                         </span>
-                        <span className="font-extrabold text-emerald-400 font-mono bg-emerald-950/30 px-2 py-0.5 rounded-md">
+                        <span className="font-extrabold text-sky-400 font-mono bg-sky-950/30 px-2 py-0.5 rounded-md">
                           ~{estimatedTime}s
                         </span>
                       </div>
                       
                       <button
                         onClick={handleCancelTask}
-                        className="w-full mt-2 py-2 px-3 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-300 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 border border-rose-500/20 active:scale-[0.98]"
+                        className="w-full mt-2 py-2 px-3 rounded-lg bg-[#121212]/30 hover:bg-[#1C1C1E]/40 text-neutral-300 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 border border-neutral-500/20 active:scale-[0.98]"
                       >
-                        <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                        <XCircle className="w-3.5 h-3.5 text-neutral-400" />
                         Cancelar Solicitação
                       </button>
                     </div>
@@ -567,46 +574,46 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                   />
 
                   {/* Floating Action Overlay */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#212121]/90 backdrop-blur-md border border-neutral-700 opacity-90 transition-opacity">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#212121]/90 backdrop-blur-md border border-[#2C2C2E] opacity-90 transition-opacity">
                     <button
                       onClick={() => toggleFavorite(currentImage.id)}
-                      className={`p-2 rounded-lg transition-colors ${currentImage.isFavorite ? 'text-rose-400 bg-rose-500/20' : 'text-neutral-200 hover:bg-neutral-800'}`}
+                      className={`p-2 rounded-lg transition-colors ${currentImage.isFavorite ? 'text-neutral-400 bg-neutral-500/20' : 'text-neutral-200 hover:bg-[#232326]'}`}
                       title={currentImage.isFavorite ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                     >
-                      <Heart className={`w-4 h-4 ${currentImage.isFavorite ? 'fill-rose-400 text-rose-400' : ''}`} />
+                      <Heart className={`w-4 h-4 ${currentImage.isFavorite ? 'fill-neutral-400 text-neutral-400' : ''}`} />
                     </button>
                     <button
                       onClick={() => handleGenerate(currentImage.originalPrompt || currentImage.prompt)}
                       disabled={isGenerating}
-                      className="p-2 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors"
+                      className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
                       title="Regenerar esta Imagem"
                     >
                       <RotateCcw className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setFullscreenUrl(currentImage.imageUrl)}
-                      className="p-2 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors"
+                      className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
                       title="Ver em Tela Cheia"
                     >
                       <Maximize2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleCopyLink(currentImage.imageUrl, currentImage.id)}
-                      className="p-2 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors"
+                      className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
                       title="Copiar Link da Imagem"
                     >
-                      {copiedId === currentImage.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {copiedId === currentImage.id ? <Check className="w-4 h-4 text-sky-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => handleDownload(currentImage.imageUrl, `zeno-${Date.now()}.jpg`, currentImage.id)}
                       disabled={isDownloading}
-                      className="p-2 rounded-lg text-neutral-200 hover:bg-neutral-800 transition-colors flex items-center gap-1"
+                      className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors flex items-center gap-1"
                       title="Baixar Imagem"
                     >
                       {isDownloading ? (
                         <RefreshCw className="w-4 h-4 text-neutral-300 animate-spin" />
                       ) : downloadDoneId === currentImage.id ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
+                        <Check className="w-4 h-4 text-sky-400" />
                       ) : (
                         <Download className="w-4 h-4 text-neutral-300" />
                       )}
@@ -621,7 +628,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                           onSendToChat(currentImage.imageUrl, currentImage.originalPrompt || currentImage.prompt);
                           onClose();
                         }}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 flex items-center gap-2 shadow-sm transition-all"
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-200 flex items-center gap-2 shadow-sm transition-all"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span>Enviar para a Conversa</span>
@@ -631,7 +638,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center text-center p-8 space-y-3">
-                  <div className="p-4 rounded-2xl bg-neutral-800 text-neutral-300 border border-neutral-700">
+                  <div className="p-4 rounded-2xl bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
                     <ImageIcon className="w-10 h-10" />
                   </div>
                   <h3 className="text-sm font-semibold">Nenhuma Imagem Gerada Ainda</h3>
@@ -644,9 +651,9 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
             {/* Gallery Library */}
             {history.length > 0 && (
-              <div className="space-y-2.5 pt-2 border-t border-neutral-800">
+              <div className="space-y-2.5 pt-2 border-t border-[#2C2C2E]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-1 bg-neutral-800/80 p-1 rounded-xl border border-neutral-700">
+                  <div className="flex items-center gap-1 bg-[#232326]/80 p-1 rounded-xl border border-[#2C2C2E]">
                     <button
                       onClick={() => setActiveTab('all')}
                       className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
@@ -658,10 +665,10 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     <button
                       onClick={() => setActiveTab('favorites')}
                       className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                        activeTab === 'favorites' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'text-neutral-400 hover:text-neutral-200'
+                        activeTab === 'favorites' ? 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/30' : 'text-neutral-400 hover:text-neutral-200'
                       }`}
                     >
-                      <Heart className="w-3 h-3 text-rose-400 fill-rose-400" />
+                      <Heart className="w-3 h-3 text-neutral-400 fill-neutral-400" />
                       <span>Favoritas ({history.filter(i => i.isFavorite).length})</span>
                     </button>
                   </div>
@@ -673,7 +680,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Buscar no histórico..."
-                      className="w-full pl-8 pr-3 py-1 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
+                      className="w-full pl-8 pr-3 py-1 rounded-xl bg-[#232326] border border-[#2C2C2E] text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
                     />
                   </div>
                 </div>
@@ -703,7 +710,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       {/* Favorite Indicator Badge */}
                       {img.isFavorite && (
                         <div className="absolute top-1 left-1 p-0.5 rounded-full bg-black/60 backdrop-blur-sm">
-                          <Heart className="w-3 h-3 text-rose-400 fill-rose-400" />
+                          <Heart className="w-3 h-3 text-neutral-400 fill-neutral-400" />
                         </div>
                       )}
 
@@ -713,7 +720,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                           e.stopPropagation();
                           deleteImage(img.id);
                         }}
-                        className="absolute top-1 right-1 p-1 rounded-lg bg-black/70 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 p-1 rounded-lg bg-black/70 hover:bg-neutral-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Excluir da biblioteca"
                       >
                         <Trash2 className="w-3 h-3" />

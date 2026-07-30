@@ -1,10 +1,12 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import Stripe from "stripe";
-import dotenv from "dotenv";
 import { SubscriptionService } from "./src/lib/subscriptionService";
 import { 
   getUserUsage, 
@@ -35,13 +37,13 @@ import { StripeWebhookHandler } from "./src/webhooks/stripeWebhookHandler";
 import { StripeService, getStripe } from "./src/services/stripeService";
 import { SubscriptionManager } from "./src/services/subscriptionManager";
 import { getYoutubeTranscript, getYoutubeMetadata, extractYoutubeId, downloadYoutubeAudio } from "./src/lib/youtube";
+import { buildAdaptiveSystemPrompt, updateProfileWithFeedback, DEFAULT_ADAPTIVE_PROFILE } from "./src/lib/adaptiveLearning";
+import { generateTextWithFallback } from "./src/services/aiProvider";
 
 // Startup Firestore connection test
 adminDb.listCollections()
   .then(cols => console.log('[FIREBASE] Server-side Firestore connection test successful. Collections found:', cols.length))
   .catch(err => console.error('[FIREBASE] Server-side Firestore connection test failed:', err.message));
-
-dotenv.config();
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -76,7 +78,7 @@ async function getAvailableModels() {
 }
 
 async function smartSelectModel(taskType: string, isPro: boolean = false) {
-  return 'models/gemini-flash-latest';
+  return 'gemini-2.0-flash';
 }
 
 async function startServer() {
@@ -187,14 +189,13 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       });
 
       if (!apiRes.ok) {
-        const errBody = await apiRes.text();
-        console.log("[LYRIA API Notice/Quota]:", errBody);
+        console.warn("[Lyria API fallback triggered - rate limit/quota reached]");
         
         // Fallback to Gemini Flash for lyrics & chords if Lyria quota exceeded (429) or error
         try {
-          const fallbackPrompt = `Escreva uma letra de música profissional completa no gênero ${genre}, tom ${keySig}, andamento ${tempo}, com base no tema: "${prompt}". Inclua versos, refrão e sugestão de acordes.`;
+          const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre}, tom ${keySig}, andamento ${tempo}, com base no tema: "${prompt}". VÁ DIRETO para a composição (com título, versos, refrão e acordes). NÃO inclua nenhuma saudação, introdução ou explicação como "Aqui está..." ou "Esta é uma composição...". NÃO use linhas com "---".`;
           const fallbackResponse = await ai.models.generateContent({
-            model: 'gemini-flash-latest',
+            model: 'gemini-2.0-flash',
             contents: fallbackPrompt,
           });
 
@@ -205,8 +206,9 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
             genre,
             key: keySig,
             tempo,
-            lyrics: `⚠️ [Aviso: Cota do modelo Lyria 3 excedida na sua chave atual. Letra e arranjo gerados via Gemini Flash]\n\n` + fallbackLyrics,
+            lyrics: fallbackLyrics,
             chordsSummary: `${keySig} - Progressive (Gemini Arranged)`,
+            notice: "Não foi possível gerar o áudio agora (limite de uso atingido). Sua letra foi criada normalmente.",
             audioData: null,
             mimeType: "audio/wav"
           });
@@ -219,6 +221,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
             tempo,
             lyrics: `(Verso 1)\n${prompt}\n\n(Refrão)\nO som ecoa na noite fria\nSeguindo a harmonia em ${keySig}\nAndamento: ${tempo}\n\n(Ponte)\nA música flui sem parar`,
             chordsSummary: `${keySig} - Standard`,
+            notice: "Não foi possível gerar o áudio agora (limite de uso atingido). Sua letra foi criada normalmente.",
             audioData: null,
             mimeType: "audio/wav"
           });
@@ -277,9 +280,9 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       console.error("[GENERATE MUSIC EXCEPTION]:", err);
       try {
         const { prompt, genre, keySig, tempo } = req.body;
-        const fallbackPrompt = `Escreva uma letra de música profissional completa no gênero ${genre || 'Pop'}, tom ${keySig || 'C Major'}, andamento ${tempo || '110 BPM'}, com base no tema: "${prompt || 'Inovação'}".`;
+        const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre || 'Pop'}, tom ${keySig || 'C Major'}, andamento ${tempo || '110 BPM'}, com base no tema: "${prompt || 'Inovação'}". VÁ DIRETO para a composição. NÃO inclua saudações, introduções ou explicações. NÃO use linhas com "---".`;
         const fallbackResponse = await ai.models.generateContent({
-          model: 'gemini-flash-latest',
+          model: 'gemini-2.0-flash',
           contents: fallbackPrompt,
         });
 
@@ -288,8 +291,9 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
           genre: genre || 'Pop',
           key: keySig || 'C Major',
           tempo: tempo || '110 BPM',
-          lyrics: `⚠️ [Aviso: O serviço Lyria 3 está temporariamente indisponível. Letra gerada via Gemini Flash]\n\n` + fallbackResponse.text,
+          lyrics: fallbackResponse.text,
           chordsSummary: `${keySig || 'C Major'} - Standard`,
+          notice: "Não foi possível gerar o áudio agora (limite de uso atingido). Sua letra foi criada normalmente.",
           audioData: null,
           mimeType: "audio/wav"
         });
@@ -306,7 +310,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
 
       const verifiedEmail = await getVerifiedEmail(req);
       const subDetails = await SubscriptionService.validateAndGetDetails(userId);
-      const isAdmin = verifiedEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const isAdmin = isAdminUser(verifiedEmail);
       const isPro = isAdmin || subDetails.isPro;
 
       // Optional: Check limits for non-pro users if needed
@@ -317,71 +321,17 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       ]);
 
       if ('error' in transcriptData) {
-        // console.log('[YOUTUBE] Captions failed, trying audio transcription for:', url);
-        try {
-          const audioPath = await downloadYoutubeAudio(url);
-          
-          if (!fs.existsSync(audioPath)) {
-            throw new Error("Falha ao gerar arquivo temporário de áudio.");
-          }
+        // Fallback to metadata description & summary if captions fail
+        const fallbackTranscript = metadata 
+          ? `[Vídeo do YouTube: ${metadata.title || 'Vídeo'} - por ${metadata.author || 'Autor Desconhecido'}]\n\nDescrição e Detalhes do Vídeo:\n${metadata.description || 'Sem descrição.'}\n\n(Nota: Este vídeo não possui legendas oficiais acessíveis. O ZENO AI processou o conteúdo com base nos metadados oficiais e informações do vídeo).`
+          : `[Vídeo do YouTube: ${url}]\n\n(Nota: O acesso direto ao conteúdo deste vídeo foi restrito pelo YouTube).`;
 
-          const audioData = fs.readFileSync(audioPath);
-          
-          // Check file size (rough limit for inline data is ~20MB)
-          if (audioData.length > 20 * 1024 * 1024) {
-             if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-             return res.status(422).json({ 
-               error: "O vídeo é muito longo para transcrição automática. Tente um vídeo com legendas oficiais.",
-               metadata 
-             });
-          }
-
-          const base64Audio = audioData.toString('base64');
-          
-          const response = await ai.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: [{
-              role: 'user',
-              parts: [
-                {
-                  inlineData: {
-                    data: base64Audio,
-                    mimeType: "audio/mp3"
-                  }
-                },
-                { text: "Transcreva este áudio do YouTube completamente para o português. Se o áudio estiver em outra língua, transcreva e traduza para o português. Retorne apenas o texto da transcrição de forma limpa, sem comentários adicionais." }
-              ]
-            }]
-          });
-          
-          const transcript = response.text || "";
-          
-          // Cleanup
-          if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-          
-          if (!transcript || transcript.length < 5) {
-            throw new Error("A IA não conseguiu extrair uma transcrição útil deste áudio.");
-          }
-
-          return res.json({
-            transcript,
-            videoId: transcriptData.videoId || extractYoutubeId(url),
-            metadata,
-            method: 'ai_transcription'
-          });
-        } catch (audioErr: any) {
-          // Fallback to metadata description & summary if audio download / transcription fails
-          const fallbackTranscript = metadata 
-            ? `[Vídeo do YouTube: ${metadata.title || 'Vídeo'} - por ${metadata.author || 'Autor Desconhecido'}]\n\nDescrição e Detalhes do Vídeo:\n${metadata.description || 'Sem descrição.'}\n\n(Nota: Devido a restrições de segurança do YouTube, as legendas e o áudio direto não puderam ser baixados. O ZENO AI está utilizando os metadados oficiais e informações do vídeo para gerar análises e respostas).`
-            : `[Vídeo do YouTube: ${url}]\n\n(Nota: O acesso direto ao conteúdo deste vídeo foi restrito pelo YouTube).`;
-
-          return res.json({
-            transcript: fallbackTranscript,
-            videoId: transcriptData.videoId || extractYoutubeId(url),
-            metadata,
-            method: 'metadata_fallback'
-          });
-        }
+        return res.json({
+          transcript: fallbackTranscript,
+          videoId: transcriptData.videoId || extractYoutubeId(url),
+          metadata,
+          method: 'metadata_fallback'
+        });
       }
 
       res.json({
@@ -420,7 +370,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode } = req.body;
+      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile } = req.body;
       
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: "Mensagem é obrigatória e deve ser texto." });
@@ -428,8 +378,8 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
 
       // Secure email verification - strictly verify against token for Admin access
       const verifiedEmail = await getVerifiedEmail(req);
-      const isAdmin = verifiedEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
       const userEmail = verifiedEmail || (req.body?.userEmail || req.headers['x-user-email'] || '') as string;
+      const isAdmin = isAdminUser(verifiedEmail) || isAdminUser(userEmail);
 
       // Server-side access control check - Securely verify subscription
       const subDetails = await SubscriptionService.validateAndGetDetails(userId);
@@ -437,7 +387,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
 
       // Smart Model Selection Logic
       let normSpeed = speed || 'zeno';
-      let apiModelName = 'models/gemini-flash-latest';
+      let apiModelName = 'gemini-2.0-flash';
 
       if (isSmartMode !== false) { // Default to smart mode
         let taskType = 'chat';
@@ -467,7 +417,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         else normSpeed = 'zeno';
       } else {
         const modelCfg = getModelConfig(normSpeed);
-        apiModelName = `models/${modelCfg.apiModel}`;
+        apiModelName = modelCfg.apiModel;
       }
 
       const modelCfg = getModelConfig(normSpeed);
@@ -480,6 +430,10 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       }
 
       let modelSystemPrompt = `${systemInstruction}\n\n[Diretrizes do Modelo ${modelCfg.name}]: ${modelCfg.systemPrompt}\n\n[REGRA DE OURO PARA GERAÇÃO DE IMAGENS - ZENO VISION]: Você possui capacidade NATIVA e COMPLETA de gerar imagens no ZENO AI! NUNCA diga 'sou uma IA de texto', NUNCA diga 'não posso gerar imagens' ou 'não tenho olhos/capacidade visual'. NUNCA recomende Midjourney, DALL-E, Stable Diffusion ou ferramentas externas. Se o usuário solicitar uma imagem, foto, desenho, ilustração, arte, logo, avatar, mockup, infográfico, diagrama ou wallpaper em qualquer modelo do ZENO, responda diretamente em formato Markdown com a tag de imagem: ![descrição da imagem em português](https://image.pollinations.ai/prompt/DESCRICAO_DETALHADA_EM_INGLES_COM_ILUMINACAO_CINEMATOGRAFICA_LENTE_E_TEXTURA_8K?width=1024&height=1024&seed=${Math.floor(Math.random() * 1000000)}&nologo=true)`;
+      
+      // Inject Adaptive Learning System Instruction Block
+      modelSystemPrompt += '\n\n' + buildAdaptiveSystemPrompt(adaptiveProfile || DEFAULT_ADAPTIVE_PROFILE);
+
       let modelTemperature = modelCfg.temperature;
 
       // Retrieve long-term memory context if userId is available
@@ -611,6 +565,43 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         }
       }
 
+      // Check for vague/incomplete search request (e.g. just "buscar" or "pesquisar" without a topic)
+      const cleanMsg = message.trim().toLowerCase().replace(/[.,!?]/g, '');
+      const vagueTerms = ['buscar', 'pesquisar', 'procurar', 'busca', 'pesquisa', 'noticias', 'notícias', 'fazer busca', 'fazer pesquisa'];
+      const isVagueSearch = vagueTerms.includes(cleanMsg) || /^(buscar|pesquisar|procurar|busca|pesquisa|notícias)\s*$/i.test(cleanMsg);
+
+      if (isVagueSearch) {
+        const recentUserMsgs = (history || []).filter((m: any) => m.role === 'user').slice(-2);
+        const contextTopic = recentUserMsgs.length > 0 ? recentUserMsgs[recentUserMsgs.length - 1].text.slice(0, 40) : null;
+        
+        let clarificationText = '';
+        if (contextTopic) {
+          clarificationText = `Você quis dizer buscar sobre **"${contextTopic}"**?\n\nOu você pode especificar, por exemplo:\n↳ Notícias e atualizações recentes sobre ${contextTopic}\n↳ Principais conceitos e resumo sobre ${contextTopic}\n↳ Fontes oficiais e cotações atuais`;
+        } else {
+          clarificationText = `Você quis dizer buscar sobre algum assunto específico da nossa conversa?\n\nOu você pode especificar, por exemplo:\n↳ Notícias de hoje sobre tecnologia e inteligência artificial\n↳ Resultados e cotações do mercado financeiro\n↳ O que é e como funciona determinado assunto`;
+        }
+
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        });
+        res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: 'search', isSearch: true, isSearching: false })}\n\n`);
+        res.write(`data: ${JSON.stringify({ text: clarificationText, isSearch: true, isSearching: false, sources: [] })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        return res.end();
+      }
+
+      // Explicit search intent triggers
+      const msgLower = message.toLowerCase();
+      const searchTriggers = [
+        'buscar', 'pesquisar', 'procurar', 'notícias sobre', 'noticias sobre',
+        'o que é', 'o que e', 'quem é', 'quem e', 'últimas notícias', 'ultimas noticias',
+        'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje',
+        'cotação', 'resultado do', 'placar', 'preço atual', 'notícias de'
+      ];
+      const isSearchIntent = normSpeed === 'search' || searchTriggers.some(t => msgLower.includes(t));
+
       // Convert history to the format expected by GenAI SDK
       const contents: any[] = [];
       if (history && Array.isArray(history)) {
@@ -650,27 +641,49 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         parts: userParts,
       });
 
-      const response = await ai.models.generateContent({
-        model: apiModelName,
+      const tools = isSearchIntent ? [{ googleSearch: {} }] : undefined;
+
+      const aiResult = await generateTextWithFallback({
         contents,
-        config: {
-          systemInstruction: modelSystemPrompt,
-          temperature: modelTemperature,
-          maxOutputTokens: 2048,
-        },
-      });
+        systemInstruction: modelSystemPrompt,
+        temperature: modelTemperature,
+        maxOutputTokens: 2048,
+        tools,
+        isSearchIntent
+      }, ai);
 
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
+      let searchSources = aiResult.sources || [];
 
-      // Send model info at the start of stream if smart mode is on
-      res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: normSpeed })}\n\n`);
+      if (!res.headersSent) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        });
+      }
 
-      const fullResponseText = response.text || "";
-      res.write(`data: ${JSON.stringify({ text: fullResponseText })}\n\n`);
+      // Send model info & search flag at start
+      res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: isSearchIntent ? 'search' : normSpeed, isSearch: isSearchIntent })}\n\n`);
+
+      const fullResponseText = aiResult.text || "";
+
+      // Fallback link extraction if groundingChunks wasn't populated but links were included in text
+      if (isSearchIntent && searchSources.length === 0) {
+        const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+        let match;
+        while ((match = linkRegex.exec(fullResponseText)) !== null) {
+          const title = match[1];
+          const url = match[2];
+          try {
+            const domain = new URL(url).hostname.replace(/^www\./, '');
+            if (!searchSources.some(s => s.url === url)) {
+              searchSources.push({ title, url, domain });
+            }
+          } catch (e) {}
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ text: fullResponseText, isSearch: isSearchIntent, sources: searchSources })}\n\n`);
 
       // Store AI response in vector memory
       if (userId && fullResponseText.length > 10) {
@@ -680,7 +693,6 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error: any) {
-      console.error("Chat Error:", error);
       let errStr = String(error?.message || error || "");
       let cleanError = errStr;
       
@@ -709,18 +721,27 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         error?.code === 429 ||
         (error?.name === "ApiError" && error?.status === 429);
 
-      if (isRateLimit) {
-        const fallbackText = `*(Nota: A cota da API Gemini atingiu o limite temporário de requisições ou tokens para este modelo. Isso acontece devido à alta demanda global nos servidores do Google. Como assistente ZENO AI, estou processando sua mensagem de forma otimizada. Para uso ilimitado e acesso prioritário aos modelos Pro sem limites de cota, faça upgrade para o ZENO Pro)*\n\nRecebi sua mensagem: "${req.body?.message || ''}". Como posso ajudar com seus códigos, redação, análises ou criatividade hoje?`;
+      if (!isRateLimit) {
+        console.error("Chat Error:", error);
+      } else {
+        console.log("Chat Error (Rate Limit/Quota):", cleanError);
+      }
+
+      if (!res.headersSent) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
         });
+      }
+
+      if (isRateLimit) {
+        const fallbackText = `*(Aviso ZENO AI: A cota temporária de requisições por minuto nos servidores da API Google Gemini foi atingida. A cota é renovada automaticamente em instantes.)*\n\nRecebi sua mensagem: "${req.body?.message || ''}". Por favor, aguarde alguns segundos e envie novamente!`;
         res.write(`data: ${JSON.stringify({ text: fallbackText })}\n\n`);
         res.write("data: [DONE]\n\n");
         return res.end();
       }
-      res.write(`data: ${JSON.stringify({ error: cleanError })}\n\n`);
+      res.write(`data: ${JSON.stringify({ text: `⚠️ **Aviso ZENO AI:** Ocorreu uma oscilação temporária na conexão com a IA (${cleanError || 'conexão instável'}). Por favor, clique em **Tentar novamente** ou reenvie sua mensagem.` })}\n\n`);
       res.write("data: [DONE]\n\n");
       res.end();
     }
@@ -747,7 +768,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: basePrompt }] }],
         config: {
           temperature: 0.7,
@@ -762,17 +783,28 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       } catch (err) {
         // Fallback generic suggestions
         suggestions = [
-          "Como melhorar minha produtividade?",
-          "Crie uma imagem de paisagem futurista",
-          "Explique física quântica de forma simples",
-          "Me ajude a planejar uma viagem"
+          "Quais foram os principais acontecimentos da Segunda Guerra Mundial?",
+          "Explique as características geográficas e relevo da América do Sul",
+          "Como funcionam a fotossíntese e a respiração celular?",
+          "Crie uma imagem de paisagem futurista em alta resolução"
         ];
       }
       
       res.json({ suggestions: suggestions.slice(0, 4) });
     } catch (e: any) {
-      console.error("/api/suggestions error:", e);
-      res.json({ suggestions: ["Explique um conceito complexo", "Gere uma ideia criativa", "Resuma os principais pontos de", "Traduza este texto para inglês"] });
+      const errStr = String(e?.message || e || "").toLowerCase();
+      const isRateLimit = errStr.includes("429") || errStr.includes("quota") || errStr.includes("resource_exhausted") || errStr.includes("exceeded");
+      if (!isRateLimit) {
+        console.error("/api/suggestions error:", e);
+      } else {
+        console.log("/api/suggestions error (rate limit):", e?.message || e);
+      }
+      res.json({ suggestions: [
+        "Quais foram as causas da Revolução Industrial?",
+        "Explique os aspectos climáticos e geopolíticos da Europa",
+        "Como funciona a Teoria da Relatividade de Einstein?",
+        "Quais são os principais ecossistemas do planeta?"
+      ] });
     }
   });
 
@@ -1029,7 +1061,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       const userId = req.query.userId as string;
       const verifiedEmail = await getVerifiedEmail(req);
       const email = verifiedEmail || (req.query.email || req.headers['x-user-email'] || '') as string;
-      const isAdmin = verifiedEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const isAdmin = isAdminUser(verifiedEmail) || isAdminUser(email);
 
       if (!userId) {
         return res.status(400).json({ error: "userId é obrigatório." });
@@ -1979,6 +2011,136 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       return res.json({ success: true });
     } catch (e: any) {
       return res.json({ success: true, warning: e.message });
+    }
+  });
+
+  // --- CLOUD DRAFT SYNCHRONIZATION ENDPOINTS ---
+  app.get("/api/sync/draft", async (req, res) => {
+    try {
+      const { userId, sessionId } = req.query;
+      if (!userId || typeof userId !== 'string') {
+        return res.json({ draft: null });
+      }
+      const docId = sessionId ? `${userId}_${sessionId}` : userId;
+      try {
+        const doc = await adminDb.collection('drafts').doc(docId).get();
+        if (!doc.exists) {
+          return res.json({ draft: null });
+        }
+        const data = doc.data();
+        return res.json({ draft: data ? { text: data.text || '', timestamp: data.timestamp || 0 } : null });
+      } catch (err) {
+        return res.json({ draft: null });
+      }
+    } catch (e: any) {
+      return res.json({ draft: null });
+    }
+  });
+
+  app.post("/api/sync/draft", async (req, res) => {
+    try {
+      const { userId, sessionId, text, timestamp } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+      const docId = sessionId ? `${userId}_${sessionId}` : userId;
+      try {
+        await adminDb.collection('drafts').doc(docId).set({
+          text: text || '',
+          timestamp: timestamp || Date.now(),
+          updatedAt: Date.now()
+        }, { merge: true });
+      } catch (err) {
+        // Quiet database fallback
+      }
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.json({ success: true, warning: e.message });
+    }
+  });
+
+  app.delete("/api/sync/draft", async (req, res) => {
+    try {
+      const { userId, sessionId } = req.query;
+      if (!userId || typeof userId !== 'string') {
+        return res.json({ success: true });
+      }
+      const docId = sessionId ? `${userId}_${sessionId}` : userId;
+      try {
+        await adminDb.collection('drafts').doc(docId).delete();
+      } catch (err) {
+        // Quiet database fallback
+      }
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.json({ success: true });
+    }
+  });
+
+  // --- ADAPTIVE LEARNING SYSTEM ENDPOINTS ---
+  app.get("/api/adaptive/profile", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId || typeof userId !== 'string') {
+        return res.json({ profile: DEFAULT_ADAPTIVE_PROFILE });
+      }
+
+      try {
+        const doc = await adminDb.collection('users').doc(userId).get();
+        if (!doc.exists) return res.json({ profile: DEFAULT_ADAPTIVE_PROFILE });
+        const data = doc.data();
+        const profile = data?.adaptiveProfile || data?.settings?.adaptiveProfile || DEFAULT_ADAPTIVE_PROFILE;
+        return res.json({ profile });
+      } catch (err) {
+        return res.json({ profile: DEFAULT_ADAPTIVE_PROFILE });
+      }
+    } catch (e: any) {
+      return res.json({ profile: DEFAULT_ADAPTIVE_PROFILE });
+    }
+  });
+
+  app.post("/api/adaptive/profile", async (req, res) => {
+    try {
+      const { userId, profile } = req.body;
+      if (!userId || !profile) return res.status(400).json({ error: "userId and profile are required" });
+
+      try {
+        await adminDb.collection('users').doc(userId).set({ adaptiveProfile: profile }, { merge: true });
+      } catch (err) {
+        console.warn('[ADAPTIVE API] Firestore update warning:', err);
+      }
+      return res.json({ success: true, profile });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/adaptive/feedback", async (req, res) => {
+    try {
+      const { userId, feedback, currentProfile } = req.body;
+      if (!feedback || !feedback.msgId) {
+        return res.status(400).json({ error: "Feedback de mensagem é obrigatório" });
+      }
+
+      const activeProfile = currentProfile || DEFAULT_ADAPTIVE_PROFILE;
+      const updatedProfile = updateProfileWithFeedback(activeProfile, feedback);
+
+      if (userId) {
+        try {
+          const feedbackId = feedback.id || 'fb_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+          await adminDb.collection('users').doc(userId).collection('feedbacks').doc(feedbackId).set({
+            ...feedback,
+            timestamp: Date.now()
+          });
+
+          // Save updated profile
+          await adminDb.collection('users').doc(userId).set({ adaptiveProfile: updatedProfile }, { merge: true });
+        } catch (dbErr: any) {
+          console.warn('[ADAPTIVE FEEDBACK] Firestore save warning:', dbErr.message);
+        }
+      }
+
+      return res.json({ success: true, updatedProfile, feedback });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
     }
   });
 

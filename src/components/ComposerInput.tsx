@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { 
-  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock
+  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud
 } from 'lucide-react';
 import { FileAttachment, UserPlan, ModelType, DailyUsage } from '../types';
 import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
@@ -26,6 +26,9 @@ interface ComposerInputProps {
   onOpenSubscriptionModal?: (reason?: string) => void;
   onOpenProFeatureModal?: () => void;
   dailyUsage?: DailyUsage;
+  cloudDraftPrompt?: { text: string; timestamp: number } | null;
+  onAcceptCloudDraft?: () => void;
+  onDismissCloudDraft?: () => void;
 }
 
 export const ComposerInput = React.memo<ComposerInputProps>(({
@@ -47,10 +50,14 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   plan = 'ZENO Free',
   onOpenSubscriptionModal,
   onOpenProFeatureModal,
-  dailyUsage
+  dailyUsage,
+  cloudDraftPrompt,
+  onAcceptCloudDraft,
+  onDismissCloudDraft,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
 
@@ -58,6 +65,31 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   const { isPro } = useSubscription();
 
   const currentModel = getModelDef(speed);
+
+  // Close model menu smoothly on outside clicks without conflicting with toggle button
+  useEffect(() => {
+    if (!isSpeedMenuOpen) return;
+
+    const handleClickOutside = (event: Event) => {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        console.log('[ComposerInput] Outside click detected. Closing model selector dropdown.');
+        setIsSpeedMenuOpen(false);
+      }
+    };
+
+    // Use setTimeout to ensure the click/touch event that opened the dropdown finishes before outside listener is active
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('pointerdown', handleClickOutside);
+      document.addEventListener('click', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isSpeedMenuOpen]);
 
   const handleModelClick = (modelId: ModelType, isModelPro: boolean) => {
     setIsSpeedMenuOpen(false);
@@ -145,22 +177,63 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`fixed bottom-0 left-0 right-0 md:left-[260px] z-30 pt-2 pb-4 pb-[env(safe-area-inset-bottom)] px-3 sm:px-6 pointer-events-none transition-all ${
+      className={`fixed bottom-0 left-0 right-0 md:left-[260px] z-30 pt-2 pb-4 pb-[env(safe-area-inset-bottom)] px-3 sm:px-6 pointer-events-none transition-all gpu-accelerated ${
         isDark 
           ? 'bg-gradient-to-t from-[#0f0f11] via-[#0f0f11]/95 to-transparent' 
           : 'bg-gradient-to-t from-white via-white/95 to-transparent'
       }`}
     >
       <div className="max-w-3xl mx-auto relative px-1 sm:px-0 pointer-events-auto">
+
+        {/* Cloud Draft Discovery Discrete Banner */}
+        {cloudDraftPrompt && (
+          <div className={`mb-2 p-2.5 px-3.5 rounded-xl border shadow-lg flex items-center justify-between gap-3 text-xs animate-fadeIn ${
+            isDark ? 'bg-[#1c1c20] border-neutral-500/30 text-neutral-200' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+          }`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <Cloud className="w-4 h-4 text-neutral-500 shrink-0 animate-pulse" />
+              <span className="truncate">
+                Encontramos um rascunho diferente salvo na nuvem. Deseja usá-lo?
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={onAcceptCloudDraft}
+                className="px-2.5 py-1 rounded-lg bg-neutral-500 hover:bg-neutral-600 active:bg-neutral-700 text-white font-medium text-[11px] transition-colors cursor-pointer"
+              >
+                Usar Rascunho
+              </button>
+              <button
+                type="button"
+                onClick={onDismissCloudDraft}
+                className={`p-1 rounded-md transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-[#232326] text-neutral-400' : 'hover:bg-neutral-100 text-neutral-700'
+                }`}
+                title="Manter rascunho atual"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
         
         {/* Model Indicator */}
         <div className="flex items-center justify-between mb-1.5 px-2">
-          <div className="relative">
+          <div ref={menuRef} className="model-selector relative">
             <button
               type="button"
-              onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-              className={`text-xs transition-colors flex items-center gap-1.5 font-medium ${
-                isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-600 hover:text-neutral-900'
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('[ComposerInput] Model selector toggle button clicked. Current isSpeedMenuOpen state:', isSpeedMenuOpen);
+                setIsSpeedMenuOpen(prev => !prev);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              className={`text-xs flex items-center gap-1.5 font-medium cursor-pointer px-2 py-1 -mx-2 rounded-lg transition-all duration-150 ease-out active:scale-95 focus:outline-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#4A4A4E] ${
+                isDark 
+                  ? 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] active:bg-[#2C2C2E]' 
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200'
               }`}
             >
               <span>Modelo:</span>
@@ -169,23 +242,24 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               }`}>
                 {currentModel.name}
                 {currentModel.isPro && !isPro && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
                     <Lock className="w-2.5 h-2.5" /> PRO
                   </span>
                 )}
               </span>
-              <ChevronDown className="w-3 h-3 text-neutral-400" />
+              <ChevronDown className={`w-3 h-3 text-neutral-400 transition-transform duration-200 ease-in-out transform ${isSpeedMenuOpen ? 'rotate-180' : 'rotate-0'}`} />
             </button>
 
             {/* Model Selection Menu */}
             {isSpeedMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setIsSpeedMenuOpen(false)} />
-                <div className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-xl border shadow-xl z-40 animate-fadeIn ${
-                  isDark ? 'bg-[#18181b] border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900'
-                }`}>
-                  <div className={`px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
-                    isDark ? 'text-neutral-400 border-neutral-800' : 'text-neutral-500 border-neutral-100'
+              <div 
+                className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-xl border shadow-2xl z-50 animate-fadeIn ${
+                  isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={`px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
+                    isDark ? 'text-neutral-400 border-[#2C2C2E]' : 'text-neutral-500 border-neutral-100'
                   }`}>
                     <span>Modo Inteligente</span>
                     <button 
@@ -195,8 +269,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                       }}
                       className={`px-1.5 py-0.5 rounded transition-colors ${
                         speed === 'smart' 
-                          ? 'bg-blue-600 text-white' 
-                          : isDark ? 'bg-neutral-800 text-neutral-400' : 'bg-neutral-100 text-neutral-500'
+                          ? 'bg-sky-600 text-white' 
+                          : isDark ? 'bg-[#232326] text-neutral-400' : 'bg-neutral-100 text-neutral-500'
                       }`}
                     >
                       {speed === 'smart' ? 'Ativo' : 'Ativar'}
@@ -214,8 +288,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                         onClick={() => handleModelClick(m.id, m.isPro)}
                         className={`w-full text-left p-2 rounded-lg transition-all flex items-center justify-between group ${
                           isSelected
-                            ? isDark ? 'bg-neutral-800 text-white font-medium' : 'bg-neutral-100 text-neutral-900 font-medium'
-                            : isDark ? 'hover:bg-neutral-800/50 text-neutral-300' : 'hover:bg-neutral-50 text-neutral-700'
+                            ? isDark ? 'bg-[#232326] text-white font-medium' : 'bg-neutral-100 text-neutral-900 font-medium'
+                            : isDark ? 'hover:bg-[#232326]/50 text-neutral-300' : 'hover:bg-neutral-50 text-neutral-700'
                         }`}
                       >
                         <div className="flex-1 pr-2">
@@ -227,20 +301,19 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
                         {isLocked ? (
                           <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                            isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
+                            isDark ? 'bg-[#232326] border-[#2C2C2E] text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
                           }`}>
                             <Lock className="w-2.5 h-2.5" /> PRO
                           </div>
                         ) : isSelected ? (
                           <div className={`w-1.5 h-1.5 rounded-full ${
-                            isDark ? 'bg-white' : 'bg-neutral-900'
+                            isDark ? 'bg-white' : 'bg-[#1C1C1E]'
                           }`} />
                         ) : null}
                       </button>
                     );
                   })}
                 </div>
-              </>
             )}
           </div>
 
@@ -266,8 +339,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
         {!isPro && (isAtLimit || isNearLimit) && (
           <div className={`mb-2 px-3.5 py-1.5 rounded-xl text-xs flex items-center justify-between border ${
             isAtLimit 
-              ? isDark ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
-              : isDark ? 'bg-neutral-900/60 border-neutral-800 text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-700'
+              ? isDark ? 'bg-[#1C1C1E] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
+              : isDark ? 'bg-[#1C1C1E]/60 border-[#2C2C2E] text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-700'
           }`}>
             <div className="flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
@@ -291,7 +364,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
         {/* Speech Error Banner */}
         {speechError && (
-          <div className="mb-2 px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs flex items-center gap-2">
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-[#232326] border border-[#2C2C2E] text-neutral-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
             <span>{speechError}</span>
           </div>
@@ -299,8 +372,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
         {/* Voice Active Bar */}
         {isListening && (
-          <div className="mb-2 px-3 py-1 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs inline-flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <div className="mb-2 px-3 py-1 rounded-full bg-[#232326] border border-[#2C2C2E] text-neutral-200 text-xs inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
             <span>Ouvindo...</span>
             <button
               type="button"
@@ -319,7 +392,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               <div
                 key={att.id}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                  isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
+                  isDark ? 'bg-[#232326] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
                 }`}
               >
                 {att.type === 'image' && att.url ? (
@@ -353,10 +426,10 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           className={`relative flex items-center gap-2 rounded-2xl min-h-[52px] max-h-[180px] px-3.5 py-2 transition-all duration-200 border ${
             isDragging 
               ? isDark 
-                ? 'border-neutral-600 bg-neutral-800'
+                ? 'border-neutral-600 bg-[#232326]'
                 : 'border-neutral-400 bg-neutral-50' 
               : isDark
-                ? 'bg-[#151518] border-neutral-800 focus-within:border-neutral-700'
+                ? 'bg-[#151518] border-[#2C2C2E] focus-within:border-[#2C2C2E]'
                 : 'bg-white border-neutral-200/90 focus-within:border-neutral-400 shadow-2xs'
           }`}
         >
@@ -368,7 +441,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             title="Anexar arquivo"
             className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
               isDark
-                ? 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                ? 'text-neutral-400 hover:text-white hover:bg-[#232326]'
                 : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
@@ -420,9 +493,9 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               isListening
                 ? isDark
                   ? 'bg-neutral-100 text-neutral-950'
-                  : 'bg-neutral-900 text-white'
+                  : 'bg-[#1C1C1E] text-white'
                 : isDark
-                  ? 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  ? 'text-neutral-400 hover:text-white hover:bg-[#232326]'
                   : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
             }`}
           >
@@ -436,7 +509,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               onClick={onStopGeneration}
               title="Parar geração"
               className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
-                isDark ? 'bg-white text-black' : 'bg-neutral-900 text-white'
+                isDark ? 'bg-white text-black' : 'bg-[#1C1C1E] text-white'
               }`}
             >
               <Square className="w-3.5 h-3.5 fill-current" />
@@ -450,9 +523,9 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 hasContent
                   ? isDark
                     ? 'bg-white text-black cursor-pointer'
-                    : 'bg-neutral-900 text-white cursor-pointer'
+                    : 'bg-[#1C1C1E] text-white cursor-pointer'
                   : isDark
-                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
+                    ? 'bg-[#232326] text-neutral-600 cursor-not-allowed'
                     : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
               }`}
             >

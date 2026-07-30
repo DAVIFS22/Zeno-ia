@@ -23,29 +23,29 @@ export function withAdmin<P extends WithAdminProps>(
 
     if (!auth || !auth.isAdmin) {
       return (
-        <div className="w-full p-6 sm:p-8 rounded-2xl bg-rose-950/30 border border-rose-500/40 text-white space-y-5 animate-fadeIn">
-          <div className="flex items-center gap-3 text-rose-400">
+        <div className="w-full p-6 sm:p-8 rounded-2xl bg-[#121212]/30 border border-neutral-500/40 text-white space-y-5 animate-fadeIn">
+          <div className="flex items-center gap-3 text-neutral-400">
             <ShieldAlert className="w-8 h-8 flex-shrink-0" />
             <div>
               <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
-              <p className="text-xs text-rose-300 font-mono mt-0.5">
+              <p className="text-xs text-neutral-300 font-mono mt-0.5">
                 Role: {auth?.role || 'Visitante'} | Email: {auth?.email || 'Anônimo'}
               </p>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-black/40 border border-rose-500/20 text-sm leading-relaxed text-rose-100/90 space-y-2">
+          <div className="p-4 rounded-xl bg-black/40 border border-neutral-500/20 text-sm leading-relaxed text-neutral-100/90 space-y-2">
             <p>
               Acesso negado ao painel administrativo. Esta área é restrita exclusivamente ao administrador do sistema.
             </p>
-            <p className="text-xs text-rose-300/80">
-              Apenas o e-mail autorizado (<span className="font-mono text-white underline">{ADMIN_EMAIL}</span>) possui o papel <code className="text-red-400">admin</code>.
+            <p className="text-xs text-neutral-300/80">
+              Apenas o e-mail autorizado (<span className="font-mono text-white underline">{ADMIN_EMAIL}</span>) possui o papel <code className="text-neutral-400">admin</code>.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-rose-500/20">
+          <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-neutral-500/20">
             <span>Guarda de Segurança HOC (withAdmin) Ativo</span>
-            <span className="font-mono text-rose-400">HTTP 403 FORBIDDEN</span>
+            <span className="font-mono text-neutral-400">HTTP 403 FORBIDDEN</span>
           </div>
         </div>
       );

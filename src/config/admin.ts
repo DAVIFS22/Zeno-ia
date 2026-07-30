@@ -1,7 +1,7 @@
 /**
  * Centralized Configuration for Admin & Role-Based Access Control (RBAC)
  * 
- * To change the administrator email in the future, simply update ADMIN_EMAIL below.
+ * To change the administrator email in the future, simply update ADMIN_EMAIL below or set ADMIN_EMAILS environment variable.
  */
 
 export const ADMIN_EMAIL = 'davifernandes0024509@gmail.com';
@@ -133,11 +133,18 @@ export const DEFAULT_FULL_ADMIN_CONFIG: FullAdminConfig = {
 };
 
 /**
- * Returns 'admin' if email strictly matches ADMIN_EMAIL, otherwise returns 'user'.
+ * Returns 'admin' if email matches authorized administrator emails, otherwise returns 'user'.
  */
 export function getUserRole(email?: string | null): UserRole {
   if (!email || typeof email !== 'string') return 'user';
-  return email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user';
+  const cleanEmail = email.trim().toLowerCase();
+  const adminEmailsList = [
+    ADMIN_EMAIL,
+    'davifernandes0024509@gmail.com',
+    ...(process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',').map(s => s.trim()) : [])
+  ].map(e => e.toLowerCase());
+
+  return adminEmailsList.includes(cleanEmail) ? 'admin' : 'user';
 }
 
 /**

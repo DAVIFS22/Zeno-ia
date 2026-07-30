@@ -20,6 +20,7 @@ interface SettingsModalProps {
   onClearHistory: () => void;
   onExportAllData: () => void;
   onOpenSubscriptionModal?: () => void;
+  onOpenAdaptiveModal?: () => void;
   backendLimits?: any;
   adminConfig?: any;
   user?: AuthProfile | null;
@@ -48,6 +49,7 @@ export function SettingsModal({
   onClearHistory,
   onExportAllData,
   onOpenSubscriptionModal,
+  onOpenAdaptiveModal,
   backendLimits,
   adminConfig,
   user,
@@ -110,11 +112,11 @@ export function SettingsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm animate-fadeIn">
       <div className={`w-full max-w-3xl h-[85vh] max-h-[700px] rounded-2xl border ${
-        isDark ? 'bg-[#121214] border-neutral-800 text-white' : 'bg-white border-neutral-200 text-neutral-900 shadow-xl'
+        isDark ? 'bg-[#121214] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900 shadow-xl'
       } flex flex-col overflow-hidden transition-all duration-150`}>
         
         {/* Header & Categories Navigation */}
-          <div className={`border-b ${isDark ? 'border-neutral-800/80 bg-[#121214]' : 'border-neutral-200 bg-white'} px-6 pt-5 pb-3 flex flex-col gap-4 flex-shrink-0`}>
+          <div className={`border-b ${isDark ? 'border-[#2C2C2E]/80 bg-[#121214]' : 'border-neutral-200 bg-white'} px-6 pt-5 pb-3 flex flex-col gap-4 flex-shrink-0`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <ZenoLogo size={22} variant={settings.logoVariant} theme={isDark ? "dark" : "light"} />
@@ -127,7 +129,7 @@ export function SettingsModal({
                 type="button"
                 onClick={onClose}
                 className={`p-2 rounded-lg transition-colors ${
-                  isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
+                  isDark ? 'hover:bg-[#232326] text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
                 }`}
               >
                 <X className="w-4 h-4" />
@@ -155,8 +157,8 @@ export function SettingsModal({
                     }}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                       isActive
-                        ? isDark ? 'bg-neutral-800 text-white' : 'bg-neutral-100 text-neutral-900'
-                        : isDark ? 'text-neutral-400 hover:text-white hover:bg-neutral-800/40' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'
+                        ? isDark ? 'bg-[#232326] text-white' : 'bg-neutral-100 text-neutral-900'
+                        : isDark ? 'text-neutral-400 hover:text-white hover:bg-[#232326]/40' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -178,14 +180,14 @@ export function SettingsModal({
                       session.accounts.map((acc: any) => (
                         <div key={acc.uid} className={`p-4 rounded-xl border flex items-center justify-between ${
                           acc.uid === session.activeUid
-                            ? isDark ? 'bg-neutral-800/60 border-neutral-700' : 'bg-neutral-50 border-neutral-200'
-                            : isDark ? 'bg-[#17171a] border-neutral-800' : 'bg-white border-neutral-200'
+                            ? isDark ? 'bg-[#232326]/60 border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'
+                            : isDark ? 'bg-[#17171a] border-[#2C2C2E]' : 'bg-white border-neutral-200'
                         }`}>
                           <div className="flex items-center gap-3 min-w-0">
                             {acc.photoURL ? (
                               <img src={acc.photoURL} alt={acc.displayName} className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
                             ) : (
-                              <div className="w-9 h-9 rounded-full bg-neutral-800 flex items-center justify-center">
+                              <div className="w-9 h-9 rounded-full bg-[#232326] flex items-center justify-center">
                                 <User className="w-4 h-4 text-neutral-400" />
                               </div>
                             )}
@@ -197,7 +199,7 @@ export function SettingsModal({
                           {acc.uid !== session.activeUid && (
                             <button
                               onClick={() => onSwitchAccount?.(acc.uid)}
-                              className="px-3 py-1 rounded-lg text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors"
+                              className="px-3 py-1 rounded-lg text-xs font-medium bg-[#232326] hover:bg-neutral-700 text-neutral-200 transition-colors"
                             >
                               Alternar
                             </button>
@@ -205,7 +207,7 @@ export function SettingsModal({
                         </div>
                       ))
                     ) : (
-                      <div className={`p-5 rounded-xl border text-center ${isDark ? 'border-neutral-800 bg-[#17171a]' : 'border-neutral-200 bg-neutral-50'}`}>
+                      <div className={`p-5 rounded-xl border text-center ${isDark ? 'border-[#2C2C2E] bg-[#17171a]' : 'border-neutral-200 bg-neutral-50'}`}>
                         <p className="text-xs text-neutral-400 mb-3">Conecte sua conta Google para salvar conversas e sincronizar preferências.</p>
                         <button
                           onClick={() => onLogin?.(true)}
@@ -218,7 +220,7 @@ export function SettingsModal({
                     )}
                   </div>
 
-                  <div className="pt-4 border-t border-neutral-800/60 flex items-center justify-between">
+                  <div className="pt-4 border-t border-[#2C2C2E]/60 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Lembrar este dispositivo</p>
                       <p className="text-xs text-neutral-400">Mantenha a sessão ativa neste navegador.</p>
@@ -227,7 +229,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ rememberDevice: !settings.rememberDevice })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        settings.rememberDevice ? 'bg-neutral-200' : 'bg-neutral-800'
+                        settings.rememberDevice ? 'bg-neutral-200' : 'bg-[#232326]'
                       }`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
@@ -263,8 +265,8 @@ export function SettingsModal({
                         onClick={() => onUpdateSettings({ theme: 'dark' })}
                         className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
                           safeSettings.theme === 'dark'
-                            ? 'bg-neutral-800 border-neutral-600 text-white font-semibold'
-                            : 'bg-transparent border-neutral-800 text-neutral-400 hover:text-white'
+                            ? 'bg-[#232326] border-neutral-600 text-white font-semibold'
+                            : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
                         Escuro
@@ -275,7 +277,7 @@ export function SettingsModal({
                         className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
                           safeSettings.theme === 'light'
                             ? 'bg-neutral-200 border-neutral-400 text-neutral-900 font-semibold'
-                            : 'bg-transparent border-neutral-800 text-neutral-400 hover:text-white'
+                            : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
                         Claro
@@ -285,8 +287,8 @@ export function SettingsModal({
                         onClick={() => onUpdateSettings({ theme: 'auto' })}
                         className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
                           safeSettings.theme === 'auto'
-                            ? 'bg-neutral-800 border-neutral-600 text-white font-semibold'
-                            : 'bg-transparent border-neutral-800 text-neutral-400 hover:text-white'
+                            ? 'bg-[#232326] border-neutral-600 text-white font-semibold'
+                            : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
                         Sistema
@@ -294,13 +296,13 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  <div className="space-y-3 pt-4 border-t border-neutral-800/60">
+                  <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Tamanho da Fonte</h3>
                     <select
                       value={safeSettings.fontSize || 'normal'}
                       onChange={(e) => onUpdateSettings({ fontSize: e.target.value as any })}
                       className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none ${
-                        isDark ? 'bg-[#17171a] border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                        isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
                       }`}
                     >
                       <option value="compact">Compacto (14px)</option>
@@ -314,6 +316,37 @@ export function SettingsModal({
               {/* 4. IA */}
               {activeCategory === 'ai' && (
                 <div className="space-y-6 animate-fadeIn">
+                  {/* Adaptive Learning Highlight Banner */}
+                  <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
+                    isDark ? 'bg-sky-500/10 border-sky-500/30' : 'bg-sky-50 border-sky-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-lg bg-sky-500/20 text-sky-400">
+                        <Brain className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-neutral-100 flex items-center gap-2">
+                          <span>Aprendizado Adaptativo ZENO</span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                            ATIVO
+                          </span>
+                        </div>
+                        <div className="text-xs text-neutral-400">
+                          ZENO adapta a complexidade das explicações e sugestões ao seu perfil.
+                        </div>
+                      </div>
+                    </div>
+                    {onOpenAdaptiveModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenAdaptiveModal}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-sky-500 text-neutral-950 hover:bg-sky-400 transition-colors whitespace-nowrap shadow-md shadow-sky-500/10"
+                      >
+                        Configurar Perfil
+                      </button>
+                    )}
+                  </div>
+
                   <div className="space-y-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Modelo Padrão</h3>
                     <div className="flex items-center justify-between mb-2">
@@ -325,7 +358,7 @@ export function SettingsModal({
                         type="button"
                         onClick={() => onUpdateSettings({ isSmartMode: !safeSettings.isSmartMode })}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          safeSettings.isSmartMode ? 'bg-blue-600' : 'bg-neutral-800'
+                          safeSettings.isSmartMode ? 'bg-sky-600' : 'bg-[#232326]'
                         }`}
                       >
                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
@@ -346,8 +379,8 @@ export function SettingsModal({
                           onClick={() => onUpdateSettings({ defaultSpeed: model.id as any })}
                           className={`p-3 rounded-xl border text-left text-xs font-medium transition-all ${
                             (safeSettings.defaultSpeed || 'zeno') === model.id
-                              ? isDark ? 'bg-neutral-800 border-neutral-600 text-white' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
-                              : isDark ? 'bg-transparent border-neutral-800 text-neutral-400 hover:text-white' : 'bg-transparent border-neutral-200 text-neutral-600'
+                              ? isDark ? 'bg-[#232326] border-neutral-600 text-white' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
+                              : isDark ? 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white' : 'bg-transparent border-neutral-200 text-neutral-600'
                           }`}
                         >
                           {model.title}
@@ -356,7 +389,7 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-neutral-800/60">
+                  <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Instruções Customizadas</h3>
                     <textarea
                       rows={3}
@@ -364,12 +397,12 @@ export function SettingsModal({
                       onChange={(e) => onUpdateSettings({ customInstructions: e.target.value })}
                       placeholder="Direcione o comportamento da IA (ex: 'Responda de forma direta e concisa')..."
                       className={`w-full p-3 rounded-xl text-xs border focus:outline-none resize-none ${
-                        isDark ? 'bg-[#17171a] border-neutral-800 text-white placeholder-neutral-500' : 'bg-neutral-50 border-neutral-200 text-neutral-900 placeholder-neutral-400'
+                        isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white placeholder-neutral-500' : 'bg-neutral-50 border-neutral-200 text-neutral-900 placeholder-neutral-400'
                       }`}
                     />
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-neutral-800/60">
+                  <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
                     <div className="flex justify-between items-center text-xs font-medium">
                       <span className="text-neutral-400">Temperatura (Criatividade)</span>
                       <span className="font-mono">{safeSettings.temperature ?? 0.7}</span>
@@ -399,7 +432,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ autoRead: !safeSettings.autoRead })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        safeSettings.autoRead ? 'bg-neutral-200' : 'bg-neutral-800'
+                        safeSettings.autoRead ? 'bg-neutral-200' : 'bg-[#232326]'
                       }`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
@@ -408,13 +441,13 @@ export function SettingsModal({
                     </button>
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-neutral-800/60">
+                  <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Idioma de Fala</h3>
                     <select
                       value={safeSettings.speechLanguage || 'pt-BR'}
                       onChange={(e) => onUpdateSettings({ speechLanguage: e.target.value })}
                       className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none ${
-                        isDark ? 'bg-[#17171a] border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                        isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
                       }`}
                     >
                       <option value="pt-BR">Português (Brasil)</option>
@@ -437,7 +470,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ saveHistory: safeSettings.saveHistory === false ? true : false })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        safeSettings.saveHistory !== false ? 'bg-neutral-200' : 'bg-neutral-800'
+                        safeSettings.saveHistory !== false ? 'bg-neutral-200' : 'bg-[#232326]'
                       }`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
@@ -446,11 +479,11 @@ export function SettingsModal({
                     </button>
                   </div>
 
-                  <div className="space-y-3 pt-4 border-t border-neutral-800/60">
+                  <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
                     <button
                       type="button"
                       onClick={onExportAllData}
-                      className="w-full py-2.5 rounded-xl border border-neutral-800 hover:border-neutral-700 text-xs font-medium transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 rounded-xl border border-[#2C2C2E] hover:border-[#2C2C2E] text-xs font-medium transition-all flex items-center justify-center gap-2"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Exportar Histórico (.md)</span>
@@ -459,7 +492,7 @@ export function SettingsModal({
                     <button
                       type="button"
                       onClick={() => setShowClearConfirm(true)}
-                      className="w-full py-2.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-xs font-medium transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 rounded-xl border border-neutral-500/30 text-neutral-400 hover:bg-neutral-500/10 text-xs font-medium transition-all flex items-center justify-center gap-2"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Limpar Todo o Histórico</span>
@@ -480,7 +513,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ notificationsEnabled: !safeSettings.notificationsEnabled })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        safeSettings.notificationsEnabled ? 'bg-neutral-200' : 'bg-neutral-800'
+                        safeSettings.notificationsEnabled ? 'bg-neutral-200' : 'bg-[#232326]'
                       }`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
@@ -501,7 +534,7 @@ export function SettingsModal({
         </div>
 
         {/* Modal Footer */}
-        <div className={`p-4 border-t ${isDark ? 'border-neutral-800 bg-[#121214]' : 'border-neutral-200 bg-white'} flex items-center justify-between flex-shrink-0`}>
+        <div className={`p-4 border-t ${isDark ? 'border-[#2C2C2E] bg-[#121214]' : 'border-neutral-200 bg-white'} flex items-center justify-between flex-shrink-0`}>
           <span className="text-xs text-neutral-500">ZENO AI v3.6.0</span>
           <button
             type="button"
@@ -517,7 +550,7 @@ export function SettingsModal({
       {/* Confirmation Modal */}
       {showClearConfirm && (
         <div className="fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4 animate-fadeIn">
-          <div className={`p-5 rounded-xl max-w-sm w-full border ${isDark ? 'border-neutral-800 bg-[#17171a] text-white' : 'border-neutral-200 bg-white text-neutral-900'} space-y-3`}>
+          <div className={`p-5 rounded-xl max-w-sm w-full border ${isDark ? 'border-[#2C2C2E] bg-[#17171a] text-white' : 'border-neutral-200 bg-white text-neutral-900'} space-y-3`}>
             <h3 className="font-semibold text-sm">Apagar Histórico?</h3>
             <p className="text-xs text-neutral-400 leading-relaxed">
               Esta ação apagar suas conversas de forma definitiva.
@@ -536,7 +569,7 @@ export function SettingsModal({
                   setShowClearConfirm(false);
                   onClearHistory();
                 }}
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white"
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-neutral-600 hover:bg-neutral-700 text-white"
               >
                 Apagar
               </button>

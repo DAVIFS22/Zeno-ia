@@ -30,16 +30,16 @@ export const AuthScreen: React.FC = () => {
             placeholder="Email" 
             value={email} 
             onChange={e => setEmail(e.target.value)} 
-            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500"
+            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-sky-500"
           />
           <input 
             type="password" 
             placeholder="Senha" 
             value={password} 
             onChange={e => setPassword(e.target.value)} 
-            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500"
+            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-sky-500"
           />
-          <button type="submit" className="w-full p-3 rounded-lg bg-blue-600 hover:bg-blue-700 font-medium">
+          <button type="submit" className="w-full p-3 rounded-lg bg-sky-600 hover:bg-sky-700 font-medium">
             {isLogin ? 'Entrar' : 'Cadastrar'}
           </button>
         </form>
@@ -54,7 +54,7 @@ export const AuthScreen: React.FC = () => {
       </div>
 
       {authLogs && authLogs.length > 0 && (
-        <div className="absolute bottom-4 left-4 right-4 bg-black/80 text-green-400 p-4 rounded text-xs font-mono max-h-48 overflow-y-auto">
+        <div className="absolute bottom-4 left-4 right-4 bg-black/80 text-sky-400 p-4 rounded text-xs font-mono max-h-48 overflow-y-auto">
           <h3 className="font-bold mb-2">Auth Logs:</h3>
           {authLogs.map((log, i) => <div key={i}>{log}</div>)}
         </div>

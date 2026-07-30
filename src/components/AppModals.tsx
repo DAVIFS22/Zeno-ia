@@ -13,11 +13,15 @@ import { MoreModal } from './MoreModal';
 import { ProFeatureModal } from './ProFeatureModal';
 import { AuthModal } from './AuthModal';
 import { MusicStudioModal } from './MusicStudioModal';
+import { AdaptiveLearningModal } from './AdaptiveLearningModal';
+import { AdaptiveLearningProfile } from '../types';
 
 interface AppModalsProps {
   theme: 'dark' | 'light';
   userSettings: UserSettings;
   onUpdateSettings: (settings: Partial<UserSettings>) => void;
+  adaptiveProfile?: AdaptiveLearningProfile;
+  onUpdateAdaptiveProfile?: (updated: AdaptiveLearningProfile) => void;
   userId: string;
   profile: any;
   session: any;
@@ -42,6 +46,8 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   theme,
   userSettings,
   onUpdateSettings,
+  adaptiveProfile,
+  onUpdateAdaptiveProfile,
   userId,
   profile,
   session,
@@ -68,6 +74,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const plansModal = useModal('plans');
   const proFeatureModal = useModal('proFeature');
   const settingsModal = useModal('settings');
+  const adaptiveModal = useModal('adaptive');
   const imageStudioModal = useModal('imageStudio');
   const imageLibraryModal = useModal('imageLibrary');
   const projectsModal = useModal('projects');
@@ -121,7 +128,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
       {deleteSessionModal.isOpen && deletingSessionId && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className={`rounded-2xl p-6 max-w-sm w-full border shadow-2xl ${
-            theme === 'dark' ? 'bg-[#1e1e24] border-neutral-800 text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
+            theme === 'dark' ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
           }`}>
             <h3 className="font-bold text-lg mb-2">Excluir Conversa</h3>
             <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
@@ -131,7 +138,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
               <button
                 onClick={deleteSessionModal.close}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
+                  theme === 'dark' ? 'hover:bg-[#232326] text-neutral-300' : 'hover:bg-neutral-100 text-neutral-700'
                 }`}
               >
                 Cancelar
@@ -141,7 +148,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                   onDeleteSession(deletingSessionId);
                   deleteSessionModal.close();
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+                className="px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
               >
                 Excluir
               </button>
@@ -156,23 +163,23 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           <div 
             className={`relative w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden my-auto transition-all ${
               theme === 'dark' 
-                ? 'bg-[#121215] border-neutral-800 text-neutral-100' 
+                ? 'bg-[#121215] border-[#2C2C2E] text-neutral-100' 
                 : 'bg-white border-neutral-200 text-neutral-900'
             }`}
           >
             {/* Modal Header */}
             <div className={`flex items-center justify-between px-6 py-4 border-b ${
-              theme === 'dark' ? 'border-neutral-800/80 bg-[#17171c]' : 'border-neutral-200/80 bg-neutral-50/80'
+              theme === 'dark' ? 'border-[#2C2C2E]/80 bg-[#17171c]' : 'border-neutral-200/80 bg-neutral-50/80'
             }`}>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <div className="w-8 h-8 rounded-xl bg-neutral-500/10 border border-neutral-500/20 flex items-center justify-center text-neutral-400">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-sm sm:text-base tracking-tight">ZENO Pro</span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      theme === 'dark' ? 'bg-neutral-800 text-neutral-300 border-neutral-700' : 'bg-neutral-200 text-neutral-700 border-neutral-300'
+                      theme === 'dark' ? 'bg-[#232326] text-neutral-300 border-[#2C2C2E]' : 'bg-neutral-200 text-neutral-700 border-neutral-300'
                     }`}>
                       Gerenciamento
                     </span>
@@ -185,7 +192,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                 onClick={subscriptionModal.close}
                 aria-label="Fechar"
                 className={`p-2 rounded-full transition-colors ${
-                  theme === 'dark' ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-black'
+                  theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-white' : 'hover:bg-neutral-200 text-neutral-600 hover:text-black'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -195,9 +202,9 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
             {/* Optional Reason Message Banner */}
             {subscriptionModal.data?.reasonMessage && (
               <div className={`px-6 py-2.5 text-xs font-medium flex items-center gap-2 border-b ${
-                theme === 'dark' ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
+                theme === 'dark' ? 'bg-[#1C1C1E] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
               }`}>
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                <Sparkles className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
                 <span>{subscriptionModal.data.reasonMessage}</span>
               </div>
             )}
@@ -275,6 +282,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onClearHistory={onClearHistory}
         onExportAllData={onExportAllData}
         onOpenSubscriptionModal={() => ui.openModal('subscription')}
+        onOpenAdaptiveModal={() => ui.openModal('adaptive')}
         user={profile}
         session={session}
         onLogout={logout}
@@ -282,6 +290,21 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onSwitchAccount={switchAccount}
         authLoading={authLoading}
       />
+
+      {/* Adaptive Learning Profile Modal */}
+      {adaptiveProfile && (
+        <AdaptiveLearningModal
+          isOpen={adaptiveModal.isOpen}
+          onClose={adaptiveModal.close}
+          profile={adaptiveProfile}
+          onUpdateProfile={(updated) => {
+            if (onUpdateAdaptiveProfile) {
+              onUpdateAdaptiveProfile(updated);
+            }
+          }}
+          userId={userId}
+        />
+      )}
 
       {/* Image Generation Studio Modal */}
       <ImageStudioModal
@@ -355,7 +378,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#222222] border border-[#333333] shadow-2xl space-y-5 text-left">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
@@ -379,7 +402,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                         renewalNotificationModal.close();
                         ui.openModal('settings');
                       }}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors text-center"
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm transition-colors text-center"
                     >
                       {btn}
                     </button>
@@ -401,7 +424,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                           alert('Erro ao atualizar pagamento.');
                         }
                       }}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition-colors text-center"
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm transition-colors text-center"
                     >
                       {btn}
                     </button>

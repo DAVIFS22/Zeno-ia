@@ -54,7 +54,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-4xl bg-[#121215] rounded-t-[32px] sm:rounded-3xl shadow-2xl p-6 sm:p-10 max-h-[92vh] overflow-y-auto border border-neutral-800 animate-slideUp sm:animate-none" 
+        className="relative w-full max-w-4xl bg-[#121215] rounded-t-[32px] sm:rounded-3xl shadow-2xl p-6 sm:p-10 max-h-[92vh] overflow-y-auto border border-[#2C2C2E] animate-slideUp sm:animate-none" 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile Drag Handle */}
@@ -64,7 +64,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
         <div className="flex justify-between items-start mb-8">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-500/10 border border-neutral-500/20 text-neutral-400 text-xs font-medium">
               <Sparkles className="w-3.5 h-3.5" />
               <span>ZENO Pro Oficial</span>
             </div>
@@ -73,7 +73,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           </div>
           <button 
             onClick={onClose} 
-            className="p-2.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+            className="p-2.5 rounded-full hover:bg-[#232326] text-neutral-400 hover:text-white transition-colors"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
@@ -82,11 +82,11 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1 - Mensal */}
-          <div className="border border-neutral-800 rounded-3xl p-6 sm:p-8 flex flex-col justify-between hover:border-neutral-700 transition-all duration-300 bg-neutral-950/60 shadow-lg relative group">
+          <div className="border border-[#2C2C2E] rounded-3xl p-6 sm:p-8 flex flex-col justify-between hover:border-[#2C2C2E] transition-all duration-300 bg-[#121212]/60 shadow-lg relative group">
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-white">Plano Mensal</h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-neutral-800 text-neutral-300 font-medium">Flexível</span>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-[#232326] text-neutral-300 font-medium">Flexível</span>
               </div>
               <div className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">
                 R$ 39,90 <span className="text-sm font-normal text-neutral-400">/mês</span>
@@ -110,10 +110,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
               </ul>
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-neutral-800/80">
+            <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/80">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
                 <span>Teste grátis de 30 dias</span>
-                <span className="text-emerald-400 font-medium">Sem compromisso</span>
+                <span className="text-sky-400 font-medium">Sem compromisso</span>
               </div>
               <button
                 onClick={() => handleSubscribe('monthly')}
@@ -135,14 +135,14 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           {/* Card 2 - Anual */}
           <div className="border border-neutral-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative bg-gradient-to-b from-neutral-900 to-neutral-950 text-white shadow-2xl group ring-1 ring-white/20">
             <div className="absolute -top-3.5 left-6 bg-white text-black text-[11px] uppercase tracking-wider px-3.5 py-1 rounded-full font-bold shadow-md flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-neutral-500 fill-neutral-500" />
               <span>⭐ Melhor Custo-Benefício</span>
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-4 mt-2">
                 <h3 className="text-lg font-semibold">Plano Anual</h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-emerald-400 font-medium border border-emerald-500/30">Economize ~17%</span>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-sky-400 font-medium border border-sky-500/30">Economize ~17%</span>
               </div>
               <div className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight">
                 R$ 399,90 <span className="text-sm font-normal text-neutral-400">/ano</span>
@@ -158,17 +158,17 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                   'Economia de quase dois meses no ano'
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start text-neutral-200 text-sm">
-                    <Check className="w-4 h-4 text-emerald-400 mr-3 flex-shrink-0 mt-0.5" />
+                    <Check className="w-4 h-4 text-sky-400 mr-3 flex-shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-neutral-800">
+            <div className="space-y-3 pt-4 border-t border-[#2C2C2E]">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
                 <span>Teste grátis de 30 dias</span>
-                <span className="text-emerald-400 font-medium">Garantia de 30 dias</span>
+                <span className="text-sky-400 font-medium">Garantia de 30 dias</span>
               </div>
               <button
                 onClick={() => handleSubscribe('annual')}
@@ -188,9 +188,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-400 text-xs">
+        <div className="mt-8 pt-6 border-t border-[#2C2C2E]/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-400 text-xs">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-sky-400 flex-shrink-0" />
             <span>Pagamento 100% seguro processado pelo Stripe com criptografia SSL.</span>
           </div>
           <span>Cancele a qualquer momento nas configurações da conta.</span>

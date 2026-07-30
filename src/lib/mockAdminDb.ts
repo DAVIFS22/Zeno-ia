@@ -86,6 +86,10 @@ class MockCollection {
 
 class MockDoc {
   constructor(public path: string) {}
+
+  collection(subPath: string) {
+    return new MockCollection(`${this.path}/${subPath}`);
+  }
   
   async get() {
     const snap = await getDoc(doc(db, this.path));

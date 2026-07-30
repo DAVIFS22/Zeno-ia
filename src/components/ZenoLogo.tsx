@@ -84,7 +84,7 @@ export const ZenoLogo: React.FC<ZenoLogoProps> = ({
       className={`inline-flex items-center justify-center font-extrabold select-none flex-shrink-0 shadow-xs transition-all duration-150 ${
         isDark
           ? 'bg-white text-neutral-950 border border-white/20'
-          : 'bg-neutral-900 text-white border border-neutral-800'
+          : 'bg-[#1C1C1E] text-white border border-[#2C2C2E]'
       } ${className}`}
     >
       Z

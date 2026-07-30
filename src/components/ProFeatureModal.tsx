@@ -49,23 +49,23 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
               </p>
               <ul className="space-y-2.5">
                 <li className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-sky-500 flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Todos os modelos avançados sem limites</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Zap className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <Zap className="w-4 h-4 text-sky-500 flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Prioridade máxima e maior velocidade</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Image className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <Image className="w-4 h-4 text-sky-500 flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Geração de imagens ilimitada</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Search className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <Search className="w-4 h-4 text-sky-500 flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Pesquisas avançadas e análise de arquivos</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Shield className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <Shield className="w-4 h-4 text-sky-500 flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Acesso antecipado aos novos modelos</span>
                 </li>
               </ul>
@@ -78,7 +78,7 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
                 onClose();
                 onUpgrade();
               }}
-              className="w-full py-4 rounded-2xl font-semibold bg-neutral-900 text-white hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl font-semibold bg-[#1C1C1E] text-white hover:bg-[#232326] transition-colors flex items-center justify-center gap-2"
             >
               <Sparkles className="w-4 h-4" />
               <span>Upgrade para o ZENO Pro</span>
@@ -88,7 +88,7 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
               onClick={onClose}
               className={`w-full py-4 rounded-2xl font-semibold transition-colors ${
                 isDark 
-                  ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700' 
+                  ? 'bg-[#232326] text-neutral-300 hover:bg-neutral-700' 
                   : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
               }`}
             >
