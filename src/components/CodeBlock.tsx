@@ -220,10 +220,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
 
   const renderCodeLines = () => {
     return (
-      <div className="flex text-xs sm:text-sm font-code leading-relaxed">
+      <div className="flex pt-12 text-xs sm:text-sm font-code leading-relaxed">
         {/* Line Numbers Column */}
         {showLineNumbers && (
-          <div className="select-none py-3 pr-3.5 pl-3 text-right font-mono text-neutral-600 border-r border-[#2C2C2E]/80 bg-black/20 flex flex-col min-w-[2.75rem]">
+          <div className="select-none pb-4 pr-3.5 pl-3 text-right font-mono text-neutral-600 border-r border-[#2C2C2E]/80 bg-black/20 flex flex-col min-w-[2.75rem]">
             {rawLines.map((_, idx) => {
               const isMatch = lineMatchesSearch(rawLines[idx]);
               return (
@@ -241,7 +241,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
         )}
 
         {/* Code Content Area */}
-        <div className={`p-3 flex-1 overflow-x-auto scrollbar-custom ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}>
+        <div className={`pb-4 pl-3 pr-14 flex-1 overflow-x-auto scrollbar-custom ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}>
           {rawLines.map((lineText, idx) => {
             const isMatch = lineMatchesSearch(lineText);
             const lineHtml = highlightedLines[idx] || '';
@@ -390,7 +390,22 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
         </div>
 
         {/* Code Content Container */}
-        <div className="relative overflow-hidden bg-[#171717] text-neutral-100">
+        <div className="relative group/code-content overflow-hidden bg-[#171717] text-neutral-100">
+          {/* Floating Copy Button for quick extraction */}
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={`absolute top-2.5 right-2.5 z-30 p-2 rounded-lg backdrop-blur-md transition-all border shadow-xl ${
+              copied 
+                ? 'bg-sky-500/30 border-sky-500/50 text-sky-400' 
+                : 'bg-black/60 border-white/20 text-neutral-400 hover:text-white hover:bg-black/80 hover:scale-105 active:scale-95'
+            }`}
+            title="Copiar código"
+            aria-label="Copiar código rápido"
+          >
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          </button>
+
           {renderCodeLines()}
         </div>
       </div>

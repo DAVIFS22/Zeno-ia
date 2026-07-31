@@ -37,6 +37,7 @@ import {
   getModelDef
 } from './lib/subscription';
 import { hasPremiumAccess } from './config/admin';
+import { filterValidSources } from './utils/sourceValidation';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
 const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
@@ -44,6 +45,25 @@ const STORAGE_KEY_SETTINGS = 'zeno_user_settings_v3';
 const STORAGE_KEY_USAGE = 'zeno_daily_usage_v3';
 
 const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+
+// Intent Detection Layer
+export const detectIntent = (input: string): 'image' | 'text' => {
+  const normalized = input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const imageKeywordsPattern = /(gere uma imagem|criar imagem|crie uma imagem|desenhe|faca uma ilustracao|renderize|gerar arte|criar arte|criar logo|criar wallpaper|editar imagem|editar foto|transformar imagem|melhorar imagem|remover fundo|restaurar foto|upscale|generate image|create image)/i;
+  const singleWordPattern = /\b(image|draw)\b/i;
+
+  if (imageKeywordsPattern.test(normalized) || singleWordPattern.test(normalized)) {
+    return 'image';
+  }
+  
+  return 'text';
+};
 
 function MainAppInner() {
   const ui = useUIState();
@@ -107,6 +127,9 @@ function MainAppInner() {
     session 
   } = useAuth();
 
+  // Unified userId: Priority to Firebase UID, fallback to local storage only for non-Firestore legacy logic if needed
+  const userId = profile?.uid || getOrCreateUserId(profile?.uid);
+
   // Sync user profile data to settings when logged in
   useEffect(() => {
     if (profile) {
@@ -141,29 +164,40 @@ function MainAppInner() {
     }
   }, [isPro, profile, userSettings.userEmail]);
 
-  const userId = getOrCreateUserId(profile?.uid);
-
   // Adaptive Learning Profile State & Effects
   const [adaptiveProfile, setAdaptiveProfile] = useState<AdaptiveLearningProfile>(DEFAULT_ADAPTIVE_PROFILE);
 
   useEffect(() => {
     if (userId) {
-      fetch(`/api/adaptive/profile?userId=${encodeURIComponent(userId)}`)
-        .then(async res => {
+      const fetchProfile = async () => {
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (user) {
+            try {
+              const token = await user.getIdToken();
+              headers['Authorization'] = `Bearer ${token}`;
+            } catch (tokenErr) {
+              console.warn('Could not get auth token for adaptive profile:', tokenErr);
+            }
+          }
+          const res = await fetch(`/api/adaptive/profile?userId=${encodeURIComponent(userId)}`, { 
+            headers,
+            cache: 'no-store'
+          });
           const contentType = res.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
-            return res.json();
+            const data = await res.json();
+            if (data && data.profile) {
+              setAdaptiveProfile(data.profile);
+            }
           }
-          return { profile: DEFAULT_ADAPTIVE_PROFILE };
-        })
-        .then(data => {
-          if (data && data.profile) {
-            setAdaptiveProfile(data.profile);
-          }
-        })
-        .catch(err => console.error('Erro ao carregar perfil adaptativo:', err));
+        } catch (err) {
+          console.error('Erro ao carregar perfil adaptativo:', err);
+        }
+      };
+      fetchProfile();
     }
-  }, [userId]);
+  }, [userId, user]);
 
   const handleSendAdaptiveFeedback = useCallback(async (msgId: string, type: 'up' | 'down', tags: string[], comment?: string) => {
     try {
@@ -494,7 +528,7 @@ function MainAppInner() {
   }, [userId]);
 
   useRealtimeSubscription(
-    userId,
+    profile?.uid, // ONLY use real Firebase UID for Firestore listeners to avoid permission errors
     handleRealtimePlanChange,
     handleUpdateSettings
   );
@@ -805,12 +839,26 @@ function MainAppInner() {
     const textToSend = overrideText !== undefined ? overrideText : input;
     if ((!textToSend.trim() && attachments.length === 0) || isLoading) return;
 
-    if (isModelPro(speed) && !isPro) {
+    // Intent Detection Layer
+    const intent = detectIntent(textToSend);
+    let finalSpeed = speed;
+
+    if (intent === 'image') {
+      finalSpeed = 'image';
+      setSpeed('image');
+    } else {
+      if (finalSpeed === 'image') {
+        finalSpeed = 'zeno';
+        setSpeed('zeno');
+      }
+    }
+
+    if (isModelPro(finalSpeed) && !isPro) {
       handleOpenProFeatureModal();
       return;
     }
 
-    const usageAction = speed === 'image' ? 'image' : speed === 'search' ? 'search' : 'message';
+    const usageAction = finalSpeed === 'image' ? 'image' : finalSpeed === 'search' ? 'search' : 'message';
     const usageCheck = checkUsageLimit(isPro ? 'ZENO Pro' : userSettings.plan, dailyUsage, usageAction);
     if (!usageCheck.allowed) {
       handleLimitReached();
@@ -818,7 +866,7 @@ function MainAppInner() {
     }
 
     if (!isPro) {
-      const limitKey = speed === 'image' ? 'image' : speed === 'vision' ? 'vision' : 'messages';
+      const limitKey = finalSpeed === 'image' ? 'image' : finalSpeed === 'vision' ? 'vision' : 'messages';
       const currentCount = (dailyUsage as any)[limitKey] || 0;
       setDailyUsage(prev => ({
         ...prev,
@@ -846,7 +894,7 @@ function MainAppInner() {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         messages: [],
-        speed,
+        speed: finalSpeed,
       };
       sessionId = newSession.id;
       setSessions(prev => [newSession, ...prev]);
@@ -869,16 +917,23 @@ function MainAppInner() {
     const clientSearchTriggers = [
       'buscar', 'pesquisar', 'procurar', 'notícias sobre', 'noticias sobre',
       'o que é', 'o que e', 'quem é', 'quem e', 'últimas notícias', 'ultimas noticias',
-      'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje'
+      'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje',
+      'cotação', 'resultado do', 'placar', 'preço atual', 'notícias de',
+      'o que aconteceu', 'como está', 'qual é o', 'qual e o', 'quando foi',
+      'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre'
     ];
-    const isClientSearch = speed === 'search' || clientSearchTriggers.some(t => msgLower.includes(t));
+    const isClientSearch = finalSpeed === 'search' || clientSearchTriggers.some(t => msgLower.includes(t));
+    if (isClientSearch) {
+      finalSpeed = 'search';
+      setSpeed('search');
+    }
 
     const initialModelMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: 'model',
       text: youtubeUrl ? '' : '', // Placeholder
       timestamp: Date.now(),
-      modelSpeed: isClientSearch ? 'search' : speed,
+      modelSpeed: isClientSearch ? 'search' : finalSpeed,
       youtubeUrl: youtubeUrl,
       isSearching: isClientSearch,
       isSearch: isClientSearch,
@@ -917,7 +972,7 @@ function MainAppInner() {
           signal: abortControllerRef.current?.signal,
           body: JSON.stringify({
             message: extraContext ? `${extraContext}\n\n[SOLICITAÇÃO]: ${textToSend}` : textToSend,
-            speed: speed,
+            speed: finalSpeed,
             isSmartMode: userSettings.isSmartMode,
             attachments: currentAttachments,
             systemInstruction: userSettings.systemInstruction,
@@ -1018,8 +1073,8 @@ function MainAppInner() {
                             updatedMsgs[lastIdx] = {
                               ...updatedMsgs[lastIdx],
                               isSearch: data.isSearch !== undefined ? data.isSearch : updatedMsgs[lastIdx].isSearch,
-                              searchSources: data.sources || updatedMsgs[lastIdx].searchSources,
-                              isSearching: false,
+                              searchSources: filterValidSources(data.sources || updatedMsgs[lastIdx].searchSources),
+                              isSearching: data.isSearching !== undefined ? data.isSearching : false,
                             };
                           }
                           return { ...s, messages: updatedMsgs };
@@ -1077,6 +1132,7 @@ function MainAppInner() {
                     updatedMsgs[lastIdx] = {
                       ...updatedMsgs[lastIdx],
                       text: accumulatedText,
+                      searchSources: filterValidSources(updatedMsgs[lastIdx].searchSources)
                     };
                   }
                   return { ...s, messages: updatedMsgs };
@@ -1267,7 +1323,7 @@ function MainAppInner() {
       const language = match ? match[1] : '';
       const codeString = String(children).replace(/\n$/, '');
 
-      if (!inline && language) {
+      if (!inline) {
         return (
           <CodeBlock
             language={language}
@@ -1478,7 +1534,7 @@ function MainAppInner() {
 
         {/* Main Conversation Feed */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-custom">
-          <div className="flex flex-col items-center min-h-full pb-36 pt-4">
+          <div className="flex flex-col w-full min-h-full pb-36 pt-4">
             
             {/* Warning Banner */}
             {!isPro && backendLimits && adminConfig && (
@@ -1488,7 +1544,7 @@ function MainAppInner() {
                 const remaining = Math.max(0, limit - used);
                 if (remaining <= 10 && remaining > 0) {
                   return (
-                    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mb-2">
+                    <div className="w-full mx-auto px-4 sm:px-8 mb-2">
                       <div className="bg-neutral-50 dark:bg-[#1C1C1E]/20 text-neutral-800 dark:text-neutral-200 text-sm py-2.5 px-4 rounded-xl flex items-center justify-between border border-neutral-200 dark:border-[#2C2C2E]/50">
                         <div className="flex items-center space-x-2">
                           <span className="font-medium">Restam apenas {remaining} mensage{remaining === 1 ? 'm' : 'ns'} hoje.</span>
@@ -1507,7 +1563,7 @@ function MainAppInner() {
 
             {/* Plan Usage Card */}
             {showUsageCard && !isPro && (messages.length === 0 || (messages.length === 1 && messages[0].id.startsWith('welcome'))) && (
-              <div className="w-full max-w-4xl px-4 sm:px-6 flex flex-col pt-4">
+              <div className="w-full px-4 sm:px-8 flex flex-col pt-4">
                 <PlanUsageCard 
                   plan={userSettings.plan} 
                   limits={adminConfig} 
@@ -1628,7 +1684,9 @@ function MainAppInner() {
 
 function MainAppWrapper() {
   const { profile } = useAuth();
-  const userId = getOrCreateUserId(profile?.uid);
+  // For the provider, we prefer the real Firebase UID. 
+  // If not available, we use the local ID, but most Firestore-based logic should wait for the UID.
+  const userId = profile?.uid || getOrCreateUserId(profile?.uid);
   const userEmail = profile?.email || '';
 
   return (

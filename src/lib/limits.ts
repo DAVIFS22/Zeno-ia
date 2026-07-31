@@ -21,7 +21,8 @@ export type UserLimits = {
 export type UserUsage = {
   userId: string;
   plan: 'ZENO Free' | 'ZENO Pro';
-  date: string; // YYYY-MM-DD for midnight reset
+  date: string; // YYYY-MM-DD
+  cycleStart?: number; // Timestamp when the 5-hour renewal cycle started
   usage: UserLimits;
   lastActive?: number;
   ip?: string;
@@ -95,14 +96,14 @@ export async function readDb(): Promise<Database> {
       auditLogs: [], // Load on demand
       systemLogs: [], // Load on demand
       stats: statsData as any || {
-        totalMessagesSent: 42,
-        totalImagesGenerated: 18,
-        totalWebSearches: 15,
-        totalPdfsAnalyzed: 8,
-        totalVisionUses: 12,
-        totalCodeUses: 21,
-        modelUsage: { 'gemini-3.5-flash-lite': 42 },
-        totalRevenue: 39.90
+        totalMessagesSent: 0,
+        totalImagesGenerated: 0,
+        totalWebSearches: 0,
+        totalPdfsAnalyzed: 0,
+        totalVisionUses: 0,
+        totalCodeUses: 0,
+        modelUsage: {},
+        totalRevenue: 0
       },
       tasks: {}
     };
@@ -177,6 +178,8 @@ function parseUserAgent(uaString?: string) {
   return { browser, device };
 }
 
+const CYCLE_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
+
 export async function getUserUsage(userId: string, email?: string, req?: any): Promise<UserUsage> {
   const today = getTodayString();
   const now = Date.now();
@@ -194,14 +197,17 @@ export async function getUserUsage(userId: string, email?: string, req?: any): P
     } else {
       console.error('Error reading user usage:', err.message);
     }
-    // Create an in-memory mock if db read fails
   }
   
-  if (!user || user.date !== today) {
+  const cycleStart = user?.cycleStart || 0;
+  const isExpired = !cycleStart || (now - cycleStart > CYCLE_DURATION_MS);
+
+  if (!user || isExpired) {
     user = {
       userId,
       plan: user?.plan || 'ZENO Free',
       date: today,
+      cycleStart: now,
       usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
       lastActive: now,
       email: email || user?.email || 'davifernandes0024509@gmail.com',
@@ -210,7 +216,7 @@ export async function getUserUsage(userId: string, email?: string, req?: any): P
       device: uaInfo.device
     };
     try {
-      await adminDb.collection(COLL_USERS).doc(userId).set(user);
+      await adminDb.collection(COLL_USERS).doc(userId).set(user, { merge: true });
     } catch (e: any) {
       if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped Firestore set', e.message);
     }
@@ -238,6 +244,7 @@ export async function getUserUsage(userId: string, email?: string, req?: any): P
 
 export async function updateUserUsage(userId: string, action: keyof UserLimits) {
   const today = getTodayString();
+  const now = Date.now();
   const userRef = adminDb.collection(COLL_USERS).doc(userId);
   let user: UserUsage | null = null;
   
@@ -248,28 +255,32 @@ export async function updateUserUsage(userId: string, action: keyof UserLimits) 
     if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped read updateUserUsage', err.message);
   }
 
-  if (!user || user.date !== today) {
+  const cycleStart = user?.cycleStart || 0;
+  const isExpired = !cycleStart || (now - cycleStart > CYCLE_DURATION_MS);
+
+  if (!user || isExpired) {
     user = {
       userId,
       plan: user?.plan || 'ZENO Free',
       date: today,
+      cycleStart: now,
       usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
-      lastActive: Date.now()
+      lastActive: now
     };
     user.usage[action] = 1;
     try {
-      await userRef.set(user);
+      await userRef.set(user, { merge: true });
     } catch (e: any) {
       if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped set updateUserUsage', e.message);
     }
   } else {
     const currentUsage = user.usage[action] || 0;
     user.usage[action] = currentUsage + 1;
-    user.lastActive = Date.now();
+    user.lastActive = now;
     try {
       await userRef.update({
         [`usage.${action}`]: currentUsage + 1,
-        lastActive: Date.now()
+        lastActive: now
       });
     } catch (e: any) {
       if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped update updateUserUsage', e.message);

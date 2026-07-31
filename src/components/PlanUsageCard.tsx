@@ -42,7 +42,7 @@ export function PlanUsageCard({ plan, limits, usage, onClose, onUpgrade }: PlanU
   if (messagesLeft > 10 || messagesLeft <= 0) return null;
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 mb-4 animate-fadeIn">
+    <div className="w-full px-4 sm:px-8 mb-4 animate-fadeIn">
       <div className="relative bg-[#1C1C1E] rounded-2xl p-4 sm:p-5 border border-[#2C2C2E] shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <button 
           onClick={onClose}

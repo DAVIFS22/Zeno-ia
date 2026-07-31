@@ -21,6 +21,7 @@ import { db } from '../lib/firebase';
 import { useSubscription } from '../contexts/SubscriptionContext';
 
 export interface SubscriptionManagerProps {
+  userId: string;
   settings: UserSettings;
   onUpdateSettings?: (newSettings: Partial<UserSettings>) => void;
   onOpenCheckout?: (plan?: 'monthly' | 'annual') => void;
@@ -39,6 +40,7 @@ interface InvoiceItem {
 }
 
 export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
+  userId,
   settings,
   onUpdateSettings,
   onOpenCheckout
@@ -59,7 +61,6 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardForm, setCardForm] = useState({ brand: 'visa', last4: '4242', expMonth: '12', expYear: '2028' });
 
-  const userId = getOrCreateUserId();
   const userEmail = settings.userEmail || '';
   const { isPro, refreshSubscription } = useSubscription();
 
@@ -132,15 +133,25 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
   // Derived Values - Strictly sourced from Stripe status data
   const effectiveSub = statusData?.sub || settings.stripeSubscription;
-  const isTrialing = statusData?.subscriptionStatus === 'trialing' || effectiveSub?.status === 'trialing';
+  
+  // Use statusData if available, otherwise fallback to effectiveSub
+  const currentStatus = statusData?.subscriptionStatus || effectiveSub?.status || 'free';
+  const isTrialing = currentStatus === 'trialing';
+  
+  // isCancelled means it's set to NOT renew at the end of the period
+  const isCancelled = statusData?.autoRenew === false || 
+                     statusData?.cancelAtPeriodEnd === true || 
+                     statusData?.cancel_at_period_end === true || 
+                     currentStatus === 'cancel_at_period_end';
+
+  // isExpired should ONLY be true if the user is truly not Pro and the status reflects expiration
+  const isExpired = !isPro && (currentStatus === 'expired' || currentStatus === 'canceled' || currentStatus === 'past_due' || currentStatus === 'unpaid');
+
   const trialEndTimestamp = statusData?.trialEnd || statusData?.trial_end || effectiveSub?.trialEnd || effectiveSub?.trial_end;
   const formattedTrialEnd = trialEndTimestamp ? new Date(trialEndTimestamp * 1000).toLocaleDateString('pt-BR') : null;
 
-  const isCancelled = statusData?.autoRenew === false || statusData?.cancelAtPeriodEnd === true || statusData?.cancel_at_period_end === true || statusData?.subscriptionStatus === 'canceled' || statusData?.subscriptionStatus === 'cancel_at_period_end';
-  const isExpired = statusData?.subscriptionStatus === 'expired' || (!isPro && statusData?.subscriptionStatus === 'canceled');
-
-  const periodEndIso = statusData?.currentPeriodEnd || statusData?.current_period_end || statusData?.renewDate || statusData?.expirationDate || effectiveSub?.renewDate;
-  const formattedDate = periodEndIso ? new Date(periodEndIso).toLocaleDateString('pt-BR') : 'N/A';
+  const periodEndIso = statusData?.currentPeriodEnd || statusData?.current_period_end || statusData?.renewDate || statusData?.expirationDate || effectiveSub?.renewDate || effectiveSub?.currentPeriodEnd;
+  const formattedDate = (isPro && periodEndIso) ? new Date(periodEndIso).toLocaleDateString('pt-BR') : 'Sem assinatura ativa';
   
   const planName = statusData?.plan || statusData?.subscriptionPlan || (settings.billingCycle === 'annual' ? 'ZENO Pro Anual' : 'ZENO Pro Mensal');
   const priceVal = statusData?.price !== undefined ? statusData.price : (settings.billingCycle === 'annual' ? 399.90 : 39.90);
@@ -152,6 +163,23 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   // Trigger Cancel Confirmation Modal
   const handleOpenCancelConfirmation = () => {
     setShowCancelConfirmModal(true);
+  };
+
+  // Status mapping for better UX
+  const getStatusLabel = () => {
+    if (isTrialing) return 'Teste Grátis Ativo';
+    if (isExpired) return 'Assinatura Expirada';
+    if (isCancelled && isPro) return 'Ativa (Não renova)';
+    if (isPro) return 'Assinatura Ativa';
+    return 'Plano Gratuito';
+  };
+
+  const getStatusBadgeLabel = () => {
+    if (isExpired) return 'Expirada';
+    if (isTrialing) return 'Teste Grátis';
+    if (isCancelled) return 'Cancelada';
+    if (isPro) return 'Ativa';
+    return 'Gratuito';
   };
 
   // Execute Cancel Auto-Renew
@@ -359,7 +387,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
       )}
 
       {/* Expired Plan Banner */}
-      {isExpired && (
+      {isExpired && !isTrialing && (
         <div className="p-5 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 text-neutral-200 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
           <div className="flex items-center gap-3">
             <XCircle className="w-6 h-6 text-neutral-400 flex-shrink-0" />
@@ -413,7 +441,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
                   : 'bg-[#232326] text-neutral-400 border-[#2C2C2E]'
               }`}>
-                {isExpired ? 'Expirada' : isTrialing ? 'Teste Grátis 30 Dias' : isCancelled ? 'Cancelada' : isPro ? 'Ativa' : 'Gratuito'}
+                {isExpired ? 'Expirada' : getStatusBadgeLabel()}
               </span>
             </div>
             <p className="text-xs text-neutral-400">
@@ -426,7 +454,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
           <div className="text-left sm:text-right">
             <div className="text-2xl font-black text-white">{isPro ? amountFormatted : 'R$ 0,00'}</div>
             <span className="text-[11px] text-neutral-500 font-medium">
-              {isPro ? 'cobrado recorrentemente' : 'sem custo'}
+              {isPro ? (isTrialing ? 'cobrança após o teste' : 'cobrado recorrentemente') : 'sem custo'}
             </span>
           </div>
         </div>
@@ -439,18 +467,18 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isTrialing ? (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="text-neutral-400 font-bold">Teste grátis de 30 dias</span>
+                  <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                  <span className="text-sky-400 font-bold">Teste grátis de 30 dias</span>
                 </>
-              ) : isCancelled ? (
+              ) : isCancelled && isPro ? (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="text-neutral-400 font-bold">Renovação cancelada</span>
+                  <span className="text-neutral-400 font-bold">Renovação desativada</span>
                 </>
               ) : isPro ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="text-sky-400 font-bold">Ativa</span>
+                  <span className="text-sky-400 font-bold">Assinatura Ativa</span>
                 </>
               ) : isExpired ? (
                 <>
@@ -475,11 +503,11 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Próxima cobrança</span>
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isCancelled ? (
-                <span className="text-neutral-400">Nenhuma</span>
+                <span className="text-neutral-400">Nenhuma (Cancelada)</span>
               ) : isPro ? (
                 <span className="text-white">{formattedDate}</span>
               ) : (
-                <span className="text-neutral-400">N/A</span>
+                <span className="text-neutral-400">Nenhuma</span>
               )}
             </p>
           </div>

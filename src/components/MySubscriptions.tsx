@@ -3,6 +3,7 @@ import { UserSettings } from '../types';
 import { SubscriptionManager } from './SubscriptionManager';
 
 interface MySubscriptionsProps {
+  userId: string;
   settings: UserSettings;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
   onOpenCheckout?: (plan?: 'monthly' | 'annual') => void;

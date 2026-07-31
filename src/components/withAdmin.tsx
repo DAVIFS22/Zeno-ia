@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { ADMIN_EMAIL } from '../config/admin';
+import { ADMIN_EMAIL, maskEmail } from '../config/admin';
 
 export interface WithAdminProps {
   userEmail?: string;
@@ -29,7 +29,7 @@ export function withAdmin<P extends WithAdminProps>(
             <div>
               <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
               <p className="text-xs text-neutral-300 font-mono mt-0.5">
-                Role: {auth?.role || 'Visitante'} | Email: {auth?.email || 'Anônimo'}
+                Role: {auth?.role || 'Visitante'} | Sessão: {maskEmail(auth?.email)}
               </p>
             </div>
           </div>
@@ -39,7 +39,7 @@ export function withAdmin<P extends WithAdminProps>(
               Acesso negado ao painel administrativo. Esta área é restrita exclusivamente ao administrador do sistema.
             </p>
             <p className="text-xs text-neutral-300/80">
-              Apenas o e-mail autorizado (<span className="font-mono text-white underline">{ADMIN_EMAIL}</span>) possui o papel <code className="text-neutral-400">admin</code>.
+              Apenas o e-mail autorizado (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) possui acesso administrativo.
             </p>
           </div>
 

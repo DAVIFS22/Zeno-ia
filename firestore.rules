@@ -1,13 +1,65 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read and write for all paths in the applet
+    // Basic helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Admins collection: key is email. 
+    // Client needs to read own status to show admin UI.
+    match /admins/{email} {
+      allow read: if isAuthenticated() && request.auth.token.email.lower() == email.lower();
+      allow write: if false; // Only via Admin SDK (backend)
+    }
+
+    // Users: Keyed by UID. Block client-side modification of isPro, isAdmin, unlimited, adminOverride.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || userId.startsWith('anon_');
+      allow create: if isOwner(userId) || userId.startsWith('anon_');
+      allow update: if (isOwner(userId) || userId.startsWith('anon_')) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPro', 'isAdmin', 'unlimited', 'adminOverride']);
+    }
+    
+    // Subscriptions: Strictly backend-only writes
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId) || userId.startsWith('anon_');
+      allow write: if false; // Only via Backend Admin SDK
+    }
+
+    // User-owned data with userId field
+    match /images/{docId} {
+      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    match /chats/{docId} {
+      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    match /memory/{docId} {
+      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Drafts: docId is prefixed with userId (e.g. "{userId}_{sessionId}" or just "{userId}")
+    match /drafts/{docId} {
+      allow read, write: if isAuthenticated() && docId.startsWith(request.auth.uid);
+    }
+
+    // Internal collections: strictly backend only
+    match /config/{docId} { allow read, write: if false; }
+    match /stripe_webhook_logs/{docId} { allow read, write: if false; }
+    match /failed_webhooks/{docId} { allow read, write: if false; }
+
+    // Default deny
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
-
-
-

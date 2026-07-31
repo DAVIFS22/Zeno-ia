@@ -7,18 +7,18 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
+  signInAnonymously,
   User,
   UserCredential,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence
 } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { app } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { app, db } from '../lib/firebase';
 import { isAdminUser } from '../config/admin';
 
 const auth = getAuth(app);
-const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 export interface AuthProfile {
@@ -66,18 +66,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     addLog('AuthProvider: Setting up authentication');
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      addLog(`AuthProvider: onAuthStateChanged triggered. User: ${currentUser ? currentUser.email : 'null'}`);
+      addLog(`AuthProvider: onAuthStateChanged triggered. User: ${currentUser ? (currentUser.isAnonymous ? 'Anonymous' : currentUser.email) : 'null'}`);
+      
       if (currentUser) {
         const anonId = localStorage.getItem('zeno_anon_user_id');
         if (anonId && anonId !== currentUser.uid) {
-          addLog('AuthProvider: Found anon user, migrating data');
+          addLog(`AuthProvider: Found previous local anon ID (${anonId}), migrating to Firebase UID (${currentUser.uid})`);
           migrateAnonymousData(anonId, currentUser.uid).catch(console.warn);
         }
+        
         setUser(currentUser);
         const isAdmin = isAdminUser(currentUser.email);
         setProfile({
           uid: currentUser.uid,
-          displayName: currentUser.displayName,
+          displayName: currentUser.displayName || (currentUser.isAnonymous ? 'Convidado' : null),
           email: currentUser.email,
           photoURL: currentUser.photoURL,
           isAdmin: isAdmin,
@@ -88,14 +90,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: null,
           lastLogin: null
         });
-      } else {
-          addLog('AuthProvider: No user detected');
-          setUser(null);
-          setProfile(null);
-        }
-        addLog('AuthProvider: Setting loading false');
         setLoading(false);
-      });
+      } else {
+        addLog('AuthProvider: No user detected, signing in anonymously');
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          addLog(`AuthProvider: Anonymous sign-in error: ${error}`);
+          setLoading(false);
+        }
+      }
+    });
 
     return () => unsubscribe();
   }, []);

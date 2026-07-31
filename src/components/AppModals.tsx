@@ -212,6 +212,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
             {/* Modal Body */}
             <div className="p-6 sm:p-8 max-h-[82vh] overflow-y-auto scrollbar-custom">
               <SubscriptionManager
+                userId={userId}
                 settings={userSettings}
                 onUpdateSettings={onUpdateSettings}
                 onOpenCheckout={async (plan) => {
@@ -222,7 +223,8 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                       body: JSON.stringify({ 
                         plan: plan || 'monthly', 
                         email: userSettings.userEmail, 
-                        hasUsedFreeTrial: userSettings.hasUsedFreeTrial 
+                        hasUsedFreeTrial: userSettings.hasUsedFreeTrial,
+                        userId
                       })
                     });
                     const data = await res.json();
@@ -247,6 +249,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           isOpen={plansModal.isOpen}
           onClose={plansModal.close}
           settings={userSettings}
+          userId={userId}
           onOpenCheckout={async (plan) => {
             try {
               const res = await fetch('/api/create-checkout-session', {
@@ -255,7 +258,8 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                 body: JSON.stringify({ 
                   plan: plan || 'monthly', 
                   email: userSettings.userEmail, 
-                  hasUsedFreeTrial: userSettings.hasUsedFreeTrial 
+                  hasUsedFreeTrial: userSettings.hasUsedFreeTrial,
+                  userId
                 })
               });
               const data = await res.json();
@@ -284,6 +288,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onOpenSubscriptionModal={() => ui.openModal('subscription')}
         onOpenAdaptiveModal={() => ui.openModal('adaptive')}
         user={profile}
+        userId={userId}
         session={session}
         onLogout={logout}
         onLogin={() => ui.openModal('auth')}

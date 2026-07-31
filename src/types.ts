@@ -13,6 +13,9 @@ export type SearchSource = {
   title: string;
   url: string;
   domain?: string;
+  publishedDate?: string;
+  updatedDate?: string;
+  snippet?: string;
 };
 
 export type Message = {

@@ -54,7 +54,7 @@ export function ContextualPrompts({ onSelectPrompt, recentSessions, attachments 
   if (suggestions.length === 0 && !isLoading) return null;
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 mb-6 flex flex-col gap-3">
+    <div className="w-full px-4 mb-6 flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-medium px-1">
         <Sparkles className="w-4 h-4 text-sky-500" />
         <span>Sugestões para começar</span>

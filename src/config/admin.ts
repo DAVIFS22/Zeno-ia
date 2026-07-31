@@ -133,6 +133,22 @@ export const DEFAULT_FULL_ADMIN_CONFIG: FullAdminConfig = {
 };
 
 /**
+ * Masks an email address for privacy (e.g. "davifernandes0024509@gmail.com" -> "d***@g***.com")
+ */
+export function maskEmail(email?: string | null): string {
+  if (!email || typeof email !== 'string') return 'Sessão de Admin';
+  const clean = email.trim();
+  const parts = clean.split('@');
+  if (parts.length !== 2) return 'Administrador';
+  const [name, domain] = parts;
+  const maskedName = name.length > 2 ? name[0] + '***' + name[name.length - 1] : name[0] + '***';
+  const domainParts = domain.split('.');
+  const maskedDomain = domainParts[0].length > 1 ? domainParts[0][0] + '***' : '***';
+  const ext = domainParts.slice(1).join('.');
+  return `${maskedName}@${maskedDomain}.${ext}`;
+}
+
+/**
  * Returns 'admin' if email matches authorized administrator emails, otherwise returns 'user'.
  */
 export function getUserRole(email?: string | null): UserRole {
@@ -141,7 +157,7 @@ export function getUserRole(email?: string | null): UserRole {
   const adminEmailsList = [
     ADMIN_EMAIL,
     'davifernandes0024509@gmail.com',
-    ...(process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',').map(s => s.trim()) : [])
+    ...(typeof process !== 'undefined' && process.env?.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',').map(s => s.trim()) : [])
   ].map(e => e.toLowerCase());
 
   return adminEmailsList.includes(cleanEmail) ? 'admin' : 'user';

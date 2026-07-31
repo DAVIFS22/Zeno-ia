@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, ModelType } from '../types';
 import { SourcesBottomSheet } from './SourcesBottomSheet';
+import { SourcesCard } from './SourcesCard';
 import { ZenoLogo } from './ZenoLogo';
 import { ErrorBanner } from './ErrorBanner';
 import { Countdown } from './Countdown';
@@ -118,8 +119,8 @@ export const MessageItem = React.memo<MessageItemProps>(({
   };
   if (msg.role === 'user') {
     return (
-      <div className="group flex w-full justify-end">
-        <div className="flex flex-col items-end max-w-[88%] sm:max-w-[82%]">
+      <div className="group flex w-full justify-end px-3 sm:px-4 py-2">
+        <div className="flex flex-col items-end max-w-[90%] sm:max-w-[85%]">
           {isEditing ? (
             <div className={`w-full p-3 rounded-2xl border flex flex-col gap-2.5 ${
               theme === 'dark' ? 'bg-[#18181c] border-[#2C2C2E]' : 'bg-white border-neutral-300 shadow-md'
@@ -200,19 +201,20 @@ export const MessageItem = React.memo<MessageItemProps>(({
                     'ZENO Flash';
 
   return (
-    <div className="group flex w-full justify-start">
-      <div className="flex gap-3 sm:gap-4 w-full max-w-4xl">
-        <div className="flex-shrink-0 mt-0.5">
-          <ZenoLogo size={28} variant={logoVariant} theme={theme} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className={`text-xs font-bold ${
-              theme === 'dark' ? 'text-neutral-200' : 'text-neutral-800'
-            }`}>
-              {modelName}
-            </span>
-          </div>
+    <div className="group flex flex-col w-full px-3 sm:px-4 py-4">
+      {/* Avatar and Name Header */}
+      <div className="flex items-center gap-3 mb-2.5">
+        <ZenoLogo size={24} variant={logoVariant} theme={theme} />
+        <span className={`text-[13px] font-bold ${
+          theme === 'dark' ? 'text-neutral-200' : 'text-neutral-800'
+        }`}>
+          {modelName}
+        </span>
+      </div>
+
+      {/* Message Content (Full Width) */}
+      <div className="w-full max-w-full overflow-hidden">
+
 
           {msg.youtubeUrl && (
             <YouTubeProcessor 
@@ -268,56 +270,41 @@ export const MessageItem = React.memo<MessageItemProps>(({
               theme={theme}
             />
           ) : (
-            <div className={`markdown-body max-w-none text-[15px] sm:text-[16px] leading-[1.8] ${
+            <div className={`w-full max-w-none break-words text-[15px] sm:text-[16px] leading-[1.8] ${
               theme === 'dark' ? 'text-neutral-200' : 'text-neutral-800'
             }`}>
               {(!msg.text && isLoadingLast && msg.role === 'model') ? (
-                (msg.isSearching || msg.isSearch || msg.modelSpeed === 'search') ? (
-                  <div className="flex items-center gap-2 py-1.5 text-neutral-400 text-sm animate-pulse">
-                    <Globe className="w-4 h-4 text-sky-400 animate-spin" />
-                    <span className="font-medium text-sky-400/90">Buscando na internet...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 py-1 text-neutral-400 text-sm animate-pulse">
+                !(msg.isSearching || msg.isSearch || msg.modelSpeed === 'search') && (
+                  <div className="flex items-center gap-2 py-1 text-neutral-400 text-sm animate-pulse mb-3">
                     <Sparkles className="w-4 h-4 text-neutral-400" />
                     <span>ZENO está sintetizando a resposta...</span>
                   </div>
                 )
               ) : (
-                <>
+                <div className="markdown-body">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={markdownComponents}
                   >
                     {msg.text}
                   </ReactMarkdown>
-
-                  {/* Discrete Source Citation Bar */}
-                  {msg.searchSources && msg.searchSources.length > 0 && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button 
-                        onClick={() => setShowSourcesSheet(true)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                        theme === 'dark' ? 'bg-[#18181c] hover:bg-[#202026] border-[#2C2C2E] text-neutral-300' : 'bg-neutral-100 hover:bg-neutral-200/60 border-neutral-200 text-neutral-700'
-                      }`}>
-                        <Globe className="w-3.5 h-3.5 text-sky-400" />
-                        <span className="truncate max-w-[220px]">
-                          {msg.searchSources[0].title || msg.searchSources[0].domain}
-                        </span>
-                        {msg.searchSources.length > 1 ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-neutral-500/20 text-neutral-400">
-                            · {msg.searchSources.length}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-neutral-500/20 text-neutral-400">
-                            · 1
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </>
+                </div>
               )}
+
+              {/* Pesquisando Loading State */}
+              {(!msg.text && isLoadingLast && msg.role === 'model' && (msg.isSearching || (!msg.searchSources || msg.searchSources.length === 0) && (msg.isSearch || msg.modelSpeed === 'search'))) && (
+                <div className="flex items-center gap-2 py-1.5 text-neutral-400 text-sm animate-pulse mt-3">
+                  <Globe className="w-4 h-4 animate-spin text-neutral-400" />
+                  <span className="font-medium text-neutral-400">Pesquisando...</span>
+                </div>
+              )}
+
+              {/* Discrete Source Citation Bar */}
+              <SourcesCard 
+                sources={msg.searchSources || []} 
+                theme={theme} 
+                onClick={() => setShowSourcesSheet(true)} 
+              />
             </div>
           )}
 
@@ -461,7 +448,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
           {/* Interactive Adaptive Feedback Tag Bar */}
           {showFeedbackTags && itemFeedback && (
-            <div className={`mt-2.5 p-3 rounded-xl border animate-fadeIn max-w-xl ${
+            <div className={`mt-2.5 p-3 rounded-xl border animate-fadeIn w-full ${
               theme === 'dark' ? 'bg-[#1C1C1E]/90 border-[#2C2C2E]/80 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
             }`}>
               {feedbackSubmitted ? (
@@ -530,7 +517,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -769,7 +755,7 @@ export const MessageList = React.memo<MessageListProps>(({
   if (visibleMessages.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="w-full max-w-4xl px-4 sm:px-6 flex flex-col space-y-8 gpu-accelerated contain-render">
+    <div ref={containerRef} className="w-full flex flex-col space-y-8 gpu-accelerated contain-render">
       {/* Sentinel & Pagination Controls */}
       {hasMore && (
         <div className="flex flex-col items-center gap-2 my-2 transition-all">

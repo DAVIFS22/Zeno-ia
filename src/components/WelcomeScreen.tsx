@@ -70,7 +70,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="flex flex-col items-center justify-center w-full max-w-xl px-4 py-8 mx-auto my-auto text-center"
+      className="flex flex-col items-center justify-center w-full px-4 py-8 mx-auto my-auto text-center"
     >
       {/* Small Clean Logo & Simple Greeting */}
       <div className="flex flex-col items-center gap-3 mb-6">

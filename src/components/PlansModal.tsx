@@ -6,6 +6,7 @@ interface PlansModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: UserSettings;
+  userId: string;
   onOpenCheckout?: (plan: string) => Promise<void> | void;
 }
 
@@ -13,6 +14,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   isOpen,
   onClose,
   settings,
+  userId,
   onOpenCheckout,
 }) => {
   const [loadingPlan, setLoadingPlan] = useState<'monthly' | 'annual' | null>(null);
@@ -31,7 +33,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           body: JSON.stringify({ 
             plan: plan === 'annual' ? 'annual' : 'monthly', 
             email: settings?.userEmail || '', 
-            hasUsedFreeTrial: settings?.hasUsedFreeTrial 
+            hasUsedFreeTrial: settings?.hasUsedFreeTrial,
+            userId
           })
         });
         const data = await res.json();

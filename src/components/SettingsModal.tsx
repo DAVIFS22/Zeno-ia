@@ -8,7 +8,7 @@ import {
 import { UserSettings } from '../types';
 import { ZenoLogo } from './ZenoLogo';
 import { MySubscriptions } from './MySubscriptions';
-import { isAdminUser, hasPremiumAccess } from '../config/admin';
+import { isAdminUser, hasPremiumAccess, maskEmail } from '../config/admin';
 import { ProtectedAdminPanel } from './AdminPanel';
 import { AuthProfile } from '../contexts/AuthContext';
 
@@ -24,6 +24,7 @@ interface SettingsModalProps {
   backendLimits?: any;
   adminConfig?: any;
   user?: AuthProfile | null;
+  userId: string;
   session?: any;
   onLogout?: (uid?: string) => void;
   onLogin?: (remember: boolean) => void;
@@ -53,6 +54,7 @@ export function SettingsModal({
   backendLimits,
   adminConfig,
   user,
+  userId,
   session,
   onLogout,
   onLogin,
@@ -106,7 +108,7 @@ export function SettingsModal({
     { id: 'voice', label: 'Voz', icon: Volume2 },
     { id: 'privacy', label: 'Privacidade', icon: Shield },
     { id: 'notifications', label: 'Notificações', icon: Bell },
-    ...(isOwner || user?.isAdmin ? [{ id: 'developer' as const, label: 'Desenvolvedor', icon: Code }] : [])
+    ...(isAdminUser(user?.email) || isAdminUser(userEmail) ? [{ id: 'developer' as const, label: 'Desenvolvedor', icon: Code }] : [])
   ];
 
   return (
@@ -193,7 +195,7 @@ export function SettingsModal({
                             )}
                             <div className="min-w-0">
                               <p className="text-sm font-semibold truncate">{acc.displayName || 'Usuário ZENO'}</p>
-                              <p className="text-xs text-neutral-400 truncate">{acc.email}</p>
+                              <p className="text-xs text-neutral-400 truncate">{maskEmail(acc.email)}</p>
                             </div>
                           </div>
                           {acc.uid !== session.activeUid && (
@@ -244,6 +246,7 @@ export function SettingsModal({
               {activeCategory === 'subscription' && (
                 <div className="space-y-6 animate-fadeIn">
                   <MySubscriptions
+                    userId={userId}
                     settings={safeSettings}
                     onUpdateSettings={onUpdateSettings}
                     onOpenCheckout={() => {

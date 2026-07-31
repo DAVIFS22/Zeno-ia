@@ -7,9 +7,10 @@ const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json
 
 const app = initializeApp({
   credential: applicationDefault(),
+  projectId: firebaseConfig.projectId
 });
 
-const db = getFirestore(app, '(default)');
+const db = getFirestore(app);
 
 async function test() {
   try {

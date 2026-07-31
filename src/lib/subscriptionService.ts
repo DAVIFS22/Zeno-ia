@@ -168,6 +168,29 @@ export class SubscriptionService {
    * Validate access and calculate status metrics for frontend
    */
   static async validateAndGetDetails(userId: string) {
+    try {
+      const userDoc = await adminDb.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        const uData = userDoc.data() as any;
+        if (uData?.unlimited === true || uData?.adminOverride === true) {
+          return {
+            isPro: true,
+            subscriptionStatus: 'active',
+            subscriptionPlan: 'Anual (Admin Unlimited)',
+            purchaseDate: new Date().toISOString(),
+            renewDate: new Date(Date.now() + 365 * 86400 * 1000).toISOString(),
+            expirationDate: new Date(Date.now() + 365 * 86400 * 1000).toISOString(),
+            daysRemaining: 365,
+            autoRenew: true,
+            paymentStatus: 'succeeded',
+            needsReconciliation: false,
+            renewalDateOutdated: false,
+            sub: null
+          };
+        }
+      }
+    } catch (e) {}
+
     const sub = await this.getSubscription(userId);
     const now = Date.now();
 

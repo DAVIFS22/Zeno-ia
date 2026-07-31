@@ -34,7 +34,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   const { isPro } = useSubscription();
 
   return (
-    <header className={`h-13 flex items-center justify-between px-4 sm:px-6 border-b flex-shrink-0 z-20 backdrop-blur-md transition-colors duration-200 ${
+    <header className={`h-13 flex items-center justify-between px-4 sm:px-8 border-b flex-shrink-0 z-20 backdrop-blur-md transition-colors duration-200 ${
       isDark ? 'bg-[#0f0f11]/90 text-white border-[#2C2C2E]/80' : 'bg-white/90 text-neutral-900 border-neutral-200/80'
     }`}>
       <div className="flex items-center gap-3 min-w-0">

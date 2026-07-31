@@ -1,17 +1,12 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Globe, X } from 'lucide-react';
-
-interface Source {
-  title: string;
-  url: string;
-  domain?: string;
-}
+import { Globe, X, Calendar } from 'lucide-react';
+import { SearchSource } from '../types';
 
 interface SourcesBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  sources: Source[];
+  sources: SearchSource[];
   theme: string;
 }
 
@@ -47,6 +42,7 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
             onClick={onClose}
             className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm"
           />
+
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
@@ -111,39 +107,110 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
   );
 }
 
-function SourceCard({ source, theme, getFaviconUrl }: { source: Source; theme: string, getFaviconUrl: (d: string) => string }) {
+function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; theme: string, getFaviconUrl: (d: string) => string }) {
+  const domain = source.domain || new URL(source.url).hostname;
+  
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+  
+  const pubDateRaw = source.publishedDate || (source as any).publishedAt;
+  const upDateRaw = source.updatedDate || (source as any).lastUpdated;
+
+  const pubDate = pubDateRaw ? formatDate(pubDateRaw) : null;
+  const upDate = upDateRaw ? formatDate(upDateRaw) : null;
+
   return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`group block py-2 border-b last:border-0 ${theme === 'dark' ? 'border-[#2C2C2E]/60' : 'border-neutral-100'}`}
+    <div
+      className={`group grid grid-cols-1 gap-3 p-4 rounded-xl border transition-colors ${
+        theme === 'dark' 
+          ? 'bg-[#1e1e22]/50 border-[#2c2c30] hover:border-[#3a3a40]' 
+          : 'bg-neutral-50/70 border-neutral-200/80 hover:border-neutral-300'
+      }`}
     >
-      <div className="flex items-center gap-2 mb-2">
-        <img 
-          src={getFaviconUrl(source.domain || new URL(source.url).hostname)} 
-          alt="" 
-          className="w-4 h-4 rounded-sm"
-          onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
-            if (e.currentTarget.nextElementSibling) {
-              (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
-            }
-          }}
-        />
-        <div className="hidden w-4 h-4 rounded-sm items-center justify-center bg-neutral-500/20">
-          <Globe className={`w-3 h-3 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`} />
+      {/* Header Row: Domain & Dates */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="grid items-center gap-2.5 min-w-0" style={{ gridTemplateColumns: 'min-content 1fr' }}>
+          <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center overflow-hidden">
+            <img 
+              src={getFaviconUrl(domain)} 
+              alt="" 
+              className="w-5 h-5 rounded-sm bg-neutral-100 dark:bg-neutral-800 object-contain"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+                if (e.currentTarget.nextElementSibling) {
+                  (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                }
+              }}
+            />
+            <div className="hidden w-5 h-5 rounded-sm items-center justify-center bg-neutral-500/20">
+              <Globe className={`w-3.5 h-3.5 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`} />
+            </div>
+          </div>
+          <span className={`text-[13px] font-semibold tracking-wide truncate ${theme === 'dark' ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            {domain}
+          </span>
         </div>
-        <span className={`text-[11px] uppercase tracking-wider font-semibold ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>
-          {source.domain || source.url}
-        </span>
+
+        {(pubDate || upDate) && (
+          <div className={`grid grid-flow-col auto-cols-max items-center gap-x-4 text-[11px] sm:text-[12px] font-medium flex-shrink-0 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>
+            {pubDate && (
+              <span className="flex items-center gap-1.5" title="Data de publicação">
+                <Calendar className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
+                <span>Publicado em: {pubDate}</span>
+              </span>
+            )}
+            {upDate && (
+              <span className="flex items-center gap-1.5" title="Última atualização">
+                <Calendar className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
+                <span>Última atualização: {upDate}</span>
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <h3 className={`text-base font-semibold mb-1.5 leading-tight group-hover:underline ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-900'}`}>
-        {source.title || source.domain}
-      </h3>
-      <p className={`text-xs leading-relaxed line-clamp-2 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>
-        {source.url}
-      </p>
-    </a>
+
+      {/* Main Title & URL Description */}
+      <div className="space-y-1">
+        <h3 className={`text-[15px] sm:text-[16px] font-bold leading-snug ${theme === 'dark' ? 'text-neutral-100' : 'text-neutral-900'}`}>
+          {source.title || domain}
+        </h3>
+        
+        <p className={`text-[13px] leading-relaxed line-clamp-2 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-600'}`}>
+          {source.url}
+        </p>
+      </div>
+
+      {/* Footer / Snippet & Action Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-dashed border-neutral-500/20 mt-1">
+        <span className={`text-[11px] truncate max-w-full sm:max-w-[65%] ${theme === 'dark' ? 'text-neutral-500' : 'text-neutral-400'}`}>
+          {source.snippet || source.url}
+        </span>
+        
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all shadow-sm flex-shrink-0 ${
+            theme === 'dark' 
+              ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 hover:text-white' 
+              : 'bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-200'
+          }`}
+        >
+          Acessar fonte ↗
+        </a>
+      </div>
+    </div>
   );
 }

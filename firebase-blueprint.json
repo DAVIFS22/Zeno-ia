@@ -78,6 +78,34 @@
     "/memory/{memoryId}": {
       "schema": "MemoryChunk",
       "description": "AI Memory"
+    },
+    "/usage/{userId}": {
+      "schema": "object",
+      "description": "User daily usage limits and stats"
+    },
+    "/subscriptions/{userId}": {
+      "schema": "object",
+      "description": "User subscription details"
+    },
+    "/subscription_events/{eventId}": {
+      "schema": "object",
+      "description": "Subscription life-cycle events"
+    },
+    "/config/admin_settings": {
+      "schema": "object",
+      "description": "Global admin configuration"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "object",
+      "description": "Admin audit logs"
+    },
+    "/system_logs/{logId}": {
+      "schema": "object",
+      "description": "System event logs"
+    },
+    "/stats/global_metrics": {
+      "schema": "object",
+      "description": "Global usage statistics"
     }
   }
 }

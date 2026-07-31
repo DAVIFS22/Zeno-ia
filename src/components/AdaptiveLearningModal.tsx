@@ -18,6 +18,13 @@ interface AdaptiveLearningModalProps {
   logoVariant?: 'monochrome' | 'gradient';
 }
 
+const LEVEL_LABELS: Record<KnowledgeLevel, string> = {
+  iniciante: 'Iniciante',
+  intermediario: 'Intermediário',
+  avancado: 'Avançado',
+  especialista: 'Especialista'
+};
+
 export function AdaptiveLearningModal({
   isOpen,
   onClose,
@@ -77,6 +84,7 @@ export function AdaptiveLearningModal({
   };
 
   const totalFeedback = currentProfile.feedbackCount || 0;
+  const hasEnoughData = totalFeedback >= 5;
   const positiveRatio = totalFeedback > 0 
     ? Math.round(((currentProfile.positiveCount || 0) / totalFeedback) * 100) 
     : 100;
@@ -101,7 +109,7 @@ export function AdaptiveLearningModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold tracking-tight">Aprendizado Adaptativo ZENO</h2>
-                <span className="px-2 py-0.5 text-[11px] font-bold tracking-wider uppercase rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                <span className="px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
                   Motor IA
                 </span>
               </div>
@@ -162,8 +170,8 @@ export function AdaptiveLearningModal({
                     <span className="text-xs font-semibold">Nível Global Ativo</span>
                     <Award className="w-4 h-4 text-sky-400" />
                   </div>
-                  <div className="text-lg font-bold capitalize text-sky-400">
-                    {currentProfile.globalKnowledgeLevel}
+                  <div className="text-lg font-bold text-sky-400">
+                    {LEVEL_LABELS[currentProfile.globalKnowledgeLevel]}
                   </div>
                   <div className="text-[11px] text-neutral-400 mt-1">
                     Ajusta abstrações e profundidade técnica.
@@ -176,10 +184,10 @@ export function AdaptiveLearningModal({
                     <ThumbsUp className="w-4 h-4 text-sky-400" />
                   </div>
                   <div className="text-lg font-bold text-neutral-100">
-                    {positiveRatio}% de Precisão
+                    {hasEnoughData ? `${positiveRatio}% de Precisão` : 'Sem dados suficientes'}
                   </div>
                   <div className="text-[11px] text-neutral-400 mt-1">
-                    Baseado em {totalFeedback} feedbacks registrados.
+                    {hasEnoughData ? `Baseado em ${totalFeedback} feedbacks registrados.` : `Aguardando feedbacks (${totalFeedback}/5 mín.).`}
                   </div>
                 </div>
 
@@ -221,7 +229,7 @@ export function AdaptiveLearningModal({
                             : `${isDark ? 'bg-[#1C1C1E] border-[#2C2C2E] hover:border-[#2C2C2E] text-neutral-300' : 'bg-white border-neutral-200 hover:border-neutral-300 text-neutral-800'}`
                         }`}
                       >
-                        <div className="font-bold capitalize text-sm mb-1">{level}</div>
+                        <div className="font-bold text-sm mb-1">{LEVEL_LABELS[level]}</div>
                         <div className="text-[11px] text-neutral-400 line-clamp-2 leading-tight">
                           {KNOWLEDGE_LEVEL_DESCRIPTIONS[level]}
                         </div>
@@ -283,14 +291,9 @@ export function AdaptiveLearningModal({
                     key={domain.id}
                     className={`p-4 rounded-xl border ${isDark ? 'bg-[#1C1C1E]/50 border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'}`}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                      <div>
-                        <div className="font-bold text-sm text-neutral-100">{domain.title}</div>
-                        <div className="text-xs text-neutral-400">{domain.desc}</div>
-                      </div>
-                      <span className="self-start sm:self-auto px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                        {currentVal}
-                      </span>
+                    <div className="mb-3">
+                      <div className="font-bold text-sm text-neutral-100">{domain.title}</div>
+                      <div className="text-xs text-neutral-400">{domain.desc}</div>
                     </div>
 
                     <div className="grid grid-cols-4 gap-2 pt-1">
@@ -304,7 +307,7 @@ export function AdaptiveLearningModal({
                               : `${isDark ? 'bg-[#1C1C1E] border-[#2C2C2E] hover:bg-[#232326] text-neutral-400' : 'bg-white border-neutral-200 hover:bg-neutral-100 text-neutral-600'}`
                           }`}
                         >
-                          <span className="capitalize">{lvl}</span>
+                          <span>{LEVEL_LABELS[lvl]}</span>
                         </button>
                       ))}
                     </div>

@@ -236,7 +236,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   if (!isIntersecting) {
     return (
-      <span ref={containerRef} className="block my-4 relative max-w-xl min-h-[220px] rounded-2xl bg-[#232326]/30 border border-[#2C2C2E]/60 animate-pulse flex flex-col items-center justify-center p-6 text-center select-none">
+      <span ref={containerRef} className="block my-4 relative w-full min-h-[220px] rounded-2xl bg-[#232326]/30 border border-[#2C2C2E]/60 animate-pulse flex flex-col items-center justify-center p-6 text-center select-none">
         <Sparkles className="w-5 h-5 text-neutral-500 mb-1" />
         <span className="text-xs text-neutral-500 font-medium">Carregando imagem...</span>
       </span>
@@ -244,7 +244,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   }
 
   return (
-    <span ref={containerRef} className="block my-4 relative group max-w-xl rounded-2xl overflow-hidden border border-[#2C2C2E]/60 shadow-2xl bg-[#171717]">
+    <span ref={containerRef} className="block my-4 relative group w-full rounded-2xl overflow-hidden border border-[#2C2C2E]/60 shadow-2xl bg-[#171717]">
       {/* Loading Container */}
       {isLoading && (
         <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative overflow-hidden select-none">

@@ -18,7 +18,8 @@ import {
   FullAdminConfig, 
   DEFAULT_FULL_ADMIN_CONFIG,
   AuditLog,
-  SystemLog
+  SystemLog,
+  maskEmail
 } from '../config/admin';
 import { withAdmin } from './withAdmin';
 
@@ -245,7 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <ShieldAlert className="w-8 h-8 flex-shrink-0" />
           <div>
             <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
-            <p className="text-xs text-neutral-300 font-mono mt-0.5">Role Atual: {role} | Usuário: {userEmail || 'Anônimo'}</p>
+            <p className="text-xs text-neutral-300 font-mono mt-0.5">Role Atual: {role} | Sessão: {maskEmail(userEmail)}</p>
           </div>
         </div>
 
@@ -254,7 +255,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Você não possui permissões administrativas para visualizar ou alterar o Painel Administrativo do ZENO AI.
           </p>
           <p className="text-xs text-neutral-300/80">
-            Apenas a conta administradora principal (<span className="font-mono text-white underline">{ADMIN_EMAIL}</span>) recebe acesso irrestrito às funções de gerenciamento de servidor, modelos e limites.
+            Apenas a conta administradora principal (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) recebe acesso irrestrito às funções de gerenciamento de servidor, modelos e limites.
           </p>
         </div>
 
@@ -280,7 +281,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="w-2.5 h-2.5 rounded-full bg-neutral-400 shadow-[0_0_8px_rgba(255,255,255,0.2)] animate-pulse"></div>
             </h4>
             <p className="text-sm text-neutral-500 font-medium mt-1">
-              Sessão autenticada: <span className="text-white font-mono">{userEmail}</span>
+              Sessão autenticada: <span className="text-white font-mono">{maskEmail(userEmail)}</span>
             </p>
           </div>
         </div>
@@ -1246,12 +1247,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
                 <span className="text-neutral-400 block mb-1">Administrador Único Configurado</span>
-                <span className="font-mono text-sky-400 font-semibold">{ADMIN_EMAIL}</span>
+                <span className="font-mono text-sky-400 font-semibold">{maskEmail(ADMIN_EMAIL)}</span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
-                <span className="text-neutral-400 block mb-1">Sua Conta Atual</span>
-                <span className="font-mono text-white font-semibold">{userEmail}</span>
+                <span className="text-neutral-400 block mb-1">Sua Sessão Atual</span>
+                <span className="font-mono text-white font-semibold">{maskEmail(userEmail)}</span>
               </div>
             </div>
 
@@ -1260,7 +1261,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <ul className="space-y-1.5 text-xs text-neutral-400">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                  <span>Apenas o e-mail <code className="text-white bg-black/40 px-1 py-0.5 rounded">{ADMIN_EMAIL}</code> recebe a role <code className="text-neutral-400">admin</code>.</span>
+                  <span>Apenas a conta <code className="text-white bg-black/40 px-1 py-0.5 rounded">{maskEmail(ADMIN_EMAIL)}</code> recebe a role <code className="text-neutral-400">admin</code>.</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
