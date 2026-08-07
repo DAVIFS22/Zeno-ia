@@ -1,5 +1,27 @@
 [
   {
+    "version": "2.12.2",
+    "major": 2,
+    "minor": 12,
+    "patch": 2,
+    "date": "2026-08-07",
+    "type": "PATCH",
+    "security": [
+      "Atualização de segurança e validação de tokens"
+    ]
+  },
+  {
+    "version": "2.12.1",
+    "major": 2,
+    "minor": 12,
+    "patch": 1,
+    "date": "2026-08-07",
+    "type": "PATCH",
+    "security": [
+      "Atualização de segurança e validação de tokens"
+    ]
+  },
+  {
     "version": "2.12.0",
     "major": 2,
     "minor": 12,

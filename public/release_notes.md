@@ -1,13 +1,13 @@
-## Zeno IA v2.12.0
+## Zeno IA v2.12.2
 
 Novidades:
-- adiciona historico de imagens no menu lateral
+- N/A
 
 Correções:
-- corrige loop infinito no microfone que travava a interface
+- N/A
 
 Desempenho:
-- otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis
+- N/A
 
 - Data de Publicação: 2026-08-07
-- Tipo de Release: MINOR
+- Tipo de Release: PATCH
