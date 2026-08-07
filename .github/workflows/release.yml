@@ -1,4 +1,4 @@
-name: Zeno IA Release & CI/CD Pipeline
+name: Zeno IA Automatic Release & Review
 
 on:
   push:
@@ -20,7 +20,7 @@ on:
           - PATCH
 
 jobs:
-  release_and_deploy:
+  automatic_release_review:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -41,8 +41,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci || npm install
 
-      - name: Run GitHub Release Analyzer & Version Calculator
+      - name: Run AI Release Review & Version Analyzer
         run: npx tsx scripts/githubReleaseAnalyzer.ts
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Build Application
         run: npm run build
@@ -52,13 +55,13 @@ jobs:
 
       - name: Configure Git Identity
         run: |
-          git config --global user.name "Zeno Release Bot"
+          git config --global user.name "Zeno Release AI Bot"
           git config --global user.email "bot@zenoia.internal"
 
-      - name: Commit Version Bump & Changelog
+      - name: Commit Version Bump & Summarized Changelog
         run: |
-          git add src/lib/versionSystem.ts public/changelog.json
-          git commit -m "chore(release): bump version and update changelog [skip ci]" || echo "No changes to commit"
+          git add src/lib/versionSystem.ts public/changelog.json public/release_notes.md
+          git commit -m "chore(release): automatic version bump & summarized review [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main || true
 
       - name: Get Latest Version Tag
@@ -71,15 +74,15 @@ jobs:
       - name: Create Git Tag
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          git tag -a "$TAG" -m "Zeno IA Release $TAG"
+          git tag -a "$TAG" -m "Zeno IA Release $TAG (Automated Review)"
           git push origin "$TAG" || true
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release with Summarized Points
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Zeno IA ${{ steps.version.outputs.tag }}
-          body_path: public/changelog.json
+          body_path: public/release_notes.md
           draft: false
           prerelease: false
         env:

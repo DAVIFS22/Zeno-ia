@@ -232,9 +232,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
           }`}>
             {modelName}
           </span>
-          <span className="text-[10px] uppercase tracking-widest font-semibold text-neutral-500 opacity-70">
-            {t.welcome.subtitle}
-          </span>
         </div>
       </div>
 

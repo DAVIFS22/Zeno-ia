@@ -34,6 +34,7 @@ import { useSessions } from './hooks/useSessions';
 import { useChat } from './hooks/useChat';
 import { detectIntent } from './utils/intent';
 import { LanguageProvider, useTranslation } from './i18n';
+import { VersionProvider } from './contexts/VersionContext';
 import { hasPremiumAccess } from './config/admin';
 import { filterValidSources } from './utils/sourceValidation';
 import { isAuthorizedImageUrl } from './utils/imageSecurity';
@@ -1125,7 +1126,9 @@ export default function App() {
     <AuthProvider>
       <LanguageProvider>
         <UIProvider>
-          <AuthWrapper />
+          <VersionProvider>
+            <AuthWrapper />
+          </VersionProvider>
         </UIProvider>
       </LanguageProvider>
     </AuthProvider>

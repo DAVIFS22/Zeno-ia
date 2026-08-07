@@ -1,4 +1,26 @@
-[
+export interface VersionEntry {
+  version: string;
+  major: number;
+  minor: number;
+  patch: number;
+  date: string;
+  type: 'MAJOR' | 'MINOR' | 'PATCH';
+  news?: string[];
+  novidades?: string[];
+  fixes?: string[];
+  correcoes?: string[];
+  performance?: string[];
+  desempenho?: string[];
+  security?: string[];
+  architecture?: string[];
+  arquitetura?: string[];
+}
+
+export const CURRENT_ZENO_VERSION = "2.12.0";
+export const RELEASE_DATE = "2026-08-07";
+export const GIT_TAG = "v2.12.0";
+
+export const ZENO_VERSION_HISTORY: VersionEntry[] = [
   {
     "version": "2.12.0",
     "major": 2,
@@ -729,4 +751,37 @@
       "Lançamento inicial da Zeno IA"
     ]
   }
-]
+];
+
+export function getLatestVersion(): VersionEntry {
+  return ZENO_VERSION_HISTORY[0];
+}
+
+export async function fetchRemoteChangelog(): Promise<VersionEntry | null> {
+  try {
+    const res = await fetch('/changelog.json');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data[0];
+      }
+      if (data && data.version) {
+        return data;
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+  return null;
+}
+
+export function checkAndGetNewVersion(): { isNew: boolean; version: VersionEntry } {
+  const latest = getLatestVersion();
+  const lastSeen = localStorage.getItem('zeno_last_seen_version');
+  const isNew = lastSeen !== latest.version;
+  return { isNew, version: latest };
+}
+
+export function markVersionAsSeen(versionStr: string) {
+  localStorage.setItem('zeno_last_seen_version', versionStr);
+}

@@ -387,6 +387,24 @@ clearTimeout(timeoutId);
     }
   }
 
+  if (lastError && (lastError.message?.includes('API_KEY_INVALID') || lastError.message?.includes('API key not valid') || lastError.message?.includes('400'))) {
+    return {
+      text: "⚠️ **Configuração de API Necessária**: A chave de API fornecida é inválida ou ausente. Para interagir com o ZENO IA, configure uma `GEMINI_API_KEY` válida no painel de configurações ou nas variáveis de ambiente.",
+      provider: 'gemini',
+      modelUsed: 'fallback',
+      isAlternative: true
+    };
+  }
+
+  if (lastError && (lastError.message?.toLowerCase().includes('quota') || lastError.message?.toLowerCase().includes('rate limit') || lastError.message?.includes('429') || lastError.message?.includes('RESOURCE_EXHAUSTED') || lastError.message?.includes('resource_exhausted'))) {
+    return {
+      text: "⚠️ **Cota de API Exaurida / Rate Limit**: O limite de uso da API (quota/rate limit) foi atingido. Por favor, aguarde alguns minutos ou configure uma chave de API alternativa nas configurações.",
+      provider: 'gemini',
+      modelUsed: 'fallback',
+      isAlternative: true
+    };
+  }
+
   throw lastError || new Error("Falha ao processar requisição em todos os modelos disponíveis.");
 }
 

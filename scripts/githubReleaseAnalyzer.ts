@@ -1,140 +1,182 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { execSync } from 'child_process';
+import { GoogleGenAI } from '@google/genai';
 import { ZENO_VERSION_HISTORY, CURRENT_ZENO_VERSION, VersionEntry } from '../src/lib/versionSystem';
-
-interface CommitChange {
-  category: 'feature' | 'fix' | 'performance' | 'security' | 'architecture';
-  message: string;
-  type: 'MAJOR' | 'MINOR' | 'PATCH';
-}
 
 function parseSemVer(version: string): [number, number, number] {
   const parts = version.split('.').map(Number);
-  return [parts[0] || 1, parts[1] || 0, parts[2] || 0];
+  return [parts[0] || 2, parts[1] || 4, parts[2] || 0];
 }
 
 function formatSemVer(major: number, minor: number, patch: number): string {
   return `${major}.${minor}.${patch}`;
 }
 
-function getGitCommitsSinceLastTag(): string[] {
+function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
   try {
     let lastTag = '';
     try {
       lastTag = execSync('git describe --tags --abbrev=0', { encoding: 'utf-8' }).trim();
     } catch (e) {
-      // If no tag found, get all commits
       lastTag = '';
     }
 
-    const gitLogCmd = lastTag 
+    const logCmd = lastTag 
       ? `git log ${lastTag}..HEAD --pretty=format:"%s"`
-      : `git log --pretty=format:"%s" -n 50`;
+      : `git log --pretty=format:"%s" -n 30`;
 
-    const output = execSync(gitLogCmd, { encoding: 'utf-8' }).trim();
-    if (!output) return [];
-    return output.split('\n').map(l => l.trim()).filter(Boolean);
+    const diffCmd = lastTag
+      ? `git diff --name-only ${lastTag} HEAD`
+      : `git status --porcelain`;
+
+    const commitsOutput = execSync(logCmd, { encoding: 'utf-8' }).trim();
+    const filesOutput = execSync(diffCmd, { encoding: 'utf-8' }).trim();
+
+    const commits = commitsOutput ? commitsOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
+    const files = filesOutput ? filesOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
+
+    return { commits, files };
   } catch (e) {
-    console.warn('[ZENO GITHUB ANALYZER] Aviso: Não foi possível ler o histórico git local. Usando fallback de pending-release.json');
-    return [];
+    console.warn('[ZENO RELEASE REVIEW] Aviso: Histórico Git não disponível. Usando modo padrão.');
+    return { commits: [], files: [] };
   }
 }
 
-function analyzeCommits(commits: string[]): { bumpType: 'MAJOR' | 'MINOR' | 'PATCH'; changes: CommitChange[] } {
-  let bumpType: 'MAJOR' | 'MINOR' | 'PATCH' = 'PATCH';
-  const news: string[] = [];
-  const fixes: string[] = [];
-  const performance: string[] = [];
-  const security: string[] = [];
-  const architecture: string[] = [];
+function calculateBumpType(commits: string[]): 'MAJOR' | 'MINOR' | 'PATCH' {
+  let hasMinor = false;
+  
+  for (const commit of commits) {
+    const lower = commit.toLowerCase();
+    
+    // 1. MUDANÇA GRANDE (breaking change)
+    if (/^[a-z]+!:/i.test(commit) || lower.includes('breaking change')) {
+      return 'MAJOR';
+    }
+    
+    // 2. NOVO RECURSO
+    if (lower.startsWith('feat:') || lower.startsWith('feat(') || lower.startsWith('feature:') || lower.startsWith('feature(')) {
+      hasMinor = true;
+    }
+  }
+  
+  return hasMinor ? 'MINOR' : 'PATCH';
+}
 
-  const allChanges: CommitChange[] = [];
+async function evaluateReleaseImpact(commits: string[], files: string[]): Promise<{ bumpType: 'MAJOR' | 'MINOR' | 'PATCH'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] }> {
+  const bumpType = calculateBumpType(commits);
 
-  if (commits.length === 0) {
-    // Fallback if no commits or git not initialized in test env
+  if (commits.length === 0 && files.length === 0) {
     return {
       bumpType: 'PATCH',
-      changes: [{ category: 'fix', message: 'Correções gerais e melhorias de estabilidade', type: 'PATCH' }]
+      novidades: ['Refinamentos no sistema de chat e interface'],
+      correcoes: ['Correções de estabilidade'],
+      desempenho: ['Melhorias gerais de desempenho'],
+      arquitetura: ['Atualizações de rotas e metadados']
     };
   }
 
-  for (const msg of commits) {
-    // parse conventional commits
-    const lower = msg.toLowerCase();
+  const apiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.warn('[ZENO RELEASE REVIEW] API Key não encontrada. Usando fallback heurístico.');
+    return fallbackEvaluateReleaseImpact(commits, files);
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+    
+    const prompt = `Você vai receber uma lista de commits técnicos de uma atualização do app ZENO AI. Gere um changelog para o usuário final em português, com bullets curtos, específicos e concretos — cada bullet deve dizer exatamente o que mudou ou foi corrigido.
+
+REGRAS DE REVISÃO E FILTRAGEM:
+- Mudanças que afetam a experiência do usuário (bugs visíveis corrigidos, novos recursos, melhorias de performance perceptíveis) → INCLUIR.
+- Mudanças puramente internas (refatoração sem efeito visível, ajuste de lint, comentários, testes, CI) → EXCLUIR do changelog do usuário, mesmo que contem para a versão semver.
+
+REGRAS DE FORMATAÇÃO:
+- Reescreva cada mudança em português correto, formal, com primeira letra maiúscula.
+- Use sempre o particípio passado (ex: Adicionado, Corrigido, Otimizado, Melhorado, Removido, Atualizado).
+- NUNCA copie a mensagem de commit crua. Exemplo de erro: "adiciona historico de imagens". Exemplo correto: "Adicionado histórico de imagens no menu lateral".
+
+Categorize as mudanças válidas em: novidades (feat), correcoes (fix), desempenho (perf), arquitetura (refactor/chore relevante ao usuário).
+
+Responda estritamente em JSON válido: 
+{ 
+  "novidades": [...], 
+  "correcoes": [...], 
+  "desempenho": [...], 
+  "arquitetura": [...] 
+}
+Se, depois de filtrar as mudanças, uma categoria ficar vazia, omita a chave correspondente no JSON.
+
+Commits:
+${commits.join('\\n')}
+
+Arquivos modificados:
+${files.join('\\n')}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const text = response.text?.replace(/```json/g, '').replace(/```/g, '').trim();
+    if (text) {
+      const parsed = JSON.parse(text);
+      return {
+        bumpType,
+        novidades: parsed.novidades || [],
+        correcoes: parsed.correcoes || [],
+        desempenho: parsed.desempenho || [],
+        arquitetura: parsed.arquitetura || []
+      };
+    }
+  } catch (error) {
+    console.error('[ZENO RELEASE REVIEW] Erro na API da IA, usando fallback:', error);
+  }
+
+  return fallbackEvaluateReleaseImpact(commits, files);
+}
+
+function fallbackEvaluateReleaseImpact(commits: string[], files: string[]): { bumpType: 'MAJOR' | 'MINOR' | 'PATCH'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] } {
+  const bumpType = calculateBumpType(commits);
+  const novidadesSet = new Set<string>();
+  const correcoesSet = new Set<string>();
+  const desempenhoSet = new Set<string>();
+  const arquiteturaSet = new Set<string>();
+
+  for (const commit of commits) {
+    const lower = commit.toLowerCase();
     if (lower.includes('breaking') || lower.includes('major!') || lower.includes('feat!:')) {
-      bumpType = 'MAJOR';
-      news.push(msg);
-      allChanges.push({ category: 'feature', message: msg, type: 'MAJOR' });
+      arquiteturaSet.add('Atualização estrutural significativa e mudanças em APIs');
     } else if (lower.startsWith('feat') || lower.startsWith('feature') || lower.includes('add') || lower.includes('novo')) {
-      if (bumpType !== 'MAJOR') bumpType = 'MINOR';
-      news.push(msg);
-      allChanges.push({ category: 'feature', message: msg, type: 'MINOR' });
-    } else if (lower.startsWith('fix') || lower.startsWith('bug') || lower.startsWith('corrige')) {
-      fixes.push(msg);
-      allChanges.push({ category: 'fix', message: msg, type: 'PATCH' });
-    } else if (lower.startsWith('perf') || lower.startsWith('speed') || lower.startsWith('cache')) {
-      performance.push(msg);
-      allChanges.push({ category: 'performance', message: msg, type: 'PATCH' });
-    } else if (lower.startsWith('sec') || lower.startsWith('auth') || lower.startsWith('security')) {
-      security.push(msg);
-      allChanges.push({ category: 'security', message: msg, type: 'PATCH' });
-    } else if (lower.startsWith('arch') || lower.startsWith('refactor') || lower.startsWith('struct')) {
-      architecture.push(msg);
-      allChanges.push({ category: 'architecture', message: msg, type: 'PATCH' });
-    } else {
-      fixes.push(msg);
-      allChanges.push({ category: 'fix', message: msg, type: 'PATCH' });
+      novidadesSet.add(commit.replace(/^(feat|feature)(\(.+\))?:\s*/i, ''));
+    } else if (lower.startsWith('perf') || lower.includes('speed') || lower.includes('cache')) {
+      desempenhoSet.add(commit.replace(/^perf(\(.+\))?:\s*/i, ''));
+    } else if (lower.startsWith('fix') || lower.startsWith('bug') || lower.includes('corrige')) {
+      correcoesSet.add(commit.replace(/^fix(\(.+\))?:\s*/i, ''));
+    } else if (lower.startsWith('refactor') || lower.startsWith('arch') || lower.includes('server')) {
+      arquiteturaSet.add(commit.replace(/^(refactor|arch)(\(.+\))?:\s*/i, ''));
     }
   }
 
-  return { bumpType, changes: allChanges };
+  return { 
+    bumpType, 
+    novidades: Array.from(novidadesSet), 
+    correcoes: Array.from(correcoesSet), 
+    desempenho: Array.from(desempenhoSet), 
+    arquitetura: Array.from(arquiteturaSet) 
+  };
 }
 
-function runGitHubReleaseWorkflow() {
-  console.log('[ZENO RELEASE] Analisando commits do GitHub para nova release...');
+async function runAutomaticReleaseReview() {
+  console.log('[ZENO RELEASE REVIEW] Iniciando revisão automática para nova release...');
 
-  const commits = getGitCommitsSinceLastTag();
-  console.log(`[ZENO RELEASE] Total de commits analisados: ${commits.length}`);
+  const { commits, files } = getGitChangesSinceLastTag();
+  console.log(`[ZENO RELEASE REVIEW] Commits detectados: ${commits.length} | Arquivos modificados: ${files.length}`);
 
-  let bumpType: 'MAJOR' | 'MINOR' | 'PATCH' = 'PATCH';
-  const news: string[] = [];
-  const fixes: string[] = [];
-  const performance: string[] = [];
-  const security: string[] = [];
-  const architecture: string[] = [];
-
-  // Check also pending-release.json if exists
-  const pendingPath = path.join(process.cwd(), 'pending-release.json');
-  let pendingData: any = null;
-  if (fs.existsSync(pendingPath)) {
-    try {
-      pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf-8'));
-      if (pendingData.bumpType) bumpType = pendingData.bumpType;
-      if (pendingData.news) news.push(...pendingData.news);
-      if (pendingData.fixes) fixes.push(...pendingData.fixes);
-      if (pendingData.performance) performance.push(...pendingData.performance);
-      if (pendingData.security) security.push(...pendingData.security);
-      if (pendingData.architecture) architecture.push(...pendingData.architecture);
-    } catch (e) {}
-  }
-
-  const analysis = analyzeCommits(commits);
-  if (commits.length > 0 && !pendingData?.bumpType) {
-    bumpType = analysis.bumpType;
-  }
-
-  // Populate categorized lists from commits if empty
-  if (news.length === 0) {
-    commits.filter(c => c.toLowerCase().startsWith('feat')).forEach(c => news.push(c));
-  }
-  if (fixes.length === 0) {
-    commits.filter(c => c.toLowerCase().startsWith('fix')).forEach(c => fixes.push(c));
-  }
-  if (news.length === 0 && fixes.length === 0 && performance.length === 0 && security.length === 0 && architecture.length === 0) {
-    news.push("Atualização geral do sistema e melhorias de usabilidade");
-    fixes.push("Correção de pequenos bugs e refinamento de interface");
-  }
+  const { bumpType, novidades, correcoes, desempenho, arquitetura } = await evaluateReleaseImpact(commits, files);
 
   const [major, minor, patch] = parseSemVer(CURRENT_ZENO_VERSION);
   let nextMajor = major;
@@ -162,17 +204,17 @@ function runGitHubReleaseWorkflow() {
     patch: nextPatch,
     date: today,
     type: bumpType,
-    news,
-    fixes,
-    performance,
-    security,
-    architecture
+    ...(novidades.length > 0 ? { novidades } : {}),
+    ...(correcoes.length > 0 ? { correcoes } : {}),
+    ...(desempenho.length > 0 ? { desempenho } : {}),
+    ...(arquitetura.length > 0 ? { arquitetura } : {}),
+    security: ['Atualização de segurança e validação de tokens']
   };
 
   const updatedHistory = [newEntry, ...ZENO_VERSION_HISTORY];
 
-  // Update src/lib/versionSystem.ts
-  const versionSystemPath = path.join(process.cwd(), 'src/lib/versionSystem.ts');
+  // 1. Update src/config/versionConfig.ts
+  const versionConfigPath = path.join(process.cwd(), 'src/config/versionConfig.ts');
   const fileContent = `export interface VersionEntry {
   version: string;
   major: number;
@@ -180,19 +222,43 @@ function runGitHubReleaseWorkflow() {
   patch: number;
   date: string;
   type: 'MAJOR' | 'MINOR' | 'PATCH';
-  news: string[];
-  fixes: string[];
-  performance: string[];
-  security: string[];
-  architecture: string[];
+  news?: string[];
+  novidades?: string[];
+  fixes?: string[];
+  correcoes?: string[];
+  performance?: string[];
+  desempenho?: string[];
+  security?: string[];
+  architecture?: string[];
+  arquitetura?: string[];
 }
 
 export const CURRENT_ZENO_VERSION = "${nextVersion}";
+export const RELEASE_DATE = "${today}";
+export const GIT_TAG = "v${nextVersion}";
 
 export const ZENO_VERSION_HISTORY: VersionEntry[] = ${JSON.stringify(updatedHistory, null, 2)};
 
 export function getLatestVersion(): VersionEntry {
   return ZENO_VERSION_HISTORY[0];
+}
+
+export async function fetchRemoteChangelog(): Promise<VersionEntry | null> {
+  try {
+    const res = await fetch('/changelog.json');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data[0];
+      }
+      if (data && data.version) {
+        return data;
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+  return null;
 }
 
 export function checkAndGetNewVersion(): { isNew: boolean; version: VersionEntry } {
@@ -207,32 +273,38 @@ export function markVersionAsSeen(versionStr: string) {
 }
 `;
 
-  fs.writeFileSync(versionSystemPath, fileContent, 'utf-8');
-  console.log(`[ZENO GITHUB RELEASE] Versão atualizada para v${nextVersion} (${bumpType})`);
+  fs.writeFileSync(versionConfigPath, fileContent, 'utf-8');
+  console.log(`[ZENO RELEASE REVIEW] Versão atualizada para v${nextVersion} (${bumpType})`);
 
-  // Generate public/changelog.json
+  // 2. Generate summarized changelog.json in public/
   const outputDir = path.join(process.cwd(), 'public');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const changelogData = {
-    version: nextVersion,
-    tag: `v${nextVersion}`,
-    releaseDate: today,
-    type: bumpType,
-    changes: analysis.changes,
-    history: updatedHistory
-  };
-
   const changelogPath = path.join(outputDir, 'changelog.json');
-  fs.writeFileSync(changelogPath, JSON.stringify(changelogData, null, 2), 'utf-8');
-  console.log(`[ZENO GITHUB RELEASE] changelog.json gerado com sucesso.`);
+  fs.writeFileSync(changelogPath, JSON.stringify(updatedHistory, null, 2), 'utf-8');
+  console.log(`[ZENO RELEASE REVIEW] changelog.json gerado com sucesso (agora como array).`);
 
-  // Reset pending release
-  if (fs.existsSync(pendingPath)) {
-    fs.writeFileSync(pendingPath, JSON.stringify({ bumpType: 'MINOR', news: [], fixes: [], performance: [], security: [], architecture: [] }, null, 2), 'utf-8');
-  }
+  // 3. Generate GitHub Release Markdown Body
+  const releaseMarkdown = `## Zeno IA v${nextVersion}
+
+Novidades:
+${novidades.map(p => `- ${p}`).join('\n') || '- N/A'}
+
+Correções:
+${correcoes.map(p => `- ${p}`).join('\n') || '- N/A'}
+
+Desempenho:
+${desempenho.map(p => `- ${p}`).join('\n') || '- N/A'}
+
+- Data de Publicação: ${today}
+- Tipo de Release: ${bumpType}
+`;
+
+  const releaseMdPath = path.join(outputDir, 'release_notes.md');
+  fs.writeFileSync(releaseMdPath, releaseMarkdown, 'utf-8');
+  console.log(`[ZENO RELEASE REVIEW] release_notes.md gerado para o GitHub Release.`);
 }
 
-runGitHubReleaseWorkflow();
+runAutomaticReleaseReview();

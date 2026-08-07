@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { History, X, ChevronRight } from 'lucide-react';
-import { ZENO_VERSION_HISTORY, markVersionAsSeen } from '../lib/versionSystem';
+import { useVersion } from '../contexts/VersionContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface VersionNewsModalProps {
   isOpen: boolean;
@@ -14,30 +15,53 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
   onClose,
   initialVersion
 }) => {
+  const { versionHistory, markSeen, latestVersion } = useVersion();
   const [selectedVersion, setSelectedVersion] = useState<string>(
-    initialVersion || ZENO_VERSION_HISTORY[0].version
+    initialVersion || latestVersion.version
   );
   const [showHistory, setShowHistory] = useState<boolean>(false);
 
-  if (!isOpen) return null;
-
-  const currentEntry = ZENO_VERSION_HISTORY.find(v => v.version === selectedVersion) || ZENO_VERSION_HISTORY[0];
+  const currentEntry = versionHistory.find(v => v.version === selectedVersion) || latestVersion;
 
   const handleClose = () => {
-    markVersionAsSeen(ZENO_VERSION_HISTORY[0].version);
+    markSeen(latestVersion.version);
     onClose();
   };
 
   const formatDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day}/${month}/${year}`;
+    }
+    return dateStr;
   };
 
+  const novidadesList = currentEntry.novidades || currentEntry.news || [];
+  const correcoesList = currentEntry.correcoes || currentEntry.fixes || [];
+  const desempenhoList = currentEntry.desempenho || currentEntry.performance || [];
+  const arquiteturaList = currentEntry?.arquitetura || currentEntry?.architecture || [];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-300">
-      <div className="relative w-full max-w-xl max-h-[88vh] flex flex-col bg-[#111111] text-white rounded-2xl shadow-2xl overflow-hidden border border-neutral-800/80 animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Header */}
+    <AnimatePresence>
+      {isOpen && currentEntry && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-xl max-h-[88vh] flex flex-col bg-[#111111] text-white rounded-2xl shadow-2xl overflow-hidden border border-neutral-800/80"
+          >
+            
+            {/* Header */}
         <div className="flex items-start justify-between px-10 pt-10 pb-6">
           <div className="space-y-1.5">
             <div className="flex items-center gap-3">
@@ -47,7 +71,9 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
                 {currentEntry.type}
               </span>
             </div>
-            <p className="text-xs text-neutral-400 font-light">Atualizado em {formatDate(currentEntry.date)}</p>
+            {currentEntry.date && (
+              <p className="text-xs text-neutral-400 font-light">Atualizado em {formatDate(currentEntry.date)}</p>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -75,7 +101,7 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
             <div className="space-y-4 py-2">
               <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-4">Histórico de Versões</h3>
               <div className="space-y-2">
-                {ZENO_VERSION_HISTORY.map((ver) => (
+                {versionHistory.map((ver) => (
                   <div
                     key={ver.version}
                     onClick={() => {
@@ -103,11 +129,11 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
           ) : (
             <div className="space-y-8 py-2">
               {/* Novidades */}
-              {currentEntry.news && currentEntry.news.length > 0 && (
+              {novidadesList.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Novidades</h3>
                   <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {currentEntry.news.map((item, idx) => (
+                    {novidadesList.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-3">
                         <span className="text-white select-none mt-0.5">•</span>
                         <span className="leading-relaxed">{item}</span>
@@ -118,11 +144,11 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
               )}
 
               {/* Correções */}
-              {currentEntry.fixes && currentEntry.fixes.length > 0 && (
+              {correcoesList.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Correções</h3>
                   <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {currentEntry.fixes.map((item, idx) => (
+                    {correcoesList.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-3">
                         <span className="text-white select-none mt-0.5">•</span>
                         <span className="leading-relaxed">{item}</span>
@@ -133,11 +159,11 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
               )}
 
               {/* Desempenho */}
-              {currentEntry.performance && currentEntry.performance.length > 0 && (
+              {desempenhoList.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Desempenho</h3>
                   <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {currentEntry.performance.map((item, idx) => (
+                    {desempenhoList.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-3">
                         <span className="text-white select-none mt-0.5">•</span>
                         <span className="leading-relaxed">{item}</span>
@@ -148,11 +174,11 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
               )}
 
               {/* Arquitetura */}
-              {currentEntry.architecture && currentEntry.architecture.length > 0 && (
+              {arquiteturaList.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Arquitetura</h3>
                   <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {currentEntry.architecture.map((item, idx) => (
+                    {arquiteturaList.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-3">
                         <span className="text-white select-none mt-0.5">•</span>
                         <span className="leading-relaxed">{item}</span>
@@ -160,6 +186,10 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
                     ))}
                   </ul>
                 </div>
+              )}
+
+              {novidadesList.length === 0 && correcoesList.length === 0 && desempenhoList.length === 0 && arquiteturaList.length === 0 && (
+                <p className="text-neutral-400 text-sm">Nenhum detalhe registrado para esta versão.</p>
               )}
             </div>
           )}
@@ -171,15 +201,19 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
             <p className="text-xs font-medium text-neutral-300">Semantic Versioning</p>
             <p className="text-[11px] font-mono text-neutral-500">v{currentEntry.version}</p>
           </div>
-          <button
+          <motion.button
             onClick={handleClose}
-            className="px-6 py-2.5 rounded-full bg-white text-black font-medium text-xs hover:bg-neutral-200 transition-all active:scale-95 shadow-md"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="px-6 py-2.5 rounded-full bg-white text-black font-medium text-xs shadow-md"
           >
             Continuar
-          </button>
+          </motion.button>
         </div>
 
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
