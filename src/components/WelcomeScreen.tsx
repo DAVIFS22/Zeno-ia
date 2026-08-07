@@ -1,12 +1,14 @@
 import React from 'react';
 import { 
-  Sparkles, Terminal, Palette, ArrowRight, Lock, Music
+  Sparkles, Terminal, Palette, ArrowRight, Lock, Music,
+  FileText, Mail, Calendar, Code, Cpu, Server, Layout
 } from 'lucide-react';
 import { ZenoLogo } from './ZenoLogo';
 import { ModelType } from '../types';
 import { motion } from 'motion/react';
-import { ZENO_MODELS, getModelDef } from '../lib/subscription';
+import { getModelDef } from '../lib/subscription';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { useTranslation } from '../i18n';
 
 interface WelcomeScreenProps {
   speed: ModelType;
@@ -14,7 +16,6 @@ interface WelcomeScreenProps {
   logoVariant: 'monochrome' | 'gradient';
   userName?: string;
   onSelectPrompt: (promptText: string) => void;
-  onOpenImageStudio: () => void;
   onOpenMusicStudio?: () => void;
   onSelectSpeed: (speed: ModelType) => void;
   user?: any;
@@ -33,36 +34,39 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
   onLogin,
   authLoading
 }) => {
+  const { t } = useTranslation();
   const isDark = theme === 'dark';
   const displayName = user?.displayName?.split(' ')[0] || userName?.split(' ')[0] || '';
   const { isPro } = useSubscription();
 
   const currentModelDef = getModelDef(speed);
 
-  // Suggestions for prompt starters
+  // Suggestions for prompt starters with outline icons
   const getSuggestions = () => {
     if (speed === 'vision' || speed === 'image') {
       return [
-        { title: 'Logotipo Minimalista', prompt: 'Crie um conceito de logotipo minimalista e elegante para uma marca de tecnologia.' },
-        { title: 'Ilustração Vetorial', prompt: 'Crie uma ilustração vetorial moderna de uma paisagem de montanhas ao pôr do sol.' },
-        { title: 'Interface UI/UX', prompt: 'Gere um mockup limpo de interface mobile para um aplicativo de finanças pessoais.' },
+        { title: (t.welcome as any).suggestions?.vision1?.title || 'Logotipo Minimalista', prompt: (t.welcome as any).suggestions?.vision1?.prompt || 'Crie um conceito de logotipo minimalista e elegante para uma marca de tecnologia.', icon: Palette },
+        { title: (t.welcome as any).suggestions?.vision2?.title || 'Ilustração Vetorial', prompt: (t.welcome as any).suggestions?.vision2?.prompt || 'Crie uma ilustração vetorial moderna de uma paisagem de montanhas ao pôr do sol.', icon: Sparkles },
+        { title: (t.welcome as any).suggestions?.vision3?.title || 'Interface UI/UX', prompt: (t.welcome as any).suggestions?.vision3?.prompt || 'Gere um mockup limpo de interface mobile para um aplicativo de finanças pessoais.', icon: Layout },
       ];
     }
     if (speed === 'code' || speed === 'mega') {
       return [
-        { title: 'Componente React', prompt: 'Crie um componente React em TypeScript com Tailwind CSS para uma lista interativa.' },
-        { title: 'Otimizar Algoritmo', prompt: 'Como posso otimizar a complexidade de tempo desta função de ordenação?' },
-        { title: 'API Express em TypeScript', prompt: 'Escreva uma estrutura básica de servidor Express em TypeScript com validações.' },
+        { title: (t.welcome as any).suggestions?.code1?.title || 'Componente React', prompt: (t.welcome as any).suggestions?.code1?.prompt || 'Crie um componente React em TypeScript com Tailwind CSS para uma lista interativa.', icon: Code },
+        { title: (t.welcome as any).suggestions?.code2?.title || 'Otimizar Algoritmo', prompt: (t.welcome as any).suggestions?.code2?.prompt || 'Como posso otimizar a complexidade de tempo desta função de ordenação?', icon: Cpu },
+        { title: (t.welcome as any).suggestions?.code3?.title || 'API Express em TypeScript', prompt: (t.welcome as any).suggestions?.code3?.prompt || 'Escreva uma estrutura básica de servidor Express em TypeScript com validações.', icon: Server },
       ];
     }
     return [
-      { title: 'Resumir Artigo', prompt: 'Como posso resumir textos extensos em tópicos diretos e objetivos?' },
-      { title: 'E-mail Profissional', prompt: 'Escreva uma mensagem profissional para alinhar os próximos passos de um projeto.' },
-      { title: 'Planejamento Semanal', prompt: 'Crie um cronograma simples de foco e produtividade para a próxima semana.' },
+      { title: (t.welcome as any).suggestions?.general1?.title || 'Resumir Artigo', prompt: (t.welcome as any).suggestions?.general1?.prompt || 'Como posso resumir textos extensos em tópicos diretos e objetivos?', icon: FileText },
+      { title: (t.welcome as any).suggestions?.general2?.title || 'E-mail Profissional', prompt: (t.welcome as any).suggestions?.general2?.prompt || 'Escreva uma mensagem profissional para alinhar os próximos passos de um projeto.', icon: Mail },
+      { title: (t.welcome as any).suggestions?.general3?.title || 'Planejamento Semanal', prompt: (t.welcome as any).suggestions?.general3?.prompt || 'Crie um cronograma simples de foco e produtividade para a próxima semana.', icon: Calendar },
     ];
   };
 
   const suggestions = getSuggestions();
+  
+  const modelDescription = (t.welcome as any).modelDescriptions?.[speed] || currentModelDef.description;
 
   return (
     <motion.div 
@@ -70,88 +74,105 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="flex flex-col items-center justify-center w-full px-4 py-8 mx-auto my-auto text-center"
+      className="flex flex-col items-center justify-center w-full max-w-xl px-4 py-8 mx-auto my-auto text-center"
     >
       {/* Small Clean Logo & Simple Greeting */}
       <div className="flex flex-col items-center gap-3 mb-6">
-        <ZenoLogo size={32} variant={logoVariant} theme={theme} />
+        <ZenoLogo size={36} variant={logoVariant} theme={theme} />
         <h1 className={`text-xl sm:text-2xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-          {displayName ? `Olá, ${displayName}` : 'Como posso ajudar você hoje?'}
+          {displayName ? `${t.welcome.title.split(',')[0]}, ${displayName}` : t.welcome.subtitle}
         </h1>
+        <p className={`text-xs sm:text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+          Como posso te ajudar hoje?
+        </p>
       </div>
 
-      {/* Model Selector Card (Only shown when starting a new chat) */}
-      <div className={`w-full p-4 sm:p-5 rounded-2xl border transition-all mb-6 text-left ${
+      {/* Model Selector Card (ZENO Smart) */}
+      <div className={`w-full p-4 sm:p-5 rounded-2xl border transition-all mb-4 text-left ${
         isDark 
           ? 'bg-[#151518] border-[#2C2C2E]/80 text-white' 
           : 'bg-white border-neutral-200/90 text-neutral-900 shadow-xs'
       }`}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-neutral-400" />
+            <Sparkles className="w-4 h-4 text-blue-400" />
             <span className="text-sm font-semibold tracking-tight">{currentModelDef.name}</span>
           </div>
-          {currentModelDef.isPro && !isPro && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
-              <Lock className="w-2.5 h-2.5" /> PRO
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+              isDark 
+                ? 'bg-blue-500/15 text-blue-400 border-blue-500/20' 
+                : 'bg-blue-50 text-blue-600 border-blue-200'
+            }`}>
+              Padrão
             </span>
-          )}
+            {currentModelDef.isPro && !isPro && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
+                <Lock className="w-2.5 h-2.5" /> PRO
+              </span>
+            )}
+          </div>
         </div>
         <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-          {currentModelDef.description}
+          {modelDescription}
         </p>
       </div>
 
-      {/* Discrete Prompt Suggestions */}
-      <div className="w-full space-y-2">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {suggestions.map((s, idx) => (
+      {/* Discrete Prompt Suggestions with Outline Icons */}
+      <div className="w-full space-y-2.5">
+        <div className="flex flex-col gap-2.5 w-full">
+          {suggestions.map((s, idx) => {
+            const IconComp = s.icon;
+            return (
+              <button
+                key={idx}
+                onClick={() => onSelectPrompt(s.prompt)}
+                className={`group flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs sm:text-sm font-normal cursor-pointer ${
+                  isDark
+                    ? 'bg-[#151518] hover:bg-[#232326] border-[#2C2C2E]/80 text-neutral-200 hover:text-white'
+                    : 'bg-white hover:bg-neutral-50 border-neutral-200/90 text-neutral-700 hover:text-neutral-900 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center gap-3 truncate pr-2">
+                  <IconComp className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 flex-shrink-0" />
+                  <span className="truncate font-medium">{s.title}</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
+              </button>
+            );
+          })}
+
+          {onOpenMusicStudio && (
             <button
-              key={idx}
-              onClick={() => onSelectPrompt(s.prompt)}
-              className={`group flex items-center justify-between p-3 rounded-xl border text-left transition-all text-xs font-normal ${
+              onClick={onOpenMusicStudio}
+              className={`group flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs sm:text-sm font-normal cursor-pointer ${
                 isDark
-                  ? 'bg-[#151518] hover:bg-[#232326]/80 border-[#2C2C2E]/80 text-neutral-300 hover:text-white'
+                  ? 'bg-[#151518] hover:bg-[#232326] border-[#2C2C2E]/80 text-neutral-200 hover:text-white'
                   : 'bg-white hover:bg-neutral-50 border-neutral-200/90 text-neutral-700 hover:text-neutral-900 shadow-2xs'
               }`}
             >
-              <span className="truncate pr-1">{s.title}</span>
-              <ArrowRight className="w-3 h-3 text-neutral-400 group-hover:text-neutral-200 transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
+              <div className="flex items-center gap-3 truncate pr-2">
+                <Music className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 flex-shrink-0" />
+                <span className="truncate font-medium">{t.composer.musicStudio || 'Estúdio de Música'}</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
             </button>
-          ))}
+          )}
         </div>
-
-        {onOpenMusicStudio && (
-          <button
-            onClick={onOpenMusicStudio}
-            className={`w-full group flex items-center justify-between p-3 rounded-xl border text-left transition-all text-xs font-normal ${
-              isDark
-                ? 'bg-[#1C1C1E] hover:bg-[#2C2C2E]/80 border-[#2C2C2E] text-[#F5F5F5]'
-                : 'bg-white hover:bg-neutral-50 border-neutral-200/90 text-neutral-700 hover:text-neutral-900 shadow-2xs'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 truncate pr-1">
-              <Music className="w-4 h-4 text-[#D4D4D8] shrink-0" />
-              <span className="font-medium text-[#F5F5F5]">Criar Música com IA</span>
-              <span className="text-[#9A9A9E] truncate">— Letras, acordes e prévia sonora</span>
-            </div>
-            <ArrowRight className="w-3 h-3 text-[#9A9A9E] group-hover:text-[#F5F5F5] transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
-          </button>
-        )}
       </div>
 
       {!user && (
-        <div className="mt-8">
+        <div className="mt-6">
           <button
             onClick={() => onLogin?.(true)}
             disabled={authLoading}
-            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all border ${
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-all border cursor-pointer ${
               isDark 
                 ? 'bg-[#1C1C1E] hover:bg-[#232326] text-neutral-300 border-[#2C2C2E]' 
                 : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border-neutral-200'
             }`}
           >
-            {authLoading ? 'Conectando...' : 'Entrar com Google para sincronizar histórico'}
+            {authLoading ? t.common.loading : t.welcome.getStarted}
           </button>
         </div>
       )}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
 import { UserSettings } from '../types';
+import { useTranslation } from '../i18n';
 
 interface PlansModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   userId,
   onOpenCheckout,
 }) => {
+  const { t } = useTranslation();
   const [loadingPlan, setLoadingPlan] = useState<'monthly' | 'annual' | null>(null);
 
   if (!isOpen) return null;
@@ -41,11 +43,11 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         if (data.url) {
           window.open(data.url, '_blank');
         } else {
-          alert(data.error || 'Erro ao iniciar o checkout.');
+          alert(data.error || t.plans.error);
         }
       }
     } catch (err) {
-      alert('Erro ao processar assinatura. Tente novamente.');
+      alert(t.plans.processError);
     } finally {
       setLoadingPlan(null);
     }
@@ -71,13 +73,13 @@ export const PlansModal: React.FC<PlansModalProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>ZENO Pro Oficial</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">Escolha seu plano</h2>
-            <p className="text-neutral-400 text-sm">Desbloqueie todo o poder dos modelos avançados, geração de imagens e recursos ilimitados.</p>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">{t.plans.title}</h2>
+            <p className="text-neutral-400 text-sm">{t.plans.subtitle}</p>
           </div>
           <button 
             onClick={onClose} 
             className="p-2.5 rounded-full hover:bg-[#232326] text-neutral-400 hover:text-white transition-colors"
-            aria-label="Fechar"
+            aria-label={t.common.close}
           >
             <X className="w-5 h-5" />
           </button>
@@ -88,22 +90,22 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           <div className="border border-[#2C2C2E] rounded-3xl p-6 sm:p-8 flex flex-col justify-between hover:border-[#2C2C2E] transition-all duration-300 bg-[#121212]/60 shadow-lg relative group">
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">Plano Mensal</h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-[#232326] text-neutral-300 font-medium">Flexível</span>
+                <h3 className="text-lg font-semibold text-white">{t.plans.monthly}</h3>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-[#232326] text-neutral-300 font-medium">{t.plans.flexible}</span>
               </div>
               <div className="text-3xl sm:text-4xl font-bold text-white mb-2 tracking-tight">
-                R$ 39,90 <span className="text-sm font-normal text-neutral-400">/mês</span>
+                {t.plans.monthlyPrice} <span className="text-sm font-normal text-neutral-400">{t.plans.monthlyPeriod}</span>
               </div>
-              <p className="text-neutral-400 text-sm mb-6">Ideal para quem deseja flexibilidade total sem compromisso de longo prazo.</p>
+              <p className="text-neutral-400 text-sm mb-6">{t.plans.monthlyDesc}</p>
               
               <ul className="space-y-3.5 mb-8">
                 {[
-                  'Todos os modelos Premium (Claude 3.5, GPT-4o, Gemini Pro)',
-                  'Respostas prioritárias na velocidade máxima',
-                  'Geração de imagens ilimitada em alta definição',
-                  'Pesquisa Web avançada em tempo real',
-                  'Upload de arquivos e documentos',
-                  'Cancelamento a qualquer momento'
+                  t.plans.features.premiumModels,
+                  t.plans.features.priority,
+                  t.plans.features.images,
+                  t.plans.features.webSearch,
+                  t.plans.features.docs,
+                  t.plans.features.cancel
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start text-neutral-300 text-sm">
                     <Check className="w-4 h-4 text-white mr-3 flex-shrink-0 mt-0.5" />
@@ -115,8 +117,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
             <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/80">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
-                <span>Teste grátis de 30 dias</span>
-                <span className="text-sky-400 font-medium">Sem compromisso</span>
+                <span>{t.plans.freeTrial}</span>
+                <span className="text-sky-400 font-medium">{t.plans.noCommitment}</span>
               </div>
               <button
                 onClick={() => handleSubscribe('monthly')}
@@ -126,10 +128,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                 {loadingPlan === 'monthly' ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processando assinatura...</span>
+                    <span>{t.plans.processing}</span>
                   </>
                 ) : (
-                  <span>Assinar Plano Mensal</span>
+                  <span>{t.plans.subscribeMonthly}</span>
                 )}
               </button>
             </div>
@@ -139,26 +141,26 @@ export const PlansModal: React.FC<PlansModalProps> = ({
           <div className="border border-neutral-600 rounded-3xl p-6 sm:p-8 flex flex-col justify-between relative bg-gradient-to-b from-neutral-900 to-neutral-950 text-white shadow-2xl group ring-1 ring-white/20">
             <div className="absolute -top-3.5 left-6 bg-white text-black text-[11px] uppercase tracking-wider px-3.5 py-1 rounded-full font-bold shadow-md flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-neutral-500 fill-neutral-500" />
-              <span>⭐ Melhor Custo-Benefício</span>
+              <span>⭐ {t.plans.bestValue}</span>
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-4 mt-2">
-                <h3 className="text-lg font-semibold">Plano Anual</h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-sky-400 font-medium border border-sky-500/30">Economize ~17%</span>
+                <h3 className="text-lg font-semibold">{t.plans.annual}</h3>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-sky-400 font-medium border border-sky-500/30">{t.plans.savePercent}</span>
               </div>
               <div className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight">
-                R$ 399,90 <span className="text-sm font-normal text-neutral-400">/ano</span>
+                {t.plans.annualPrice} <span className="text-sm font-normal text-neutral-400">{t.plans.annualPeriod}</span>
               </div>
-              <p className="text-neutral-300 text-sm mb-6">Para usuários dedicados que buscam máxima produtividade com desconto exclusivo.</p>
+              <p className="text-neutral-300 text-sm mb-6">{t.plans.annualDesc}</p>
               
               <ul className="space-y-3.5 mb-8">
                 {[
-                  'Todos os recursos Premium ilimitados',
-                  'Prioridade máxima no servidor e menor latência',
-                  'Acesso antecipado a novos recursos e modelos',
-                  'Suporte VIP prioritário 24/7',
-                  'Economia de quase dois meses no ano'
+                  t.plans.features.unlimited,
+                  t.plans.features.latency,
+                  t.plans.features.earlyAccess,
+                  t.plans.features.support,
+                  t.plans.features.economy
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start text-neutral-200 text-sm">
                     <Check className="w-4 h-4 text-sky-400 mr-3 flex-shrink-0 mt-0.5" />
@@ -170,8 +172,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
             <div className="space-y-3 pt-4 border-t border-[#2C2C2E]">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
-                <span>Teste grátis de 30 dias</span>
-                <span className="text-sky-400 font-medium">Garantia de 30 dias</span>
+                <span>{t.plans.freeTrial}</span>
+                <span className="text-sky-400 font-medium">{t.plans.guarantee}</span>
               </div>
               <button
                 onClick={() => handleSubscribe('annual')}
@@ -181,10 +183,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                 {loadingPlan === 'annual' ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-black" />
-                    <span>Processando assinatura anual...</span>
+                    <span>{t.plans.processingAnnual}</span>
                   </>
                 ) : (
-                  <span>Assinar Plano Anual</span>
+                  <span>{t.plans.subscribeAnnual}</span>
                 )}
               </button>
             </div>
@@ -194,9 +196,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         <div className="mt-8 pt-6 border-t border-[#2C2C2E]/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-400 text-xs">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-sky-400 flex-shrink-0" />
-            <span>Pagamento 100% seguro processado pelo Stripe com criptografia SSL.</span>
+            <span>{t.plans.securePayment}</span>
           </div>
-          <span>Cancele a qualquer momento nas configurações da conta.</span>
+          <span>{t.plans.cancelAnytime}</span>
         </div>
       </div>
     </div>

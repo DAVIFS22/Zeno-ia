@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, Sparkles, Download, Copy, Check, RefreshCw, Sliders, Layers, Maximize2, ExternalLink, Wand2, Palette, Heart, Trash2, Search, RotateCcw, Edit3, Filter, Users, Clock, XCircle, Camera, PenTool, Flower, Clapperboard, Box, Building2, Flame, Rocket, Image, Brush, Triangle, Tag, Diamond, Circle, Hexagon, Square, Monitor, Smartphone } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 import { GeneratedImage } from '../types';
-import { addImageToLibrary, getStoredImages, saveStoredImages } from '../lib/imageLibraryStorage';
+import { useTranslation } from '../i18n';
+import { getStoredImages, saveStoredImages, addImageToLibrary } from '../lib/imageLibraryStorage';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ImageStudioModalProps {
   isOpen: boolean;
@@ -16,35 +18,6 @@ interface ImageStudioModalProps {
   onLimitReached?: () => void;
 }
 
-const STYLES = [
-  { id: 'photorealistic', name: 'Fotorealista', icon: Camera, desc: 'Fotografia profissional 8K e luzes cinematográficas' },
-  { id: 'ultra-realista', name: 'Ultra Realista', icon: Camera, desc: 'Textura ultra detalhada, lente DSLR e profundidade' },
-  { id: 'anime', name: 'Anime', icon: Palette, desc: 'Estilo de animação japonesa moderna' },
-  { id: 'manga', name: 'Mangá', icon: PenTool, desc: 'Traços em preto e branco marcantes' },
-  { id: 'ghibli', name: 'Studio Ghibli', icon: Flower, desc: 'Cenários poéticos desenhados à mão' },
-  { id: 'pixar', name: 'Pixar / Disney', icon: Clapperboard, desc: 'Personagens 3D carismáticos e iluminação suave' },
-  { id: '3d-render', name: 'Render 3D', icon: Box, desc: 'Unreal Engine 5, Ray Tracing e Octane' },
-  { id: 'cyberpunk', name: 'Cyberpunk', icon: Building2, desc: 'Neon cintilante e metrópole futurista' },
-  { id: 'fantasy', name: 'Fantasia', icon: Flame, desc: 'Mundos mágicos e trajes detalhados' },
-  { id: 'scifi', name: 'Sci-Fi', icon: Rocket, desc: 'Tecnologia avançada e paisagens cósmicas' },
-  { id: 'concept-art', name: 'Concept Art', icon: Image, desc: 'Ilustração conceitual para cinema e jogos' },
-  { id: 'digital', name: 'Pintura Digital', icon: Brush, desc: 'Pinceladas expressivas e cores ricas' },
-  { id: 'watercolor', name: 'Aquarela', icon: Palette, desc: 'Pinceladas suaves de água e tons pastéis' },
-  { id: 'vector', name: 'Vetorial', icon: Triangle, desc: 'Ilustração plana e formas geométricas limpas' },
-  { id: 'logo', name: 'Logotipo', icon: Tag, desc: 'Design de marca minimalista e escalável' },
-  { id: 'icon', name: 'Ícone 3D', icon: Diamond, desc: 'Símbolo em relevo para aplicativos e UI' },
-  { id: 'minimalist', name: 'Minimalista', icon: Circle, desc: 'Composição limpa com espaço negativo' },
-  { id: 'low-poly', name: 'Low Poly', icon: Hexagon, desc: 'Arte em polígonos geométricos estilizados' }
-];
-
-const ASPECT_RATIOS = [
-  { id: '1:1', name: 'Quadrado (1:1)', icon: Square },
-  { id: '16:9', name: 'Widescreen (16:9)', icon: Monitor },
-  { id: '9:16', name: 'Stories (9:16)', icon: Smartphone },
-  { id: '4:3', name: 'Clássico (4:3)', icon: Image },
-  { id: '3:2', name: 'Foto (3:2)', icon: Camera }
-];
-
 export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   isOpen,
   onClose,
@@ -56,6 +29,37 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   onOpenProFeatureModal,
   onLimitReached
 }) => {
+  const { t } = useTranslation();
+
+  const STYLES = [
+    { id: 'photorealistic', name: t.imageStudio.styles.photorealistic, icon: Camera, desc: 'Fotografia profissional 8K e luzes cinematográficas' },
+    { id: 'ultra-realista', name: t.imageStudio.styles.ultraRealistic, icon: Camera, desc: 'Textura ultra detalhada, lente DSLR e profundidade' },
+    { id: 'anime', name: t.imageStudio.styles.anime, icon: Palette, desc: 'Estilo de animação japonesa moderna' },
+    { id: 'manga', name: t.imageStudio.styles.manga, icon: PenTool, desc: 'Traços em preto e branco marcantes' },
+    { id: 'ghibli', name: t.imageStudio.styles.ghibli, icon: Flower, desc: 'Cenários poéticos desenhados à mão' },
+    { id: 'pixar', name: t.imageStudio.styles.pixar, icon: Clapperboard, desc: 'Personagens 3D carismáticos e iluminação suave' },
+    { id: '3d-render', name: t.imageStudio.styles.threeDRender, icon: Box, desc: 'Unreal Engine 5, Ray Tracing e Octane' },
+    { id: 'cyberpunk', name: t.imageStudio.styles.cyberpunk, icon: Building2, desc: 'Neon cintilante e metrópole futurista' },
+    { id: 'fantasy', name: t.imageStudio.styles.fantasy, icon: Flame, desc: 'Mundos mágicos e trajes detalhados' },
+    { id: 'scifi', name: t.imageStudio.styles.scifi, icon: Rocket, desc: 'Tecnologia avançada e paisagens cósmicas' },
+    { id: 'concept-art', name: t.imageStudio.styles.conceptArt, icon: Image, desc: 'Ilustração conceitual para cinema e jogos' },
+    { id: 'digital', name: t.imageStudio.styles.digitalPainting, icon: Brush, desc: 'Pinceladas expressivas e cores ricas' },
+    { id: 'watercolor', name: t.imageStudio.styles.watercolor, icon: Palette, desc: 'Pinceladas suaves de água e tons pastéis' },
+    { id: 'vector', name: t.imageStudio.styles.vector, icon: Triangle, desc: 'Ilustração plana e formas geométricas limpas' },
+    { id: 'logo', name: t.imageStudio.styles.logo, icon: Tag, desc: 'Design de marca minimalista e escalável' },
+    { id: 'icon', name: t.imageStudio.styles.icon, icon: Diamond, desc: 'Símbolo em relevo para aplicativos e UI' },
+    { id: 'minimalist', name: t.imageStudio.styles.minimalist, icon: Circle, desc: 'Composição limpa com espaço negativo' },
+    { id: 'low-poly', name: t.imageStudio.styles.lowPoly, icon: Hexagon, desc: 'Arte em polígonos geométricos estilizados' }
+  ];
+
+  const ASPECT_RATIOS = [
+    { id: '1:1', name: t.imageStudio.ratios.square, icon: Square },
+    { id: '16:9', name: t.imageStudio.ratios.widescreen, icon: Monitor },
+    { id: '9:16', name: t.imageStudio.ratios.stories, icon: Smartphone },
+    { id: '4:3', name: t.imageStudio.ratios.classic, icon: Image },
+    { id: '3:2', name: t.imageStudio.ratios.photo, icon: Camera }
+  ];
+
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('photorealistic');
   const [selectedRatio, setSelectedRatio] = useState('1:1');
@@ -152,16 +156,19 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
       if (!statusRes.ok) throw new Error('Falha ao obter status');
       
       const statusData = await statusRes.json();
+      const task = statusData.task || statusData;
+      const status = task.status;
+      const result = task.result;
       
-      if (statusData.status === 'completed') {
+      if (status === 'completed') {
         const newImg = addImageToLibrary({
-          imageUrl: statusData.result.imageUrl,
-          prompt: statusData.result.prompt,
-          originalPrompt: statusData.result.originalPrompt || targetPrompt,
-          optimizedPrompt: statusData.result.prompt,
-          aspectRatio: statusData.result.aspectRatio || selectedRatio,
-          style: statusData.result.style || selectedStyle,
-          seed: statusData.result.seed,
+          imageUrl: result?.imageUrl || task.imageUrl,
+          prompt: result?.prompt || task.prompt || targetPrompt,
+          originalPrompt: result?.originalPrompt || targetPrompt,
+          optimizedPrompt: result?.prompt || targetPrompt,
+          aspectRatio: result?.aspectRatio || selectedRatio,
+          style: result?.style || selectedStyle,
+          seed: result?.seed,
           model: 'Estúdio ZENO Vision',
           provider: 'Flux Dev',
           collection: 'Geral',
@@ -172,9 +179,9 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
         setActiveTaskId(null);
         setQueuePosition(null);
         setEstimatedTime(null);
-      } else if (statusData.status === 'failed') {
-        throw new Error(statusData.error || 'Erro interno no processamento do motor ZENO.');
-      } else if (statusData.status === 'cancelled') {
+      } else if (status === 'failed') {
+        throw new Error(task.error || 'Erro interno no processamento do motor ZENO.');
+      } else if (status === 'cancelled') {
         throw new Error('Geração de imagem cancelada.');
       } else {
         // Update live metrics
@@ -298,7 +305,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   };
 
   const handleCopyLink = (url: string, id: string) => {
-    navigator.clipboard.writeText(url);
+    copyToClipboard(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -337,13 +344,13 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
-                ZENO Vision Studio
+                {t.imageStudio.title}
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
-                  Gerador de Imagens IA
+                  {t.imageStudio.subtitle}
                 </span>
               </h2>
               <p className="text-xs text-neutral-400">
-                Transforme ideias em arte e fotografias realistas de alta qualidade
+                {t.imageStudio.description}
               </p>
             </div>
           </div>
@@ -363,8 +370,8 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
             {/* Prompt Input */}
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
-                <span>Descreva sua imagem</span>
-                <span className="text-[11px] text-neutral-400 font-normal">Prompt com IA</span>
+                <span>{t.imageStudio.promptLabel}</span>
+                <span className="text-[11px] text-neutral-400 font-normal">{t.composer.speedSmart}</span>
               </label>
               <div className={`relative rounded-2xl border transition-all ${
                 theme === 'dark' ? 'bg-[#212121] border-[#2C2C2E] focus-within:border-neutral-500' : 'bg-neutral-50 border-neutral-300 focus-within:border-neutral-500'
@@ -372,7 +379,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Ex: Um astronauta caminhando por uma floresta bioluminescente em um planeta distante, estilo fotorrealista..."
+                  placeholder={t.imageStudio.promptPlaceholder}
                   rows={4}
                   className="w-full p-3.5 bg-transparent border-none focus:outline-none resize-none text-sm leading-relaxed text-neutral-200 placeholder-neutral-500"
                 />
@@ -383,7 +390,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5 text-neutral-400" />
-                <span>Estilo Visual</span>
+                <span>{t.imageStudio.styleLabel}</span>
               </label>
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-custom">
                 {STYLES.map(style => (
@@ -411,7 +418,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-neutral-400" />
-                <span>Proporção (Aspect Ratio)</span>
+                <span>{t.imageStudio.ratioLabel}</span>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {ASPECT_RATIOS.map(ratio => (
@@ -446,12 +453,12 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
               {isGenerating ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin text-neutral-900" />
-                  <span>Gerando Imagem...</span>
+                  <span>{t.imageStudio.generating}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  <span>Gerar Imagem com IA</span>
+                  <span>{t.imageStudio.generateBtn}</span>
                 </>
               )}
             </button>
@@ -468,7 +475,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     <XCircle className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-neutral-100">Falha na Fila de Geração</h4>
+                    <h4 className="text-sm font-bold text-neutral-100">{t.imageStudio.failed}</h4>
                     <p className="text-xs text-neutral-400 max-w-xs">{queueError}</p>
                   </div>
                   <button
@@ -478,7 +485,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     }}
                     className="py-1.5 px-4 bg-[#232326] hover:bg-neutral-700 text-neutral-200 border border-[#2C2C2E] text-xs font-semibold rounded-xl transition-all"
                   >
-                    Tentar Novamente
+                    {t.imageStudio.tryAgain}
                   </button>
                 </div>
               ) : isGenerating ? (
@@ -497,10 +504,10 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                   <div className="space-y-1.5 z-10">
                     <h3 className="text-base font-bold text-neutral-100 flex items-center justify-center gap-2">
                       <Sparkles className="w-4 h-4 text-neutral-400 animate-pulse" />
-                      <span>{queuePosition !== null ? 'Aguardando na Fila ZENO...' : (genProgress < 40 ? 'Expandindo Prompt...' : genProgress < 75 ? 'Sintetizando Iluminação & Textura...' : 'Renderizando Alta Definição...')}</span>
+                      <span>{queuePosition !== null ? t.imageStudio.queueTitle : (genProgress < 40 ? t.imageStudio.generatingSteps.step1 : genProgress < 75 ? t.imageStudio.generatingSteps.step2 : t.imageStudio.generatingSteps.step3)}</span>
                     </h3>
                     <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
-                      O ZENO Vision está transformando seu texto em uma imagem em alta fidelidade.
+                      {t.imageStudio.queueDesc}
                     </p>
                   </div>
 
@@ -509,7 +516,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     <div className="flex justify-between items-center text-[11px] font-semibold text-neutral-300 px-0.5">
                       <span className="text-neutral-400 font-mono flex items-center gap-1">
                         <RefreshCw className="w-3 h-3 animate-spin text-neutral-400" />
-                        {queuePosition !== null ? 'Na fila de espera...' : 'Gerando Imagem'}
+                        {queuePosition !== null ? t.imageStudio.queueTitle : t.imageStudio.generating}
                       </span>
                       <span className="font-mono text-neutral-300">{genProgress}%</span>
                     </div>
@@ -530,7 +537,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       <div className="flex items-center justify-between text-xs text-neutral-300">
                         <span className="flex items-center gap-1.5 font-medium text-neutral-400">
                           <Users className="w-4 h-4 text-neutral-500" />
-                          Posição na Fila:
+                          {t.imageStudio.queuePosition}
                         </span>
                         <span className="font-extrabold text-neutral-100 bg-[#232326] px-2.5 py-1 rounded-lg border border-[#2C2C2E] font-mono">
                           #{queuePosition}
@@ -539,7 +546,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       <div className="flex items-center justify-between text-xs text-neutral-300">
                         <span className="flex items-center gap-1.5 font-medium text-neutral-400">
                           <Clock className="w-4 h-4 text-neutral-500" />
-                          Tempo Estimado:
+                          {t.imageStudio.estimatedTime}
                         </span>
                         <span className="font-extrabold text-sky-400 font-mono bg-sky-950/30 px-2 py-0.5 rounded-md">
                           ~{estimatedTime}s
@@ -551,7 +558,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                         className="w-full mt-2 py-2 px-3 rounded-lg bg-[#121212]/30 hover:bg-[#1C1C1E]/40 text-neutral-300 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 border border-neutral-500/20 active:scale-[0.98]"
                       >
                         <XCircle className="w-3.5 h-3.5 text-neutral-400" />
-                        Cancelar Solicitação
+                        {t.imageStudio.cancelRequest}
                       </button>
                     </div>
                   )}
@@ -564,11 +571,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      if (!target.dataset.retried) {
-                        target.dataset.retried = 'true';
-                        const fallbackPrompt = encodeURIComponent(currentImage.originalPrompt || 'artistic digital image');
-                        target.src = `https://image.pollinations.ai/prompt/${fallbackPrompt}?width=1024&height=1024&nologo=true`;
-                      }
+                      target.style.opacity = '0.5';
                     }}
                     className="max-h-[420px] w-auto object-contain rounded-xl shadow-xl transition-transform duration-300 group-hover:scale-[1.01]"
                   />
@@ -578,7 +581,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     <button
                       onClick={() => toggleFavorite(currentImage.id)}
                       className={`p-2 rounded-lg transition-colors ${currentImage.isFavorite ? 'text-neutral-400 bg-neutral-500/20' : 'text-neutral-200 hover:bg-[#232326]'}`}
-                      title={currentImage.isFavorite ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
+                      title={currentImage.isFavorite ? t.imageStudio.removeFromFavorites : t.imageStudio.addToFavorites}
                     >
                       <Heart className={`w-4 h-4 ${currentImage.isFavorite ? 'fill-neutral-400 text-neutral-400' : ''}`} />
                     </button>
@@ -586,21 +589,21 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       onClick={() => handleGenerate(currentImage.originalPrompt || currentImage.prompt)}
                       disabled={isGenerating}
                       className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
-                      title="Regenerar esta Imagem"
+                      title={t.imageStudio.regenerate}
                     >
                       <RotateCcw className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setFullscreenUrl(currentImage.imageUrl)}
                       className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
-                      title="Ver em Tela Cheia"
+                      title={t.imageStudio.fullscreen}
                     >
                       <Maximize2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleCopyLink(currentImage.imageUrl, currentImage.id)}
                       className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
-                      title="Copiar Link da Imagem"
+                      title={t.imageStudio.copyLink}
                     >
                       {copiedId === currentImage.id ? <Check className="w-4 h-4 text-sky-400" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -608,7 +611,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       onClick={() => handleDownload(currentImage.imageUrl, `zeno-${Date.now()}.jpg`, currentImage.id)}
                       disabled={isDownloading}
                       className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors flex items-center gap-1"
-                      title="Baixar Imagem"
+                      title={t.imageStudio.download}
                     >
                       {isDownloading ? (
                         <RefreshCw className="w-4 h-4 text-neutral-300 animate-spin" />
@@ -631,7 +634,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                         className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-200 flex items-center gap-2 shadow-sm transition-all"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Enviar para a Conversa</span>
+                        <span>{t.imageStudio.sendToChat}</span>
                       </button>
                     </div>
                   )}
@@ -641,9 +644,9 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                   <div className="p-4 rounded-2xl bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
                     <ImageIcon className="w-10 h-10" />
                   </div>
-                  <h3 className="text-sm font-semibold">Nenhuma Imagem Gerada Ainda</h3>
+                  <h3 className="text-sm font-semibold">{t.imageStudio.noImageTitle}</h3>
                   <p className="text-xs text-neutral-400 max-w-xs">
-                    Escreva uma descrição no campo ao lado e clique em "Gerar Imagem com IA" para ver a imagem ser criada.
+                    {t.imageStudio.noImageDesc}
                   </p>
                 </div>
               )}
@@ -660,7 +663,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                         activeTab === 'all' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-200'
                       }`}
                     >
-                      Todas ({history.length})
+                      {t.imageStudio.galleryTitle} ({history.length})
                     </button>
                     <button
                       onClick={() => setActiveTab('favorites')}
@@ -669,7 +672,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       }`}
                     >
                       <Heart className="w-3 h-3 text-neutral-400 fill-neutral-400" />
-                      <span>Favoritas ({history.filter(i => i.isFavorite).length})</span>
+                      <span>{t.imageStudio.favoritesTitle} ({history.filter(i => i.isFavorite).length})</span>
                     </button>
                   </div>
 
@@ -679,7 +682,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Buscar no histórico..."
+                      placeholder={t.imageStudio.searchPlaceholder}
                       className="w-full pl-8 pr-3 py-1 rounded-xl bg-[#232326] border border-[#2C2C2E] text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
                     />
                   </div>
@@ -721,7 +724,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                           deleteImage(img.id);
                         }}
                         className="absolute top-1 right-1 p-1 rounded-lg bg-black/70 hover:bg-neutral-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Excluir da biblioteca"
+                        title={t.imageStudio.deleteFromLibrary}
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -730,7 +733,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
                   {filteredHistory.length === 0 && (
                     <div className="text-xs text-neutral-500 py-4 italic">
-                      Nenhuma imagem encontrada {activeTab === 'favorites' ? 'nos favoritos' : ''}.
+                      {t.imageStudio.emptyGallery} {activeTab === 'favorites' ? t.imageStudio.emptyFavorites : ''}.
                     </div>
                   )}
                 </div>
@@ -750,22 +753,22 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
             <button
               onClick={() => handleDownload(fullscreenUrl, `zeno-fullscreen-${Date.now()}.jpg`)}
               className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2 text-xs font-semibold"
-              title="Baixar Imagem"
+              title={t.imageStudio.download}
             >
               <Download className="w-5 h-5 text-neutral-300" />
-              <span className="hidden sm:inline">Baixar</span>
+              <span className="hidden sm:inline">{t.imageStudio.download}</span>
             </button>
             <button
               onClick={() => setFullscreenUrl(null)}
               className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-              title="Fechar"
+              title={t.common.close}
             >
               <X className="w-6 h-6" />
             </button>
           </div>
           <img
             src={fullscreenUrl}
-            alt="Fullscreen view"
+            alt={t.imageStudio.fullscreen}
             referrerPolicy="no-referrer"
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"

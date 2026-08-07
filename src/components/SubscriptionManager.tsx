@@ -19,6 +19,7 @@ import { getOrCreateUserId } from '../lib/userId';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { useTranslation } from '../i18n';
 
 export interface SubscriptionManagerProps {
   userId: string;
@@ -45,6 +46,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   onUpdateSettings,
   onOpenCheckout
 }) => {
+  const { t, language } = useTranslation();
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
   const [statusData, setStatusData] = useState<any>(null);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
@@ -63,6 +65,15 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
   const userEmail = settings.userEmail || '';
   const { isPro, refreshSubscription } = useSubscription();
+
+  const localeMap: Record<string, string> = {
+    pt: 'pt-BR',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    zh: 'zh-CN'
+  };
+
+  const currentLocale = localeMap[language] || 'pt-BR';
 
   // 1. Initial & API Status Fetch from /api/subscription/status (Stripe single source of truth)
   const fetchSubscriptionStatus = async () => {
@@ -148,14 +159,14 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   const isExpired = !isPro && (currentStatus === 'expired' || currentStatus === 'canceled' || currentStatus === 'past_due' || currentStatus === 'unpaid');
 
   const trialEndTimestamp = statusData?.trialEnd || statusData?.trial_end || effectiveSub?.trialEnd || effectiveSub?.trial_end;
-  const formattedTrialEnd = trialEndTimestamp ? new Date(trialEndTimestamp * 1000).toLocaleDateString('pt-BR') : null;
+  const formattedTrialEnd = trialEndTimestamp ? new Date(trialEndTimestamp * 1000).toLocaleDateString(currentLocale) : null;
 
   const periodEndIso = statusData?.currentPeriodEnd || statusData?.current_period_end || statusData?.renewDate || statusData?.expirationDate || effectiveSub?.renewDate || effectiveSub?.currentPeriodEnd;
-  const formattedDate = (isPro && periodEndIso) ? new Date(periodEndIso).toLocaleDateString('pt-BR') : 'Sem assinatura ativa';
+  const formattedDate = (isPro && periodEndIso) ? new Date(periodEndIso).toLocaleDateString(currentLocale) : t.subscriptionManager.activeUntil;
   
-  const planName = statusData?.plan || statusData?.subscriptionPlan || (settings.billingCycle === 'annual' ? 'ZENO Pro Anual' : 'ZENO Pro Mensal');
+  const planName = statusData?.plan || statusData?.subscriptionPlan || (settings.billingCycle === 'annual' ? t.plans.annual : t.plans.monthly);
   const priceVal = statusData?.price !== undefined ? statusData.price : (settings.billingCycle === 'annual' ? 399.90 : 39.90);
-  const amountFormatted = priceVal.toLocaleString('pt-BR', { style: 'currency', currency: statusData?.currency?.toUpperCase() || 'BRL' });
+  const amountFormatted = priceVal.toLocaleString(currentLocale, { style: 'currency', currency: statusData?.currency?.toUpperCase() || 'BRL' });
 
   // Payment Method
   const paymentMethod = statusData?.paymentMethod || statusData?.payment_method || effectiveSub?.paymentMethod || null;
@@ -175,11 +186,11 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   };
 
   const getStatusBadgeLabel = () => {
-    if (isExpired) return 'Expirada';
-    if (isTrialing) return 'Teste Grátis';
-    if (isCancelled) return 'Cancelada';
-    if (isPro) return 'Ativa';
-    return 'Gratuito';
+    if (isExpired) return t.subscriptionManager.expired;
+    if (isTrialing) return t.subscriptionManager.trial30;
+    if (isCancelled) return t.subscription.off;
+    if (isPro) return t.subscriptionManager.activeSub;
+    return t.subscriptionManager.free;
   };
 
   // Execute Cancel Auto-Renew
@@ -204,10 +215,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         await fetchSubscriptionStatus();
         await refreshSubscription();
 
-        const cancelDate = data.formattedDate || (data.current_period_end ? new Date(data.current_period_end).toLocaleDateString('pt-BR') : formattedDate);
+        const cancelDate = data.formattedDate || (data.current_period_end ? new Date(data.current_period_end).toLocaleDateString(currentLocale) : formattedDate);
         setFeedback({ 
           type: 'info', 
-          message: `Renovação automática cancelada com sucesso. Sua assinatura permanecerá ativa até ${cancelDate}.` 
+          message: t.subscriptionManager.cancelSuccess.replace('{date}', cancelDate)
         });
 
         if (onUpdateSettings) {
@@ -253,7 +264,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
         setFeedback({ 
           type: 'success', 
-          message: 'Sua cobrança automática foi reativada com sucesso. O seu plano ZENO Pro continuará sem interrupções.' 
+          message: t.subscriptionManager.reactivateSuccess 
         });
 
         if (onUpdateSettings) {
@@ -319,7 +330,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setFeedback({ type: 'success', message: "Forma de pagamento atualizada com sucesso!" });
+        setFeedback({ type: 'success', message: t.subscriptionManager.saveCard });
         setShowCardModal(false);
         setStatusData((prev: any) => ({
           ...prev,
@@ -339,7 +350,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
     return (
       <div className="p-12 text-center text-xs text-neutral-400 space-y-3 animate-pulse">
         <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
-        <p className="font-medium">Carregando dados da sua assinatura ZENO Pro...</p>
+        <p className="font-medium">{t.subscriptionManager.loading}</p>
       </div>
     );
   }
@@ -352,10 +363,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-neutral-400" />
-            <span>Gerenciar Assinatura</span>
+            <span>{t.subscriptionManager.manageTitle}</span>
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
-            Acompanhe a situação do seu plano, gerencie a renovação automática, cartão de crédito e histórico de cobranças.
+            {t.subscriptionManager.manageDesc}
           </p>
         </div>
 
@@ -364,7 +375,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             onClick={() => onOpenCheckout()}
             className="px-4 py-2 rounded-xl bg-white text-black hover:bg-neutral-200 font-semibold text-xs transition-colors flex items-center gap-1.5 self-start sm:self-auto"
           >
-            <span>Fazer Upgrade Pro</span>
+            <span>{t.subscriptionManager.upgradePro}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         )}
@@ -392,8 +403,8 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
           <div className="flex items-center gap-3">
             <XCircle className="w-6 h-6 text-neutral-400 flex-shrink-0" />
             <div>
-              <strong className="block text-neutral-300 font-bold text-base">Seu plano ZENO Pro expirou.</strong>
-              <p className="text-neutral-200/80 text-xs">Renove agora para recuperar respostas ilimitadas sem restrições.</p>
+              <strong className="block text-neutral-300 font-bold text-base">{t.subscriptionManager.statusExpired}</strong>
+              <p className="text-neutral-200/80 text-xs">{t.subscriptionManager.statusExpiredDesc}</p>
             </div>
           </div>
           {onOpenCheckout && (
@@ -401,7 +412,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               onClick={() => onOpenCheckout('monthly')}
               className="px-5 py-2.5 rounded-xl bg-neutral-600 hover:bg-neutral-500 text-white font-bold text-xs transition-all shadow-md whitespace-nowrap self-stretch sm:self-auto text-center"
             >
-              Renovar Assinatura
+              {t.subscriptionManager.renewBtn}
             </button>
           )}
         </div>
@@ -412,9 +423,9 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div className="p-5 rounded-2xl bg-neutral-500/10 border border-neutral-500/30 text-neutral-200 text-xs sm:text-sm flex items-center gap-3 shadow-lg">
           <Sparkles className="w-6 h-6 text-neutral-400 flex-shrink-0" />
           <div>
-            <strong className="block text-neutral-300 font-bold text-base">Teste Grátis de 30 dias Ativo</strong>
+            <strong className="block text-neutral-300 font-bold text-base">{t.subscriptionManager.statusTrial}</strong>
             <p className="text-neutral-200/80 text-xs mt-0.5">
-              Você está aproveitando todos os recursos Pro sem custos. O primeiro pagamento só será cobrado em {formattedTrialEnd || '30 dias'}.
+              {t.subscriptionManager.statusTrialDesc.replace('{date}', formattedTrialEnd || '30 days')}
             </p>
           </div>
         </div>
@@ -428,7 +439,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2.5">
               <h3 className="text-xl font-black tracking-tight text-white">
-                {isPro ? planName : 'Plano ZENO Free'}
+                {isPro ? planName : t.subscriptionManager.freePlan}
               </h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                 isExpired 
@@ -441,20 +452,20 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
                   : 'bg-[#232326] text-neutral-400 border-[#2C2C2E]'
               }`}>
-                {isExpired ? 'Expirada' : getStatusBadgeLabel()}
+                {isExpired ? t.subscriptionManager.expired : getStatusBadgeLabel()}
               </span>
             </div>
             <p className="text-xs text-neutral-400">
               {isPro
-                ? 'Sua conta possui acesso ilimitado e prioritário a todos os modelos inteligentes ZENO.'
-                : 'Acesso básico aos modelos com restrições diárias de uso.'}
+                ? t.subscriptionManager.proPlanDesc
+                : t.subscriptionManager.freePlanDesc}
             </p>
           </div>
 
           <div className="text-left sm:text-right">
             <div className="text-2xl font-black text-white">{isPro ? amountFormatted : 'R$ 0,00'}</div>
             <span className="text-[11px] text-neutral-500 font-medium">
-              {isPro ? (isTrialing ? 'cobrança após o teste' : 'cobrado recorrentemente') : 'sem custo'}
+              {isPro ? (isTrialing ? t.subscriptionManager.afterTrial : t.subscriptionManager.recurrent) : t.subscriptionManager.noCost}
             </span>
           </div>
         </div>
@@ -463,51 +474,51 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-[#27272a] pt-5 text-xs">
           
           <div className="space-y-1 p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32]">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Status</span>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">{t.subscriptionManager.statusLabel}</span>
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isTrialing ? (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="text-sky-400 font-bold">Teste grátis de 30 dias</span>
+                  <span className="text-sky-400 font-bold">{t.subscriptionManager.trial30}</span>
                 </>
               ) : isCancelled && isPro ? (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="text-neutral-400 font-bold">Renovação desativada</span>
+                  <span className="text-neutral-400 font-bold">{t.subscriptionManager.renewalDisabled}</span>
                 </>
               ) : isPro ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="text-sky-400 font-bold">Assinatura Ativa</span>
+                  <span className="text-sky-400 font-bold">{t.subscriptionManager.activeSub}</span>
                 </>
               ) : isExpired ? (
                 <>
                   <XCircle className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="text-neutral-400 font-bold">Expirada</span>
+                  <span className="text-neutral-400 font-bold">{t.subscriptionManager.expired}</span>
                 </>
               ) : (
-                <span className="text-neutral-400">Gratuito</span>
+                <span className="text-neutral-400">{t.subscriptionManager.free}</span>
               )}
             </p>
           </div>
 
           <div className="space-y-1 p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32]">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Plano ativo até</span>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">{t.subscriptionManager.activeUntil}</span>
             <p className="text-sm text-white font-semibold flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-              <span>{isPro ? formattedDate : 'N/A'}</span>
+              <span>{isPro ? formattedDate : t.subscriptionManager.notApplicable}</span>
             </p>
           </div>
 
           <div className="space-y-1 p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32]">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Próxima cobrança</span>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">{t.subscriptionManager.nextBilling}</span>
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isCancelled ? (
-                <span className="text-neutral-400">Nenhuma (Cancelada)</span>
+                <span className="text-neutral-400">{t.subscriptionManager.noneCancelled}</span>
               ) : isPro ? (
                 <span className="text-white">{formattedDate}</span>
               ) : (
-                <span className="text-neutral-400">Nenhuma</span>
+                <span className="text-neutral-400">{t.subscriptionManager.none}</span>
               )}
             </p>
           </div>
@@ -517,7 +528,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         {/* Payment Method Details */}
         {isPro && (
           <div className="space-y-2 border-t border-[#27272a] pt-5">
-            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Método de Pagamento Registrado</span>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">{t.subscriptionManager.paymentMethod}</span>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32] gap-3">
               {paymentMethod && paymentMethod.last4 ? (
                 <div className="flex items-center gap-3">
@@ -526,10 +537,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white capitalize">
-                      {paymentMethod.brand || 'Cartão'} •••• {paymentMethod.last4}
+                      {paymentMethod.brand || t.subscriptionManager.card} •••• {paymentMethod.last4}
                     </p>
                     <p className="text-[11px] text-neutral-400">
-                      Expiração: {paymentMethod.expMonth || '12'}/{paymentMethod.expYear || '2028'}
+                      {t.subscriptionManager.expiration} {paymentMethod.expMonth || '12'}/{paymentMethod.expYear || '2028'}
                     </p>
                   </div>
                 </div>
@@ -540,10 +551,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">
-                      Nenhum método de pagamento registrado diretamente
+                      {t.subscriptionManager.noPaymentMethod}
                     </p>
                     <p className="text-[11px] text-neutral-400">
-                      Gerencie seus cartões com segurança pelo portal do Stripe.
+                      {t.subscriptionManager.manageStripeTip}
                     </p>
                   </div>
                 </div>
@@ -560,7 +571,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 ) : (
                   <RefreshCw className="w-3.5 h-3.5" />
                 )}
-                <span>{actionType === 'portal' ? 'Abrindo...' : 'Atualizar método de pagamento'}</span>
+                <span>{actionType === 'portal' ? t.subscriptionManager.opening : t.subscriptionManager.updatePaymentBtn}</span>
               </button>
             </div>
           </div>
@@ -581,7 +592,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                <span>{actionType === 'reactivate' ? 'Reativando renovação...' : 'Reativar renovação'}</span>
+                <span>{actionType === 'reactivate' ? t.subscriptionManager.reactivating : t.subscriptionManager.reactivateBtn}</span>
               </button>
             ) : (
               <button
@@ -595,7 +606,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 ) : (
                   <XCircle className="w-4 h-4" />
                 )}
-                <span>{actionType === 'cancel' ? 'Processando cancelamento...' : 'Cancelar renovação'}</span>
+                <span>{actionType === 'cancel' ? t.subscriptionManager.cancelling : t.subscriptionManager.cancelBtn}</span>
               </button>
             )}
           </div>
@@ -608,7 +619,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div className="flex items-center justify-between border-b border-[#2C2C2E] pb-3">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <FileText className="w-4 h-4 text-neutral-400" />
-            <span>Histórico de Pagamentos e Comprovantes</span>
+            <span>{t.subscriptionManager.paymentHistory}</span>
           </h3>
 
           <button
@@ -617,7 +628,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             disabled={actionType === 'portal'}
             className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1 font-medium"
           >
-            <span>Ver no Stripe Portal</span>
+            <span>{t.subscriptionManager.viewStripe}</span>
             <ExternalLink className="w-3 h-3" />
           </button>
         </div>
@@ -625,23 +636,23 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         {isLoadingInvoices ? (
           <div className="p-6 text-center text-xs text-neutral-500 animate-pulse flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
-            <span>Carregando histórico de pagamentos e comprovantes...</span>
+            <span>{t.subscriptionManager.loadingInvoices}</span>
           </div>
         ) : invoices.length === 0 ? (
           <div className="p-6 text-center text-xs text-neutral-400 rounded-xl bg-[#1c1c20] border border-[#2d2d32]">
-            Nenhum histórico de cobrança registrado para esta conta até o momento.
+            {t.subscriptionManager.noInvoices}
           </div>
         ) : (
           <div className="space-y-2">
             {invoices.map((inv) => {
-              const invAmountStr = (inv.amount / 100).toLocaleString('pt-BR', { style: 'currency', currency: inv.currency?.toUpperCase() || 'BRL' });
-              const invDateStr = new Date(inv.date).toLocaleDateString('pt-BR');
+              const invAmountStr = (inv.amount / 100).toLocaleString(currentLocale, { style: 'currency', currency: inv.currency?.toUpperCase() || 'BRL' });
+              const invDateStr = new Date(inv.date).toLocaleDateString(currentLocale);
 
               return (
                 <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32] text-xs gap-3">
                   <div className="space-y-0.5">
                     <p className="font-semibold text-white flex items-center gap-2">
-                      <span>{inv.description || 'Assinatura ZENO Pro'}</span>
+                      <span>{inv.description || t.subscriptionManager.subscriptionZeno}</span>
                       <span className="text-[10px] text-neutral-400 font-mono">({inv.number || inv.id})</span>
                     </p>
                     <p className="text-neutral-400 text-[11px]">{invDateStr}</p>
@@ -655,7 +666,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' 
                           : 'bg-neutral-500/10 text-neutral-400'
                       }`}>
-                        {inv.status === 'succeeded' || inv.status === 'paid' ? 'Pago' : 'Pendente'}
+                        {inv.status === 'succeeded' || inv.status === 'paid' ? t.subscriptionManager.paid : t.subscriptionManager.pending}
                       </span>
                     </div>
 
@@ -666,10 +677,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
-                          title="Ver recibo do pagamento"
+                          title={t.subscriptionManager.receipt}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Recibo</span>
+                          <span className="hidden sm:inline">{t.subscriptionManager.receipt}</span>
                         </a>
                       )}
 
@@ -679,10 +690,10 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
-                          title="Baixar PDF da Fatura"
+                          title={t.subscriptionManager.invoicePdf}
                         >
                           <Download className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Fatura PDF</span>
+                          <span className="hidden sm:inline">{t.subscriptionManager.invoicePdf}</span>
                         </a>
                       ) : (
                         <button
@@ -691,7 +702,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                           className="p-2 rounded-lg bg-[#28282e] hover:bg-[#32323a] text-neutral-300 hover:text-white transition-colors border border-[#2C2C2E]/60 flex items-center gap-1 text-[11px]"
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          <span>Ver Comprovante</span>
+                          <span>{t.subscriptionManager.viewReceipt}</span>
                         </button>
                       )}
                     </div>
@@ -709,15 +720,15 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#1c1c20] border border-[#2d2d32] shadow-2xl space-y-4 text-left">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-sky-400" />
-              <span>Atualizar Cartão de Crédito</span>
+              <span>{t.subscriptionManager.updateCardTitle}</span>
             </h3>
             <p className="text-xs text-neutral-400">
-              Informe os dados do cartão de crédito para a cobrança automática da sua assinatura ZENO Pro.
+              {t.subscriptionManager.updateCardDesc}
             </p>
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">Bandeira</label>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">{t.subscriptionManager.brand}</label>
                 <select
                   value={cardForm.brand}
                   onChange={e => setCardForm({ ...cardForm, brand: e.target.value })}
@@ -731,7 +742,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">Últimos 4 Dígitos</label>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">{t.subscriptionManager.last4}</label>
                 <input
                   type="text"
                   maxLength={4}
@@ -744,7 +755,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">Mês Expir.</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">{t.subscriptionManager.expMonth}</label>
                   <input
                     type="text"
                     maxLength={2}
@@ -755,7 +766,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">Ano Expir.</label>
+                  <label className="block text-xs font-semibold text-neutral-400 mb-1 uppercase">{t.subscriptionManager.expYear}</label>
                   <input
                     type="text"
                     maxLength={4}
@@ -774,7 +785,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 onClick={() => setShowCardModal(false)}
                 className="flex-1 py-2.5 rounded-xl bg-[#2d2d32] hover:bg-[#38383e] text-white font-semibold text-xs transition-colors"
               >
-                Cancelar
+                {t.subscriptionManager.back}
               </button>
               <button
                 type="button"
@@ -785,7 +796,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 {actionType === 'update_card' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : null}
-                <span>{actionType === 'update_card' ? 'Salvando...' : 'Salvar Cartão'}</span>
+                <span>{actionType === 'update_card' ? t.subscriptionManager.saving : t.subscriptionManager.saveCard}</span>
               </button>
             </div>
           </div>
@@ -800,11 +811,11 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               <div className="w-10 h-10 rounded-xl bg-neutral-500/10 border border-neutral-500/20 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5 text-neutral-400" />
               </div>
-              <h3 className="text-base font-bold text-white">Cancelar Renovação Automática</h3>
+              <h3 className="text-base font-bold text-white">{t.subscriptionManager.cancelAutoRenewTitle}</h3>
             </div>
 
             <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed font-medium">
-              Tem certeza de que deseja cancelar a renovação automática? Seu plano continuará ativo até o fim do período já pago.
+              {t.subscriptionManager.cancelAutoRenewConfirm}
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2C2C2E]">
@@ -813,14 +824,14 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 onClick={() => setShowCancelConfirmModal(false)}
                 className="px-4 py-2.5 rounded-xl bg-[#232326] hover:bg-neutral-700 text-neutral-200 font-semibold text-xs sm:text-sm transition-colors"
               >
-                Voltar
+                {t.subscriptionManager.back}
               </button>
               <button
                 type="button"
                 onClick={executeCancelAutoRenew}
                 className="px-4 py-2.5 rounded-xl bg-neutral-600 hover:bg-neutral-500 text-white font-bold text-xs sm:text-sm transition-colors shadow-md"
               >
-                Confirmar cancelamento
+                {t.subscriptionManager.confirmCancel}
               </button>
             </div>
           </div>

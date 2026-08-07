@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { sanitizeResponseText } from "../utils/imageSecurity";
 
 export interface AIProviderOptions {
   contents: any[];
@@ -16,6 +17,8 @@ export interface AIProviderResult {
   modelUsed: string;
   isAlternative: boolean;
   sources?: Array<{ title: string; url: string; domain: string }>;
+  groundingMetadata?: any;
+  functionCalls?: any[];
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -26,46 +29,46 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const routingConfig: Record<string, Array<{ provider: string, model: string }>> = {
   general: [
-    { provider: 'gemini', model: 'gemini-3.6-flash' },
+    { provider: 'gemini', model: 'gemini-1.5-flash' },
+    { provider: 'openrouter', model: 'google/gemini-1.5-flash' },
     { provider: 'groq', model: 'llama-3.3-70b-versatile' },
-    { provider: 'openrouter', model: 'anthropic/claude-sonnet-5' },
+    { provider: 'openrouter', model: 'anthropic/claude-3.5-sonnet' },
     { provider: 'openrouter', model: 'mistralai/mistral-large' },
-    { provider: 'openrouter', model: 'google/gemini-3.6-flash' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ],
   think: [
-    { provider: 'openrouter', model: 'anthropic/claude-opus-5' },
+    { provider: 'gemini', model: 'gemini-1.5-flash' },
+    { provider: 'openrouter', model: 'anthropic/claude-3-opus' },
     { provider: 'groq', model: 'llama-3.3-70b-versatile' },
     { provider: 'openrouter', model: 'deepseek/deepseek-chat' },
     { provider: 'openrouter', model: 'google/gemini-3.1-pro-preview' },
-    { provider: 'gemini', model: 'gemini-3.1-pro-preview' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ],
   code: [
-    { provider: 'openrouter', model: 'anthropic/claude-sonnet-5' },
+    { provider: 'gemini', model: 'gemini-1.5-flash' },
+    { provider: 'openrouter', model: 'anthropic/claude-3.5-sonnet' },
     { provider: 'groq', model: 'llama-3.3-70b-versatile' },
     { provider: 'openrouter', model: 'deepseek/deepseek-chat' },
     { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct' },
-    { provider: 'gemini', model: 'gemini-3.6-flash' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ],
   speed: [
+    { provider: 'gemini', model: 'gemini-1.5-flash' },
     { provider: 'groq', model: 'llama-3.3-70b-versatile' },
-    { provider: 'groq', model: 'llama-3.1-8b-instant' },
-    { provider: 'gemini', model: 'gemini-3.6-flash' },
+    { provider: 'openrouter', model: 'google/gemini-1.5-flash' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ],
   search: [
-    { provider: 'gemini', model: 'gemini-3.6-flash' }, 
+    { provider: 'gemini', model: 'gemini-1.5-flash' }, 
+    { provider: 'openrouter', model: 'google/gemini-1.5-flash' },
     { provider: 'openrouter', model: 'deepseek/deepseek-chat' },
     { provider: 'groq', model: 'llama-3.3-70b-versatile' },
-    { provider: 'openrouter', model: 'google/gemini-3.6-flash' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ],
   image: [
     { provider: 'replicate', model: 'black-forest-labs/flux-schnell' },
-    { provider: 'openrouter', model: 'gryphe/mythomax-l2-13b' },
-    { provider: 'gemini', model: 'gemini-3.6-flash' },
+    { provider: 'openrouter', model: 'google/gemini-1.5-flash' },
+    { provider: 'gemini', model: 'gemini-1.5-flash' },
     { provider: 'openrouter', model: 'openrouter/free' }
   ]
 };
@@ -91,12 +94,16 @@ function recordSuccess(key: string) {
   providerStatus[key] = { failures: 0, cooldownUntil: 0 };
 }
 
-function recordFailure(key: string) {
+function recordFailure(key: string, isRateLimit = false) {
   const state = providerStatus[key] || { failures: 0, cooldownUntil: 0 };
   state.failures += 1;
-  if (state.failures >= 3) {
-    state.cooldownUntil = Date.now() + COOLDOWN_MS;
-    console.warn(`[CIRCUIT BREAKER] ${key} offline (cooldown 5m). Fails: ${state.failures}`);
+  
+  if (isRateLimit || state.failures >= 3) {
+    // Se for rate limit, esfriamos imediatamente por mais tempo
+    const duration = isRateLimit ? 20 * 60 * 1000 : COOLDOWN_MS; // 20 min para rate limit
+    state.cooldownUntil = Date.now() + duration;
+    state.failures = Math.max(state.failures, 3); // Garante que entre no estado de falha
+    console.warn(`[CIRCUIT BREAKER] ${key} offline (cooldown ${duration/60000}m). Motivo: ${isRateLimit ? 'Rate Limit' : 'Múltiplas falhas'}`);
   }
   providerStatus[key] = state;
 }
@@ -182,6 +189,14 @@ export async function generateTextWithFallback(
   const modelsToTry = routingConfig[category] || routingConfig.general;
   let lastError: any = null;
 
+  // Add dynamic anti-hallucination instruction if search intent is active
+  if (isSearchIntent) {
+    contents.push({
+      role: 'user',
+      parts: [{ text: "[SISTEMA]: Você está no modo de pesquisa. Se a ferramenta de busca retornar resultados, use-os. Se não houver resultados da ferramenta, admita que não encontrou informações recentes. NUNCA mencione veículos de imprensa ou sites (ex: CNN Brasil, Estadão, G1) a menos que eles estejam explicitamente nos dados de busca retornados. Não invente citações." }]
+    });
+  }
+
   for (const item of modelsToTry) {
     const key = `${item.provider}:${item.model}`;
     const reqStartTime = Date.now();
@@ -192,8 +207,15 @@ export async function generateTextWithFallback(
       continue;
     }
 
+    // 2. Se for intenção de busca, verificar se o modelo suporta ou se devemos tentar fallback
+    // Por enquanto, apenas o provedor 'gemini' nativo aqui suporta grounding metadata
+    if (isSearchIntent && item.provider !== 'gemini') {
+      console.log(`[AI ROUTING] Pulando ${key} para busca - provedor não suporta Grounding Metadata nativo`);
+      continue;
+    }
+
     try {
-      const hasKey = item.provider === 'gemini' ? !!process.env.GEMINI_API_KEY : 
+      const hasKey = item.provider === 'gemini' ? true : 
                     item.provider === 'groq' ? !!process.env.GROQ_API_KEY :
                     item.provider === 'openrouter' ? !!process.env.OPENROUTER_API_KEY :
                     item.provider === 'replicate' ? !!process.env.REPLICATE_API_KEY : true;
@@ -201,59 +223,97 @@ export async function generateTextWithFallback(
       console.log(`[AI ROUTING] Tentando categoria: ${category} | provedor: ${item.provider} | modelo: ${item.model}`);
       
       if (!hasKey) {
-        throw new Error("API KEY ausente para o provedor");
+        console.log(`[AI ROUTING] Pulando ${key}: API KEY ausente para o provedor ${item.provider}`);
+        continue;
       }
 
       if (item.provider === 'gemini') {
-        const config: any = {
-          systemInstruction,
-          temperature,
-          maxOutputTokens,
+        const generationConfig = {
+          temperature: temperature || 0.7,
+          maxOutputTokens: maxOutputTokens || 1024,
         };
-        if (isSearchIntent && tools) {
-          config.tools = tools;
-        }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout p/ fallback rápido
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-        const response = await aiClient.models.generateContent({
-          model: item.model,
-          contents,
-          config,
-        });
-        clearTimeout(timeoutId);
+        try {
+          console.log(`[AI Provider] Calling Gemini (${item.model}). Tools: ${tools?.length || 0}`);
+          
+          
+          const response = await Promise.race([
+            aiClient.models.generateContent({
+              model: item.model,
+              contents,
+              config: {
+                tools: tools && tools.length > 0 ? tools : undefined,
+                systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+                temperature: temperature || 0.7,
+                maxOutputTokens: maxOutputTokens || 1024,
+              }
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout Gemini SDK")), 25000))
+          ]) as any;
+clearTimeout(timeoutId);
 
-        const text = response.text || "";
-        if (text) {
-          const tempo = Date.now() - reqStartTime;
-          console.log(`[AI SUCCESS] provedor: gemini | modelo: ${item.model} | tempo: ${tempo}ms`);
-          recordSuccess(key);
-
-          // Extract grounding sources if available
-          let sources: Array<{ title: string; url: string; domain: string }> = [];
-          if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-            sources = response.candidates[0].groundingMetadata.groundingChunks.map((chunk: any) => {
-               if (chunk.web?.uri) {
-                  return {
-                     title: chunk.web.title || new URL(chunk.web.uri).hostname,
-                     url: chunk.web.uri,
-                     domain: new URL(chunk.web.uri).hostname.replace(/^www\./, ''),
-                     publishedDate: chunk.web.publishedDate || undefined,
-                     updatedDate: chunk.web.updatedDate || undefined
-                  };
-               }
-               return null;
-            }).filter(Boolean);
+          // Safe text extraction
+          let text = "";
+          try {
+            if ((response as any).text) {
+              text = (response as any).text;
+            } else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
+              text = (response as any).candidates[0].content.parts[0].text;
+            }
+          } catch (e: any) {
+            console.warn("[AI Provider] Text extraction failed:", e.message);
           }
 
-          return {
-            text,
-            provider: 'gemini',
-            modelUsed: item.model,
-            isAlternative: false,
-            sources: sources.length > 0 ? sources : undefined
-          };
+          const fCalls = (response as any).functionCalls || [];
+
+          if (text || (fCalls && fCalls.length > 0)) {
+            const tempo = Date.now() - reqStartTime;
+            console.log(`[AI SUCCESS] provedor: gemini | modelo: ${item.model} | tempo: ${tempo}ms | fCalls: ${fCalls.length}`);
+            recordSuccess(key);
+
+            // Extract grounding sources
+            let sources: Array<{ title: string; url: string; domain: string }> = [];
+            const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+            if (groundingMetadata && groundingMetadata.groundingChunks) {
+              sources = groundingMetadata.groundingChunks.map((chunk: any) => {
+                if (chunk.web?.uri) {
+                  return {
+                    title: chunk.web.title || new URL(chunk.web.uri).hostname,
+                    url: chunk.web.uri,
+                    domain: new URL(chunk.web.uri).hostname.replace(/^www\./, ''),
+                  };
+                }
+                return null;
+              }).filter(Boolean);
+            }
+
+            const sanitizedText = sanitizeResponseText(text, category === 'image');
+
+            return {
+              text: sanitizedText,
+              provider: 'gemini',
+              modelUsed: item.model,
+              isAlternative: false,
+              sources: sources.length > 0 ? sources : undefined,
+              groundingMetadata,
+              functionCalls: fCalls
+            };
+          }
+        } catch (geminiErr: any) {
+          clearTimeout(timeoutId);
+          console.error(`[AI Provider] Gemini API Error (${item.model}):`, {
+            message: geminiErr.message,
+            status: geminiErr.status,
+            code: geminiErr.code,
+            details: geminiErr.details,
+            stack: geminiErr.stack ? (geminiErr.stack.split('\n')[1] || geminiErr.stack) : 'no stack'
+          });
+          recordFailure(key, geminiErr.message?.includes('429'));
+          lastError = geminiErr;
+          continue; // Try next model in list
         }
       }
 
@@ -274,7 +334,7 @@ export async function generateTextWithFallback(
           console.log(`[AI SUCCESS] provedor: groq | modelo: ${item.model} | tempo: ${tempo}ms`);
           recordSuccess(key);
           return {
-            text: res,
+            text: sanitizeResponseText(res, category === 'image'),
             provider: 'groq',
             modelUsed: item.model,
             isAlternative: true
@@ -300,7 +360,7 @@ export async function generateTextWithFallback(
           console.log(`[AI SUCCESS] provedor: openrouter | modelo: ${item.model} | tempo: ${tempo}ms`);
           recordSuccess(key);
           return {
-            text: res,
+            text: sanitizeResponseText(res, category === 'image'),
             provider: 'openrouter',
             modelUsed: item.model,
             isAlternative: true
@@ -312,13 +372,17 @@ export async function generateTextWithFallback(
       lastError = err;
       const tempo = Date.now() - reqStartTime;
       let errorMsg = err?.message || String(err);
+      
+      const isRateLimit = errorMsg.includes('429') || errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('quota') || errorMsg.toLowerCase().includes('credits');
+      
       if (errorMsg.includes('402') && errorMsg.includes('credits')) {
          errorMsg = 'Limite de creditos atingido ou max_tokens muito alto (402).';
       } else if (errorMsg.length > 200) {
          errorMsg = errorMsg.substring(0, 200) + '...';
       }
+      
       console.warn(`[AI FALLBACK] Falha no provedor ${key} após ${tempo}ms. Motivo:`, errorMsg.replace(/error/gi, 'falha'));
-      recordFailure(key);
+      recordFailure(key, isRateLimit);
       await sleep(100); // Pular rapidamente para o próximo sem muito delay
     }
   }
@@ -328,9 +392,10 @@ export async function generateTextWithFallback(
 
 function prepareOpenAiMessages(contents: any[], systemInstruction?: string) {
   const messages: Array<{ role: string; content: string }> = [];
-  if (systemInstruction) {
-    messages.push({ role: "system", content: systemInstruction });
-  }
+  let baseSystem = systemInstruction || "Você é o ZENO AI, assistente inteligente.";
+  baseSystem += "\n\n[REGRA CRÍTICA DE MÍDIA]: Você NUNCA deve gerar links de imagem, URLs de serviços de geração de imagem (como pollinations.ai ou qualquer domínio externo), nem utilizar tags markdown de imagem (![alt](url)) ou HTML (<img ...>) em suas respostas. Se o usuário pedir uma imagem, informe em texto para usar a ferramenta 'Estúdio de Imagens' do ZENO.";
+
+  messages.push({ role: "system", content: baseSystem });
 
   for (const c of contents) {
     let role = c.role === 'model' ? 'assistant' : 'user';
@@ -357,7 +422,7 @@ async function callOpenAiCompatible(
   extraHeaders: Record<string, string> = {}
 ) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s de timeout máximo (Fast Fallback)
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // Aumentado para 20s para evitar "signal is aborted without reason" em modelos lentos
 
   const res = await fetch(url, {
     method: "POST",

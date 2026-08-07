@@ -121,12 +121,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithGoogle = async (options?: { rememberDevice: boolean }) => {
-    if (options?.rememberDevice) {
-      setPersistence(auth, browserLocalPersistence);
-    } else {
-      setPersistence(auth, browserSessionPersistence);
+    try {
+      if (options?.rememberDevice) {
+        setPersistence(auth, browserLocalPersistence);
+      } else {
+        setPersistence(auth, browserSessionPersistence);
+      }
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-closed-by-user') {
+        console.warn('Google sign-in popup was closed by user.');
+        return;
+      }
+      console.error('Firebase sign-in error:', error);
+      throw error;
     }
-    await signInWithPopup(auth, googleProvider);
   };
   const signInWithEmail = (e: string, p: string) => signInWithEmailAndPassword(auth, e, p);
   const signUpWithEmail = (e: string, p: string) => createUserWithEmailAndPassword(auth, e, p);

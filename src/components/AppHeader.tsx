@@ -4,6 +4,7 @@ import { UserSettings } from '../types';
 import { ZenoLogo } from './ZenoLogo';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { isAdminUser } from '../config/admin';
+import { useTranslation } from '../i18n';
 
 interface AppHeaderProps {
   theme: 'dark' | 'light';
@@ -30,6 +31,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onNewChat,
   user
 }) => {
+  const { t } = useTranslation();
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
 
@@ -45,7 +47,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
               : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
           } ${isSidebarCollapsed ? 'block' : 'md:hidden'}`}
           onClick={onOpenSidebar}
-          title="Abrir barra lateral"
+          title={t.sidebar.openSidebar}
         >
           <PanelLeftOpen className="w-4 h-4" />
         </button>
@@ -71,7 +73,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
             }`}
           >
             <Sparkles className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} />
-            <span>Upgrade Pro</span>
+            <span>{t.subscription.upgrade}</span>
           </button>
         )}
 
@@ -82,7 +84,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
               ? 'hover:bg-[#232326] text-neutral-400 hover:text-white' 
               : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
           }`}
-          title="Alternar Tema"
+          title={t.settings.theme}
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
@@ -94,7 +96,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
               ? 'hover:bg-[#232326] text-neutral-400 hover:text-white' 
               : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
           }`}
-          title="Configurações (Admin)"
+          title={t.common.settings}
         >
           {user?.photoURL ? (
             <div className="w-6 h-6 rounded-full overflow-hidden border border-sky-500/40 relative">
@@ -122,7 +124,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
               ? 'hover:bg-[#232326] text-neutral-400 hover:text-white' 
               : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'
           }`}
-          title="Nova conversa"
+          title={t.common.newChat}
         >
           <Plus className="w-4 h-4" />
         </button>

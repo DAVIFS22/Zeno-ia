@@ -3,12 +3,13 @@ import { List } from 'react-window';
 import { 
   Plus, MessageSquare, Settings, Search, PanelLeftClose, 
   X, Pin, Edit2, Trash2, Sparkles, User, Lock, Check,
-  Image, Folder, Cpu, Sliders, Shield
+  Image, Folder, Cpu, Sliders, Shield, ChevronDown
 } from 'lucide-react';
 import { UserSettings, ChatSession } from '../types';
 import { ZenoLogo } from './ZenoLogo';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { isAdminUser } from '../config/admin';
+import { useTranslation } from '../i18n';
 
 type FlatSessionListItem =
   | { type: 'header'; id: string; label: string }
@@ -145,6 +146,7 @@ interface SidebarNavProps {
   onOpenMore: () => void;
   onOpenSettings: () => void;
   onOpenSubscriptionModal: (reason?: string) => void;
+  onOpenVersionNews?: () => void;
   user?: any;
   session?: any;
   onSwitchAccount?: (uid: string) => void;
@@ -178,10 +180,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   onOpenPlugins,
   onOpenSettings,
   onOpenSubscriptionModal,
+  onOpenVersionNews,
   user,
   session,
   onSwitchAccount
 }) => {
+  const { t } = useTranslation();
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
   const [showAccountSwitcher, setShowAccountSwitcher] = React.useState(false);
@@ -322,22 +326,29 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         {/* Novo Chat Button */}
         <button 
           onClick={onNewChat}
-          className={`flex items-center gap-2.5 px-3 h-[38px] rounded-xl border ${borderMain} transition-all duration-150 w-full text-left text-xs font-medium ${
-            isDark ? 'bg-[#1C1C1E] hover:bg-[#232326] text-white' : 'bg-white hover:bg-neutral-50 text-neutral-900'
-          }`}
+          className="flex items-center gap-2.5 px-4 h-[42px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-150 w-full text-left text-xs sm:text-sm shadow-md shadow-blue-600/20 group cursor-pointer"
         >
-          <Plus className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-1 truncate">Novo Chat</span>
+          <MessageSquare className="w-4 h-4 flex-shrink-0 text-white" />
+          <span className="flex-1 truncate">Novo chat</span>
+          <Plus className="w-3.5 h-3.5 flex-shrink-0 text-blue-200 group-hover:text-white" />
         </button>
 
         {/* Streamlined Menu Options */}
         <div className="space-y-0.5 pt-1">
           <button 
-            onClick={onOpenPlugins}
+            onClick={onNewChat}
             className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
           >
-            <Cpu className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 truncate">Modelos</span>
+            <MessageSquare className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 truncate">Chat</span>
+          </button>
+
+          <button 
+            onClick={onToggleSearchVisible}
+            className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
+          >
+            <Search className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 truncate">Histórico</span>
           </button>
 
           <button 
@@ -345,23 +356,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
           >
             <Image className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 truncate">Imagens</span>
-          </button>
-
-          <button 
-            onClick={onOpenProjects}
-            className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
-          >
-            <Folder className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 truncate">Arquivos</span>
+            <span className="flex-1 truncate">Histórico de Imagens</span>
           </button>
 
           <button 
             onClick={onOpenSettings}
             className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
           >
-            <Sliders className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 truncate">Configurações</span>
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 truncate">{t.settings.title}</span>
           </button>
         </div>
 
@@ -389,12 +392,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
       {/* Sessions / History - Virtualized with react-window */}
       <div className="flex-1 flex flex-col min-h-0 px-2 py-2">
         <div className="px-2 pt-1 pb-1 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider flex-shrink-0">
-          Histórico
+          {t.sidebar.history}
         </div>
         <div ref={listContainerRef} className="flex-1 w-full min-h-0">
           {flatItems.length === 0 ? (
             <div className={`text-center py-4 px-2 text-xs ${textMuted}`}>
-              Nenhuma conversa
+              {t.sidebar.noHistory}
             </div>
           ) : (
             <List<{ items: FlatSessionListItem[] }>
@@ -409,23 +412,47 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         </div>
       </div>
 
-      {/* Minimal Footer */}
-      <div className={`p-3 border-t ${borderMain} space-y-1.5`}>
-        <button 
-          onClick={() => onOpenSubscriptionModal()} 
-          className={`flex items-center justify-between px-3 h-[36px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs ${textMain}`}
-        >
-          <div className="flex items-center gap-2">
-            <Sparkles className={`w-3.5 h-3.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} />
-            <span>ZENO Pro</span>
+      {/* Footer Banner & User Menu */}
+      <div className={`p-3 border-t ${borderMain} space-y-2`}>
+        {/* ZENO Pro Upgrade Card */}
+        {!isPro && (
+          <div className={`p-3 rounded-xl border ${
+            isDark ? 'bg-[#151518] border-[#2C2C2E]' : 'bg-white border-neutral-200 shadow-2xs'
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-blue-500" />
+              <span className={`text-xs font-semibold ${textMain}`}>ZENO Pro</span>
+            </div>
+            <p className="text-[11px] text-neutral-400 leading-relaxed mb-2.5">
+              Mais capacidade, respostas mais rápidas e recursos avançados.
+            </p>
+            <button
+              onClick={() => onOpenSubscriptionModal()}
+              className="w-full py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors shadow-xs shadow-blue-600/20 cursor-pointer"
+            >
+              Ver planos
+            </button>
           </div>
-          <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${isDark ? 'bg-[#232326] text-neutral-300' : 'bg-neutral-200 text-neutral-700'}`}>
-            {isPro ? 'Gerenciar Assinatura' : 'Upgrade Pro'}
-          </span>
-        </button>
+        )}
+
+        {/* Version Badge */}
+        <div className="flex items-center justify-between px-1 pt-1 pb-1">
+          <button
+            onClick={onOpenVersionNews}
+            className={`text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors flex items-center gap-1.5 w-full justify-center cursor-pointer ${
+              isDark 
+                ? 'bg-[#151518] text-neutral-400 border-[#2c2c2e] hover:text-white hover:border-indigo-500/50' 
+                : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-indigo-500/50'
+            }`}
+            title="Ver novidades da versão"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+            <span>Zeno IA v2.4.0 (Semantic)</span>
+          </button>
+        </div>
 
         {/* User Card */}
-        <div className="relative pt-1">
+        <div className="relative pt-0.5">
           <div 
             onClick={() => {
               if (session?.accounts?.length > 1) {
@@ -434,43 +461,43 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                 onOpenSettings();
               }
             }}
-            className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${hoverItemBg} transition-all cursor-pointer group`}
+            className={`flex items-center justify-between p-2 rounded-xl ${hoverItemBg} transition-all cursor-pointer group`}
           >
             {user ? (
-              <div className="flex items-center gap-2.5 w-full min-w-0">
-                {user.photoURL ? (
-                  <img 
-                    src={user.photoURL} 
-                    alt={user.displayName || 'User'} 
-                    referrerPolicy="no-referrer"
-                    className="w-6 h-6 rounded-full object-cover flex-shrink-0"
-                  />
-                ) : (
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-[#232326]' : 'bg-neutral-200'}`}>
-                    <User className="w-3.5 h-3.5 text-neutral-400" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                  <p className={`text-xs font-medium truncate ${textMain}`}>
-                    {user.displayName || 'Usuário ZENO'}
-                  </p>
-                  {isAdminUser(user?.email) && (
-                    <span 
-                      className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/25 flex-shrink-0"
-                      title="Admin"
-                    >
-                      <Shield className="w-2.5 h-2.5" />
-                      <span>Admin</span>
-                    </span>
+              <div className="flex items-center justify-between w-full min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {user.photoURL ? (
+                    <img 
+                      src={user.photoURL} 
+                      alt={user.displayName || 'User'} 
+                      referrerPolicy="no-referrer"
+                      className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-[#232326]' : 'bg-neutral-200'}`}>
+                      <User className="w-4 h-4 text-neutral-400" />
+                    </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold truncate ${textMain}`}>
+                      {user.displayName?.split(' ')[0] || 'Usuário ZENO'}
+                    </p>
+                    <p className="text-[10px] text-neutral-400 truncate">
+                      {isPro ? 'Plano Pro' : 'Conta gratuita'}
+                    </p>
+                  </div>
                 </div>
+                <ChevronDown className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform flex-shrink-0 ml-1" />
               </div>
             ) : (
-              <div className="flex items-center gap-2 w-full">
-                <Lock className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
-                <span className={`text-xs font-medium ${textMuted}`}>
-                  Entrar com Google
-                </span>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                  <span className={`text-xs font-medium ${textMuted}`}>
+                    Entrar com Google
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
               </div>
             )}
           </div>

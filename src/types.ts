@@ -33,6 +33,8 @@ export type Message = {
   isSearch?: boolean;
   searchSources?: SearchSource[];
   isSearching?: boolean;
+  isToolCalling?: boolean;
+  toolName?: string;
 };
 
 export type ChatSession = {
@@ -174,6 +176,7 @@ export type DailyUsage = {
   webSearchCount: number;
   docUploadCount: number;
   musicGenCount: number;
+  voiceTranscriptionsCount?: number;
 };
 
 export type UserSettings = {
@@ -209,7 +212,7 @@ export type UserSettings = {
   anonymousMode: boolean;
   rememberDevice: boolean;
   // Personalização & Idioma
-  language: 'pt-BR' | 'en-US' | 'es-ES';
+  language: 'pt-BR' | 'en-US' | 'es-ES' | 'fr-FR' | 'zh-CN' | 'auto';
   groupByDate?: boolean;
   isSmartMode: boolean;
   // Notificações

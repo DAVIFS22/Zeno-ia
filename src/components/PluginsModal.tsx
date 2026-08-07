@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Cpu, Globe, Code, FileText, Check, Sparkles, Image as ImageIcon, Search } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface PluginItem {
   id: string;
@@ -16,46 +17,48 @@ interface PluginsModalProps {
 }
 
 export const PluginsModal: React.FC<PluginsModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
+  
   const [plugins, setPlugins] = useState<PluginItem[]>([
     {
       id: 'web_search',
-      name: 'Pesquisa Web em Tempo Real',
-      description: 'ZENO Search com Grounding, links, fontes e citações diretas',
+      name: t.plugins.webSearch,
+      description: t.plugins.webSearchDesc,
       icon: Globe,
       enabled: true,
-      category: 'Busca & Dados'
+      category: t.plugins.categories.search
     },
     {
       id: 'code_runner',
-      name: 'Compilador & Executor ZENO Código',
-      description: 'Suporte a React, TypeScript, Python e Node com visualização',
+      name: t.plugins.codeRunner,
+      description: t.plugins.codeRunnerDesc,
       icon: Code,
       enabled: true,
-      category: 'Programação'
+      category: t.plugins.categories.code
     },
     {
       id: 'image_gen',
-      name: 'Estúdio ZENO Vision',
-      description: 'Geração, variação, edição e upscale de imagens em alta resolução',
+      name: t.plugins.imageStudio,
+      description: t.plugins.imageStudioDesc,
       icon: ImageIcon,
       enabled: true,
-      category: 'Imagem'
+      category: t.plugins.categories.image
     },
     {
       id: 'doc_analyzer',
-      name: 'Analisador de Documentos PDF/Código',
-      description: 'Extração automática, OCR e síntese de arquivos grandes',
+      name: t.plugins.docAnalyzer,
+      description: t.plugins.docAnalyzerDesc,
       icon: FileText,
       enabled: true,
-      category: 'Documentos'
+      category: t.plugins.categories.docs
     },
     {
       id: 'reasoning_engine',
-      name: 'Motor ZENO Pense (Raciocínio Avançado)',
-      description: 'Cadeias de pensamento detalhadas para matemática e lógica',
+      name: t.plugins.reasoning,
+      description: t.plugins.reasoningDesc,
       icon: Cpu,
       enabled: true,
-      category: 'Raciocínio'
+      category: t.plugins.categories.logic
     }
   ]);
 
@@ -76,8 +79,8 @@ export const PluginsModal: React.FC<PluginsModalProps> = ({ isOpen, onClose }) =
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-white">Plugins & Extensões</h2>
-              <p className="text-xs text-[#A8A8A8]">Ferramentas ativas para ampliar o ZENO AI</p>
+              <h2 className="text-sm font-semibold text-white">{t.plugins.title}</h2>
+              <p className="text-xs text-[#A8A8A8]">{t.plugins.subtitle}</p>
             </div>
           </div>
 
@@ -130,7 +133,7 @@ export const PluginsModal: React.FC<PluginsModalProps> = ({ isOpen, onClose }) =
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-[#242424] hover:bg-[#2F2F2F] text-white text-xs font-medium border border-[#303030] transition-colors"
           >
-            Concluído
+            {t.common.finish}
           </button>
         </div>
 

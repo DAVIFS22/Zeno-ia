@@ -5,6 +5,7 @@ import {
   ZoomIn, ZoomOut, CheckCircle2
 } from 'lucide-react';
 import hljs from 'highlight.js';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface CodeBlockProps {
   language?: string;
@@ -167,21 +168,11 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
   // Handle Clipboard Copy
   const handleCopy = async () => {
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(cleanValue);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = cleanValue;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        textArea.remove();
+      const ok = await copyToClipboard(cleanValue);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy code:', err);
     }

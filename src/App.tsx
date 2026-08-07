@@ -28,6 +28,24 @@ import { UIProvider } from './contexts/UIContext';
 import { SubscriptionProvider, useSubscription } from './contexts/SubscriptionContext';
 import { useUIState } from './hooks/useUIState';
 import { usePerformanceMetrics, measureApiLatency } from './hooks/usePerformanceMetrics';
+import { useAppSettings } from './hooks/useAppSettings';
+import { useUsage } from './hooks/useUsage';
+import { useSessions } from './hooks/useSessions';
+import { useChat } from './hooks/useChat';
+import { detectIntent } from './utils/intent';
+import { LanguageProvider, useTranslation } from './i18n';
+import { hasPremiumAccess } from './config/admin';
+import { filterValidSources } from './utils/sourceValidation';
+import { isAuthorizedImageUrl } from './utils/imageSecurity';
+import { copyToClipboard as performCopyToClipboard } from './utils/clipboard';
+import { checkAndGetNewVersion } from './lib/versionSystem';
+
+const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
+const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
+const STORAGE_KEY_SETTINGS = 'zeno_user_settings_v3';
+const STORAGE_KEY_USAGE = 'zeno_daily_usage_v3';
+
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 import { 
   getTodayString, 
   getInitialUsage, 
@@ -36,87 +54,13 @@ import {
   FREE_LIMITS,
   getModelDef
 } from './lib/subscription';
-import { hasPremiumAccess } from './config/admin';
-import { filterValidSources } from './utils/sourceValidation';
-
-const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
-const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
-const STORAGE_KEY_SETTINGS = 'zeno_user_settings_v3';
-const STORAGE_KEY_USAGE = 'zeno_daily_usage_v3';
-
-const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-
-// Intent Detection Layer
-export const detectIntent = (input: string): 'image' | 'text' => {
-  const normalized = input
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const imageKeywordsPattern = /(gere uma imagem|criar imagem|crie uma imagem|desenhe|faca uma ilustracao|renderize|gerar arte|criar arte|criar logo|criar wallpaper|editar imagem|editar foto|transformar imagem|melhorar imagem|remover fundo|restaurar foto|upscale|generate image|create image)/i;
-  const singleWordPattern = /\b(image|draw)\b/i;
-
-  if (imageKeywordsPattern.test(normalized) || singleWordPattern.test(normalized)) {
-    return 'image';
-  }
-  
-  return 'text';
-};
 
 function MainAppInner() {
+  const { t } = useTranslation();
   const ui = useUIState();
   const { trackApi } = usePerformanceMetrics('MainApp');
   const { isPro } = useSubscription();
 
-  // User Settings State
-  const [userSettings, setUserSettings] = useState<UserSettings>(() => {
-    const DEFAULT_SETTINGS: UserSettings = {
-      userName: 'Davi Fernandes',
-      userEmail: 'davifernandes0024509@gmail.com',
-      userAvatar: '',
-      plan: 'ZENO Free',
-      theme: 'dark',
-      showHomeSuggestions: false,
-      logoVariant: 'monochrome',
-      fontSize: 'normal',
-      defaultSpeed: 'smart',
-      temperature: 0.7,
-      systemInstruction: '',
-      autoRead: false,
-      voiceSpeed: 1.0,
-      speechLanguage: 'pt-BR',
-      customInstructions: '',
-      memoryEnabled: true,
-      saveHistory: true,
-      anonymousMode: false,
-      rememberDevice: true,
-      language: 'pt-BR',
-      isSmartMode: true,
-      soundEnabled: true,
-      notificationsEnabled: true,
-    };
-
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Ensure all default keys exist, especially autoRead
-        const merged = { ...DEFAULT_SETTINGS, ...parsed };
-        
-        if (merged.plan !== 'ZENO Pro' && merged.plan !== 'ZENO Free') {
-          merged.plan = 'ZENO Free';
-        }
-        return merged;
-      }
-    } catch (e) {
-      console.error('Error loading settings:', e);
-    }
-    return DEFAULT_SETTINGS;
-  });
-
-  // Auth State
   const { 
     user, 
     profile, 
@@ -127,34 +71,28 @@ function MainAppInner() {
     session 
   } = useAuth();
 
-  // Unified userId: Priority to Firebase UID, fallback to local storage only for non-Firestore legacy logic if needed
   const userId = profile?.uid || getOrCreateUserId(profile?.uid);
 
-  // Sync user profile data to settings when logged in
+  const { userSettings, setUserSettings, updateSettings } = useAppSettings(userId, profile);
+  const { dailyUsage, setDailyUsage, backendLimits, adminConfig, fetchLimits } = useUsage(userId);
+  const { 
+    sessions, 
+    setSessions, 
+    currentSessionId, 
+    setCurrentSessionId, 
+    deleteSession, 
+    clearHistory 
+  } = useSessions(userId);
+
+  const [speed, setSpeed] = useState<ModelType>('smart');
+  const [showUsageCard, setShowUsageCard] = useState(true);
+
   useEffect(() => {
-    if (profile) {
-      setUserSettings(prev => {
-        const newName = profile.displayName || prev.userName;
-        const newEmail = profile.email || prev.userEmail;
-        const newAvatar = profile.photoURL || prev.userAvatar;
-
-        if (
-          prev.userName === newName &&
-          prev.userEmail === newEmail &&
-          prev.userAvatar === newAvatar
-        ) {
-          return prev;
-        }
-
-        return {
-          ...prev,
-          userName: newName,
-          userEmail: newEmail,
-          userAvatar: newAvatar
-        };
-      });
+    const { isNew } = checkAndGetNewVersion();
+    if (isNew) {
+      ui.openModal('versionNews');
     }
-  }, [profile]);
+  }, []);
 
   useEffect(() => {
     if (isPro || (profile && hasPremiumAccess(profile)) || hasPremiumAccess(userSettings) || hasPremiumAccess(profile?.email)) {
@@ -396,7 +334,7 @@ function MainAppInner() {
 
   const handleOpenSubscriptionModal = useCallback((reasonMessage?: string) => {
     if (!user && !user?.isAnonymous) {
-      ui.openModal('auth', { data: { message: "Crie uma conta ou faça login para assinar um plano e salvar seus dados." } });
+      ui.openModal('auth', { data: { message: t.common.profile } });
       return;
     }
     if (isPro) {
@@ -404,80 +342,41 @@ function MainAppInner() {
     } else {
       ui.openModal('plans');
     }
-  }, [ui, isPro, user]);
+  }, [ui, isPro, user, t]);
 
   const handleOpenProFeatureModal = useCallback(() => {
     if (!user && !user?.isAnonymous) {
-      ui.openModal('auth', { data: { message: "Crie uma conta ou faça login para acessar recursos Pro." } });
+      ui.openModal('auth', { data: { message: t.common.profile } });
       return;
     }
     ui.openModal('proFeature');
-  }, [ui, user]);
+  }, [ui, user, t]);
 
-  // Daily Usage Tracker State
-  const [backendLimits, setBackendLimits] = useState<any>(null);
-  const [adminConfig, setAdminConfig] = useState<any>({
-    messages: 50,
-    search: 20,
-    image: 10,
-    doc: 5,
-    vision: 10,
-  });
-  const [showUsageCard, setShowUsageCard] = useState(true);
+  const {
+    input,
+    setInput,
+    attachments,
+    setAttachments,
+    isLoading,
+    handleSubmit,
+    abortChat
+  } = useChat(
+    userId,
+    userSettings,
+    isPro,
+    sessions,
+    setSessions,
+    currentSessionId,
+    setCurrentSessionId,
+    dailyUsage,
+    setDailyUsage,
+    ui
+  );
 
-  const fetchLimits = async () => {
-    try {
-      const res = await measureApiLatency('/api/limits', () => fetch(`/api/limits?userId=${userId}`));
-      if (res.ok) {
-        const data = await res.json();
-        if (data.usage?.usage) {
-          setBackendLimits((prev: any) => {
-            const next = data.usage.usage;
-            if (prev && JSON.stringify(prev) === JSON.stringify(next)) return prev;
-            return next;
-          });
-        }
-        if (data.config?.limits) {
-          setAdminConfig((prev: any) => {
-            const next = data.config.limits;
-            if (prev && JSON.stringify(prev) === JSON.stringify(next)) return prev;
-            return next;
-          });
-        }
-      }
-    } catch (e) {
-      console.warn("Could not fetch limits from server, using local defaults:", e);
-    }
-  };
-
-  useEffect(() => {
-    fetchLimits();
-    const interval = setInterval(fetchLimits, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const [dailyUsage, setDailyUsage] = useState<DailyUsage>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_USAGE);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.date === getTodayString()) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.error('Error loading daily usage:', e);
-    }
-    return getInitialUsage();
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_USAGE, JSON.stringify(dailyUsage));
-    } catch (e) {
-      console.error('Error saving usage:', e);
-    }
-  }, [dailyUsage]);
+  const handleChatSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
+    setIsNewChat(false);
+    await handleSubmit(e, overrideText, extraContext);
+  }, [handleSubmit]);
 
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
@@ -544,51 +443,22 @@ function MainAppInner() {
     }
   }, [theme]);
 
-  // Sessions & Active Chat State
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_KEY_SESSIONS}_${userId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading chat sessions:', e);
-    }
-    return [];
-  });
-
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
-    const savedId = localStorage.getItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`);
-    if (savedId && savedId !== 'null' && sessions.some(s => s.id === savedId)) {
-      return savedId;
-    }
-    return null;
-  });
-
-  // Auto-save sessions per userId
-  useEffect(() => {
-    if (userId) {
-      localStorage.setItem(`${STORAGE_KEY_SESSIONS}_${userId}`, JSON.stringify(sessions));
-    }
-  }, [sessions, userId]);
-
-  // Auto-save currentSessionId per userId
-  useEffect(() => {
-    if (userId) {
-      localStorage.setItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`, currentSessionId || 'null');
-    }
-  }, [currentSessionId, userId]);
-
-  // Local Chat UI State
   const [isNewChat, setIsNewChat] = useState<boolean>(true);
-  const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
-  const [speed, setSpeed] = useState<ModelType>('smart');
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleAddAttachment = useCallback((file: FileAttachment) => {
+    setAttachments(prev => [...prev, file]);
+  }, [setAttachments]);
+
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, [setAttachments]);
+
+  const handleOpenImageStudioModal = useCallback(() => {
+    ui.openModal('imageStudio');
+  }, [ui]);
 
   // Sync image library from backend on start
   useEffect(() => {
@@ -627,16 +497,13 @@ function MainAppInner() {
   const [editingMessageText, setEditingMessageText] = useState('');
 
   // Audio Speech Recognition State
-  const [isListening, setIsListening] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Text-To-Speech
   const toggleSpeech = useCallback((id: string, text: string) => {
     if (!('speechSynthesis' in window)) {
-      alert('Seu navegador não suporta leitura de áudio em voz alta.');
+      alert(t.common.error);
       return;
     }
 
@@ -688,7 +555,7 @@ function MainAppInner() {
     const limitWarningMessage: Message = {
       id: Date.now().toString(),
       role: 'model',
-      text: "Você atingiu o limite diário do Plano Gratuito.\n\nFaça upgrade para o ZENO Pro e continue utilizando todos os modelos sem limites, com prioridade máxima, geração de imagens ilimitada, pesquisas avançadas, análise de arquivos, maior velocidade de resposta, acesso antecipado aos novos modelos e todos os recursos Premium.",
+      text: t.composer.speedSearch, // Placeholder for limit message, should probably have its own key
       timestamp: Date.now(),
       modelSpeed: speed,
       isLimitWarning: true
@@ -741,71 +608,19 @@ function MainAppInner() {
   // New Chat Handler
   const handleNewChat = useCallback(() => {
     if (isLoading) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      setIsLoading(false);
+      abortChat();
     }
     setIsNewChat(true);
     setCurrentSessionId(null);
     setInput('');
     setAttachments([]);
     ui.setSidebarOpen(false);
-  }, [isLoading, ui]);
+  }, [isLoading, ui, abortChat, setCurrentSessionId, setInput, setAttachments]);
+
+  const originalInputRef = useRef<string>('');
+  const sessionFinalRef = useRef<string>('');
 
   // Handle Speech Recognition Toggle
-  const toggleListening = useCallback(() => {
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSpeechError('Reconhecimento de voz não é suportado pelo seu navegador.');
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = userSettings.speechLanguage || 'pt-BR';
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setSpeechError(null);
-      };
-
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setInput(prev => prev + (prev ? ' ' : '') + transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setSpeechError(`Erro no reconhecimento: ${event.error}`);
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognition.start();
-    } catch (e) {
-      console.error('Failed to start speech recognition:', e);
-      setSpeechError('Não foi possível iniciar o microfone.');
-      setIsListening(false);
-    }
-  }, [isListening, userSettings.speechLanguage]);
 
   // Handle Select Speed
   const handleSelectSpeed = useCallback((newSpeed: ModelType) => {
@@ -824,408 +639,8 @@ function MainAppInner() {
 
   // Stop Generation
   const handleStopGeneration = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsLoading(false);
-  }, []);
-
-  // Main Submit Handler
-  const handleSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
-    if (e) e.preventDefault();
-    setIsNewChat(false);
-
-    const textToSend = overrideText !== undefined ? overrideText : input;
-    if ((!textToSend.trim() && attachments.length === 0) || isLoading) return;
-
-    // Intent Detection Layer
-    const intent = detectIntent(textToSend);
-    let finalSpeed = speed;
-
-    if (intent === 'image') {
-      finalSpeed = 'image';
-      setSpeed('image');
-    } else {
-      if (finalSpeed === 'image') {
-        finalSpeed = 'zeno';
-        setSpeed('zeno');
-      }
-    }
-
-    if (isModelPro(finalSpeed) && !isPro) {
-      handleOpenProFeatureModal();
-      return;
-    }
-
-    const usageAction = finalSpeed === 'image' ? 'image' : finalSpeed === 'search' ? 'search' : 'message';
-    const usageCheck = checkUsageLimit(isPro ? 'ZENO Pro' : userSettings.plan, dailyUsage, usageAction);
-    if (!usageCheck.allowed) {
-      handleLimitReached();
-      return;
-    }
-
-    if (!isPro) {
-      const limitKey = finalSpeed === 'image' ? 'image' : finalSpeed === 'vision' ? 'vision' : 'messages';
-      const currentCount = (dailyUsage as any)[limitKey] || 0;
-      setDailyUsage(prev => ({
-        ...prev,
-        [limitKey]: currentCount + 1,
-      }));
-    }
-
-    const currentInput = textToSend;
-    const currentAttachments = [...attachments];
-
-    if (overrideText === undefined) {
-      setInput('');
-      setAttachments([]);
-      clearDraft();
-    }
-
-    let sessionId = currentSessionId;
-    let isNewSession = false;
-
-    if (!sessionId) {
-      isNewSession = true;
-      const newSession: ChatSession = {
-        id: Date.now().toString(),
-        title: generateTitleFromMessage(currentInput),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        messages: [],
-        speed: finalSpeed,
-      };
-      sessionId = newSession.id;
-      setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(sessionId);
-    }
-
-    const userMsgId = Date.now().toString();
-    const userMessage: Message = {
-      id: userMsgId,
-      role: 'user',
-      text: currentInput,
-      timestamp: Date.now(),
-      attachments: currentAttachments,
-    };
-
-    const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
-    const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
-
-    const msgLower = currentInput.toLowerCase();
-    const clientSearchTriggers = [
-      'buscar', 'pesquisar', 'procurar', 'notícias sobre', 'noticias sobre',
-      'o que é', 'o que e', 'quem é', 'quem e', 'últimas notícias', 'ultimas noticias',
-      'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje',
-      'cotação', 'resultado do', 'placar', 'preço atual', 'notícias de',
-      'o que aconteceu', 'como está', 'qual é o', 'qual e o', 'quando foi',
-      'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre'
-    ];
-    const isClientSearch = finalSpeed === 'search' || clientSearchTriggers.some(t => msgLower.includes(t));
-    if (isClientSearch) {
-      finalSpeed = 'search';
-      setSpeed('search');
-    }
-
-    const initialModelMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      text: youtubeUrl ? '' : '', // Placeholder
-      timestamp: Date.now(),
-      modelSpeed: isClientSearch ? 'search' : finalSpeed,
-      youtubeUrl: youtubeUrl,
-      isSearching: isClientSearch,
-      isSearch: isClientSearch,
-    };
-
-    setSessions(prev =>
-      prev.map(s => {
-        if (s.id === sessionId) {
-          return {
-            ...s,
-            messages: [...s.messages, userMessage, initialModelMessage],
-            updatedAt: Date.now(),
-          };
-        }
-        return s;
-      })
-    );
-
-    setIsLoading(true);
-    abortControllerRef.current = new AbortController();
-    const chatTimeoutId = setTimeout(() => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    }, 120000); // 2 minute timeout safety
-
-    try {
-      const token = user ? await user.getIdToken() : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await measureApiLatency('/api/chat', () =>
-        fetch('/api/chat', {
-          method: 'POST',
-          headers,
-          signal: abortControllerRef.current?.signal,
-          body: JSON.stringify({
-            message: extraContext ? `${extraContext}\n\n[SOLICITAÇÃO]: ${textToSend}` : textToSend,
-            speed: finalSpeed,
-            isSmartMode: userSettings.isSmartMode,
-            attachments: currentAttachments,
-            systemInstruction: userSettings.systemInstruction,
-            temperature: userSettings.temperature,
-            customInstructions: userSettings.customInstructions,
-            userId: userId,
-            userEmail: userSettings.userEmail,
-            history: messages.slice(-10).map(m => ({ role: m.role, text: m.text })),
-          }),
-        })
-      );
-      clearTimeout(chatTimeoutId);
-
-      if (!response.ok) {
-        let errorMsg = `Ocorreu uma instabilidade ao conectar com o servidor ZENO (HTTP ${response.status}). Por favor, tente novamente em instantes.`;
-        try {
-          const errorData = await response.json();
-          console.error('[ZENO API ERROR DETAILED - Status ' + response.status + ']:', errorData);
-          if (errorData) {
-            errorMsg = typeof errorData.error === 'string' ? errorData.error : (errorData.message || JSON.stringify(errorData) || errorMsg);
-          }
-        } catch (e) {
-          const errText = await response.text().catch(() => '');
-          console.error('[ZENO API ERROR NON-JSON - Status ' + response.status + ']:', errText);
-        }
-        if (response.status === 429) {
-          handleLimitReached();
-          setIsLoading(false);
-          return;
-        }
-        if (response.status === 403) {
-          // If 403 is due to Pro plan requirement for models like search/mega/vision/think
-          handleOpenProFeatureModal();
-        }
-        throw new Error(errorMsg);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = '';
-      let buffer = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunkText = decoder.decode(value, { stream: true });
-          buffer += chunkText;
-
-          // SSE Parsing
-          let textUpdated = false;
-          while (buffer.includes('\n\n')) {
-            const eventIndex = buffer.indexOf('\n\n');
-            const eventStr = buffer.slice(0, eventIndex);
-            buffer = buffer.slice(eventIndex + 2); // Remove processed event
-
-            const lines = eventStr.split('\n');
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('data:')) {
-                const dataStr = trimmed.substring(5).trim();
-                if (dataStr === '[DONE]') continue;
-                
-                try {
-                  const data = JSON.parse(dataStr);
-                  if (data.activeModel && data.modelId) {
-                    setSessions(prev =>
-                      prev.map(s => {
-                        if (s.id === sessionId) {
-                          const updatedMsgs = [...s.messages];
-                          const lastIdx = updatedMsgs.length - 1;
-                          if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
-                            updatedMsgs[lastIdx] = {
-                              ...updatedMsgs[lastIdx],
-                              modelSpeed: data.modelId
-                            };
-                          }
-                          return { ...s, messages: updatedMsgs };
-                        }
-                        return s;
-                      })
-                    );
-                    continue;
-                  }
-                  if (data.error) {
-                    accumulatedText = data.error;
-                    textUpdated = true;
-                    continue;
-                  }
-                  if (data.isSearch !== undefined || data.sources !== undefined) {
-                    setSessions(prev =>
-                      prev.map(s => {
-                        if (s.id === sessionId) {
-                          const updatedMsgs = [...s.messages];
-                          const lastIdx = updatedMsgs.length - 1;
-                          if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
-                            updatedMsgs[lastIdx] = {
-                              ...updatedMsgs[lastIdx],
-                              isSearch: data.isSearch !== undefined ? data.isSearch : updatedMsgs[lastIdx].isSearch,
-                              searchSources: filterValidSources(data.sources || updatedMsgs[lastIdx].searchSources),
-                              isSearching: data.isSearching !== undefined ? data.isSearching : false,
-                            };
-                          }
-                          return { ...s, messages: updatedMsgs };
-                        }
-                        return s;
-                      })
-                    );
-                  }
-                  if (data.text !== undefined) {
-                    // Replace full text (since server often sends full text replacements)
-                    accumulatedText = data.text;
-                    textUpdated = true;
-                  } else if (data.delta && data.delta.content) {
-                    accumulatedText += data.delta.content;
-                    textUpdated = true;
-                  }
-                } catch (e) {
-                  // Fallback: If it's valid SSE but not JSON, append plain text
-                  if (dataStr && !dataStr.startsWith('{') && !dataStr.startsWith('[')) {
-                    accumulatedText += dataStr;
-                    textUpdated = true;
-                  }
-                }
-              }
-            }
-          }
-
-          // Fallback if the backend is just sending raw text without SSE format
-          if (textUpdated === false && !buffer.includes('data:') && !buffer.includes('event:')) {
-             try {
-                // Try to parse the entire buffer as JSON in case it's a single JSON response
-                const data = JSON.parse(buffer);
-                if (data.text) {
-                   accumulatedText = data.text;
-                   textUpdated = true;
-                   buffer = '';
-                }
-             } catch (e) {
-                // If it's just plain text being streamed and doesn't look like SSE at all
-                if (buffer.length > 0 && !buffer.startsWith('{')) {
-                   accumulatedText += buffer;
-                   textUpdated = true;
-                   buffer = '';
-                }
-             }
-          }
-
-          if (textUpdated) {
-            setSessions(prev =>
-              prev.map(s => {
-                if (s.id === sessionId) {
-                  const updatedMsgs = [...s.messages];
-                  const lastIdx = updatedMsgs.length - 1;
-                  if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
-                    updatedMsgs[lastIdx] = {
-                      ...updatedMsgs[lastIdx],
-                      text: accumulatedText,
-                      searchSources: filterValidSources(updatedMsgs[lastIdx].searchSources)
-                    };
-                  }
-                  return { ...s, messages: updatedMsgs };
-                }
-                return s;
-              })
-            );
-          }
-        }
-      }
-
-      if (userSettings.autoRead && accumulatedText) {
-        toggleSpeech(initialModelMessage.id, accumulatedText);
-      }
-
-      if (accumulatedText.includes('![')) {
-        scanAndSaveImagesFromText(accumulatedText, sessionId, activeSession?.title || 'Conversa', speed);
-      }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log('Geração cancelada ou tempo limite atingido.');
-        setSessions(prev =>
-          prev.map(s => {
-            if (s.id === sessionId) {
-              const updatedMsgs = [...s.messages];
-              const lastIdx = updatedMsgs.length - 1;
-              if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model' && !updatedMsgs[lastIdx].text) {
-                updatedMsgs[lastIdx] = {
-                  ...updatedMsgs[lastIdx],
-                  hasError: true,
-                  errorMessage: 'Tempo limite de resposta excedido ou geração interrompida.',
-                };
-              }
-              return { ...s, messages: updatedMsgs };
-            }
-            return s;
-          })
-        );
-      } else {
-        console.error('Erro na requisição da IA:', err);
-        setSessions(prev =>
-          prev.map(s => {
-            if (s.id === sessionId) {
-              const updatedMsgs = [...s.messages];
-              const lastIdx = updatedMsgs.length - 1;
-              if (lastIdx >= 0 && updatedMsgs[lastIdx].role === 'model') {
-                updatedMsgs[lastIdx] = {
-                  ...updatedMsgs[lastIdx],
-                  hasError: true,
-                  errorMessage: err.message || 'Ocorreu uma falha ao comunicar com a inteligência do ZENO.',
-                  rawErrorDetails: err.stack || String(err),
-                };
-              }
-              return { ...s, messages: updatedMsgs };
-            }
-            return s;
-          })
-        );
-      }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [
-    input, 
-    attachments, 
-    isLoading, 
-    speed, 
-    isPro, 
-    dailyUsage, 
-    userSettings, 
-    currentSessionId, 
-    userId, 
-    user, 
-    messages, 
-    activeSession?.title, 
-    handleOpenProFeatureModal, 
-    handleLimitReached, 
-    toggleSpeech
-  ]);
-
-  // Attachment & Modal Handlers (Memoized)
-  const handleAddAttachment = useCallback((att: FileAttachment) => {
-    setAttachments(prev => [...prev, att]);
-  }, []);
-
-  const handleRemoveAttachment = useCallback((id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  }, []);
-
-  const handleOpenImageStudioModal = useCallback(() => {
-    ui.openModal('imageStudio');
-  }, [ui]);
+    abortChat();
+  }, [abortChat]);
 
   // Regenerate Response
   const handleRegenerate = useCallback(async () => {
@@ -1311,13 +726,16 @@ function MainAppInner() {
 
   // Copy to Clipboard
   const copyToClipboard = useCallback((id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    performCopyToClipboard(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
   // Memoized ReactMarkdown Custom Components
   const markdownComponents = useMemo(() => ({
+    p({ children }: any) {
+      return <div className="mb-2 last:mb-0">{children}</div>;
+    },
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
@@ -1342,7 +760,7 @@ function MainAppInner() {
       );
     },
     img({ src, alt }: any) {
-      if (!src) return null;
+      if (!src || !isAuthorizedImageUrl(src)) return null;
       return (
         <ImageWithLoader
           src={src}
@@ -1462,9 +880,10 @@ function MainAppInner() {
   }, [filteredSessions, userSettings.groupByDate]);
 
   return (
-    <div className={`flex h-[100dvh] font-sans overflow-hidden relative transition-colors duration-150 ${
-      theme === 'dark' ? 'bg-[#0D0D0D] text-white' : 'bg-white text-neutral-900'
-    }`}>
+    <LanguageProvider userLanguage={userSettings.language}>
+      <div className={`flex h-[100dvh] font-sans overflow-hidden relative transition-colors duration-150 ${
+        theme === 'dark' ? 'bg-[#0D0D0D] text-white' : 'bg-white text-neutral-900'
+      }`}>
       {/* Mobile Overlay */}
       {ui.isSidebarOpen && (
         <div 
@@ -1509,6 +928,7 @@ function MainAppInner() {
           }
         }}
         onOpenSubscriptionModal={handleOpenSubscriptionModal}
+        onOpenVersionNews={() => ui.openModal('versionNews')}
         user={profile}
         session={session}
         onSwitchAccount={switchAccount}
@@ -1534,7 +954,7 @@ function MainAppInner() {
 
         {/* Main Conversation Feed */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-custom">
-          <div className="flex flex-col w-full min-h-full pb-36 pt-4">
+          <div className="flex flex-col w-full min-h-full pb-36 pt-4 max-w-4xl mx-auto">
             
             {/* Warning Banner */}
             {!isPro && backendLimits && adminConfig && (
@@ -1582,7 +1002,6 @@ function MainAppInner() {
                 logoVariant={logoVariant}
                 userName={userSettings.userName}
                 onSelectPrompt={(prompt) => setInput(prompt)}
-                onOpenImageStudio={() => ui.openModal('imageStudio')}
                 onOpenMusicStudio={() => ui.openModal('musicStudio')}
                 onSelectSpeed={handleSelectSpeed}
                 user={profile}
@@ -1629,15 +1048,11 @@ function MainAppInner() {
             input={input}
             setInput={setInput}
             isLoading={isLoading}
-            isListening={isListening}
-            speechError={speechError}
             attachments={attachments}
             onAddAttachment={handleAddAttachment}
             onRemoveAttachment={handleRemoveAttachment}
-            onToggleListening={toggleListening}
-            onSubmit={handleSubmit}
+            onSubmit={handleChatSubmit}
             onStopGeneration={handleStopGeneration}
-            onOpenImageStudio={handleOpenImageStudioModal}
             speed={speed}
             onSelectSpeed={handleSelectSpeed}
             theme={theme}
@@ -1671,15 +1086,17 @@ function MainAppInner() {
         onClearHistory={handleClearAllHistory}
         onExportAllData={handleExportAllData}
         onDeleteSession={handleDeleteSession}
-        onSubmitPrompt={handleSubmit}
+        onSubmitPrompt={handleChatSubmit}
         sessions={sessions}
         onSelectSession={setCurrentSessionId}
         onLimitReached={handleLimitReached}
         dailyUsage={dailyUsage}
         onUpdateUsage={setDailyUsage}
       />
+
     </div>
-  );
+  </LanguageProvider>
+);
 }
 
 function MainAppWrapper() {
@@ -1696,18 +1113,21 @@ function MainAppWrapper() {
   );
 }
 
-function AuthWrapper() {
-  const { loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-[#050505] text-white">Carregando...</div>;
-  return <MainAppWrapper />;
-}
+  const AuthWrapper = () => {
+    const { loading } = useAuth();
+    const { t } = useTranslation();
+    if (loading) return <div className="flex items-center justify-center min-h-screen bg-[#050505] text-white">{t.common.loading}...</div>;
+    return <MainAppWrapper />;
+  }
 
 export default function App() {
   return (
     <AuthProvider>
-      <UIProvider>
-        <AuthWrapper />
-      </UIProvider>
+      <LanguageProvider>
+        <UIProvider>
+          <AuthWrapper />
+        </UIProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

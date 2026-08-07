@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Globe, X, Calendar } from 'lucide-react';
 import { SearchSource } from '../types';
+import { useTranslation } from '../i18n';
 
 interface SourcesBottomSheetProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface SourcesBottomSheetProps {
 }
 
 export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesBottomSheetProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -67,7 +70,7 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
 
             {/* Header */}
             <div className="flex-shrink-0 flex justify-between items-center px-6 pb-4 pt-2 border-b border-transparent">
-              <h2 className="text-xl font-bold">Fontes</h2>
+              <h2 className="text-xl font-bold">{t.sources.title}</h2>
               <button 
                 onClick={onClose}
                 className={`p-2 rounded-full transition-colors ${
@@ -89,7 +92,7 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
                   <div className="my-2">
                     <div className="flex items-center gap-4">
                       <div className={`flex-1 h-px ${theme === 'dark' ? 'bg-[#232326]' : 'bg-neutral-200'}`} />
-                      <span className={`text-xs font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-neutral-500' : 'text-neutral-400'}`}>Mais</span>
+                      <span className={`text-xs font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-neutral-500' : 'text-neutral-400'}`}>{t.sources.more}</span>
                       <div className={`flex-1 h-px ${theme === 'dark' ? 'bg-[#232326]' : 'bg-neutral-200'}`} />
                     </div>
                   </div>
@@ -108,6 +111,7 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
 }
 
 function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; theme: string, getFaviconUrl: (d: string) => string }) {
+  const { t, language } = useTranslation();
   const domain = source.domain || new URL(source.url).hostname;
   
   const formatDate = (dateStr?: string | null) => {
@@ -115,7 +119,15 @@ function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; th
     try {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
-      return date.toLocaleDateString('pt-BR', {
+      
+      const localeMap: Record<string, string> = {
+        pt: 'pt-BR',
+        es: 'es-ES',
+        fr: 'fr-FR',
+        zh: 'zh-CN'
+      };
+
+      return date.toLocaleDateString(localeMap[language] || 'pt-BR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
@@ -166,15 +178,15 @@ function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; th
         {(pubDate || upDate) && (
           <div className={`grid grid-flow-col auto-cols-max items-center gap-x-4 text-[11px] sm:text-[12px] font-medium flex-shrink-0 ${theme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>
             {pubDate && (
-              <span className="flex items-center gap-1.5" title="Data de publicação">
+              <span className="flex items-center gap-1.5" title={t.sources.publishedTitle}>
                 <Calendar className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
-                <span>Publicado em: {pubDate}</span>
+                <span>{t.sources.publishedAt.replace('{{date}}', pubDate)}</span>
               </span>
             )}
             {upDate && (
-              <span className="flex items-center gap-1.5" title="Última atualização">
+              <span className="flex items-center gap-1.5" title={t.sources.updatedTitle}>
                 <Calendar className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
-                <span>Última atualização: {upDate}</span>
+                <span>{t.sources.updatedAt.replace('{{date}}', upDate)}</span>
               </span>
             )}
           </div>
@@ -208,7 +220,7 @@ function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; th
               : 'bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-200'
           }`}
         >
-          Acessar fonte ↗
+          {t.sources.accessSource} ↗
         </a>
       </div>
     </div>

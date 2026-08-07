@@ -6,11 +6,15 @@ import {
   Volume2, Bell, Code, Fingerprint, ExternalLink
 } from 'lucide-react';
 import { UserSettings } from '../types';
+import { SupportChatTab } from "./SupportChatTab";
+import { LifeBuoy } from "lucide-react";
 import { ZenoLogo } from './ZenoLogo';
 import { MySubscriptions } from './MySubscriptions';
 import { isAdminUser, hasPremiumAccess, maskEmail } from '../config/admin';
 import { ProtectedAdminPanel } from './AdminPanel';
 import { AuthProfile } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n';
+import { UserGamificationSnippet, UserGamificationSkeleton } from './UserGamificationSnippet';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -40,7 +44,7 @@ export type SettingsCategory =
   | 'voice' 
   | 'privacy' 
   | 'notifications' 
-  | 'developer';
+  | 'developer' | 'support';
 
 export function SettingsModal({
   isOpen,
@@ -61,6 +65,7 @@ export function SettingsModal({
   onSwitchAccount,
   authLoading
 }: SettingsModalProps) {
+  const { t } = useTranslation();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('account');
   const [subView, setSubView] = useState<'main' | 'subscriptions'>('main');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -97,18 +102,20 @@ export function SettingsModal({
   const isOwner = userEmail ? isAdminUser(userEmail) : false;
 
   const isDark = theme === 'dark';
+  const isAuthenticated = !!(user?.uid || (session?.accounts?.length > 0 && session?.activeUid));
 
   if (!isOpen) return null;
 
   const categories: Array<{ id: SettingsCategory; label: string; icon: any }> = [
-    { id: 'account', label: 'Conta', icon: User },
-    { id: 'subscription', label: 'Assinatura', icon: Sparkles },
-    { id: 'appearance', label: 'Aparência', icon: isDark ? Moon : Sun },
-    { id: 'ai', label: 'IA', icon: Brain },
-    { id: 'voice', label: 'Voz', icon: Volume2 },
-    { id: 'privacy', label: 'Privacidade', icon: Shield },
-    { id: 'notifications', label: 'Notificações', icon: Bell },
-    ...(isAdminUser(user?.email) || isAdminUser(userEmail) ? [{ id: 'developer' as const, label: 'Desenvolvedor', icon: Code }] : [])
+    { id: 'account', label: t.common.profile, icon: User },
+    { id: 'subscription', label: t.settings.subscription, icon: Sparkles },
+    { id: 'appearance', label: t.settings.appearance, icon: isDark ? Moon : Sun },
+    { id: 'ai', label: t.settings.aiModel, icon: Brain },
+    { id: 'voice', label: t.settings.voice, icon: Volume2 },
+    { id: 'privacy', label: t.settings.privacy, icon: Shield },
+    { id: 'notifications', label: t.settings.notifications, icon: Bell },
+    { id: 'support', label: 'Ajuda e Suporte', icon: LifeBuoy },
+    ...(isAdminUser(user?.email) || isAdminUser(userEmail) ? [{ id: 'developer' as const, label: 'Admin', icon: Code }] : [])
   ];
 
   return (
@@ -123,7 +130,7 @@ export function SettingsModal({
               <div className="flex items-center gap-2.5">
                 <ZenoLogo size={22} variant={settings.logoVariant} theme={isDark ? "dark" : "light"} />
                 <h2 className="text-lg font-semibold tracking-tight">
-                  Configurações
+                  {t.settings.title}
                 </h2>
               </div>
 
@@ -177,7 +184,7 @@ export function SettingsModal({
               {activeCategory === 'account' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div className="space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Perfil & Contas</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.profileAccounts}</h3>
                     {session?.accounts?.length > 0 ? (
                       session.accounts.map((acc: any) => (
                         <div key={acc.uid} className={`p-4 rounded-xl border flex items-center justify-between ${
@@ -210,7 +217,7 @@ export function SettingsModal({
                       ))
                     ) : (
                       <div className={`p-5 rounded-xl border text-center ${isDark ? 'border-[#2C2C2E] bg-[#17171a]' : 'border-neutral-200 bg-neutral-50'}`}>
-                        <p className="text-xs text-neutral-400 mb-3">Conecte sua conta Google para salvar conversas e sincronizar preferências.</p>
+                        <p className="text-xs text-neutral-400 mb-3">{t.settings.connectGoogle}</p>
                         <button
                           onClick={() => onLogin?.(true)}
                           disabled={authLoading}
@@ -222,10 +229,16 @@ export function SettingsModal({
                     )}
                   </div>
 
+                  {authLoading ? (
+                    <UserGamificationSkeleton isDark={isDark} />
+                  ) : (
+                    isAuthenticated && userId && !userId.startsWith('anon_') && <UserGamificationSnippet userId={userId} isDark={isDark} />
+                  )}
+
                   <div className="pt-4 border-t border-[#2C2C2E]/60 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Lembrar este dispositivo</p>
-                      <p className="text-xs text-neutral-400">Mantenha a sessão ativa neste navegador.</p>
+                      <p className="text-sm font-medium">{t.settings.rememberDevice}</p>
+                      <p className="text-xs text-neutral-400">{t.settings.keepSessionActive}</p>
                     </div>
                     <button
                       type="button"
@@ -238,6 +251,12 @@ export function SettingsModal({
                         settings.rememberDevice ? 'translate-x-4' : 'translate-x-1'
                       }`} />
                     </button>
+                  </div>
+
+                  <div className="pt-6 border-t border-[#2C2C2E]/60 text-center">
+                    <p className="text-[11px] text-neutral-500 font-medium tracking-wide">
+                      Zeno IA — by ZENO Enterprise
+                    </p>
                   </div>
                 </div>
               )}
@@ -261,7 +280,7 @@ export function SettingsModal({
               {activeCategory === 'appearance' && (
                 <div className="space-y-6 animate-fadeIn">
                   <div className="space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Tema</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.appearance}</h3>
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
@@ -272,7 +291,7 @@ export function SettingsModal({
                             : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
-                        Escuro
+                        {t.settings.themeDark}
                       </button>
                       <button
                         type="button"
@@ -283,7 +302,7 @@ export function SettingsModal({
                             : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
-                        Claro
+                        {t.settings.themeLight}
                       </button>
                       <button
                         type="button"
@@ -294,13 +313,31 @@ export function SettingsModal({
                             : 'bg-transparent border-[#2C2C2E] text-neutral-400 hover:text-white'
                         }`}
                       >
-                        Sistema
+                        {t.settings.themeAuto}
                       </button>
                     </div>
                   </div>
 
                   <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Tamanho da Fonte</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.language}</h3>
+                    <select
+                      value={safeSettings.language || 'auto'}
+                      onChange={(e) => onUpdateSettings({ language: e.target.value as any })}
+                      className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none ${
+                        isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                      }`}
+                    >
+                      <option value="auto">Automático (Sistema)</option>
+                      <option value="pt-BR">{t.settings.voiceLangPt}</option>
+                      <option value="en-US">{t.settings.voiceLangEn.replace(" (US)", "")}</option>
+                      <option value="es-ES">{t.settings.voiceLangEs}</option>
+                      <option value="fr-FR">Français</option>
+                      <option value="zh-CN">中文 (Mandarin)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.fontSize}</h3>
                     <select
                       value={safeSettings.fontSize || 'normal'}
                       onChange={(e) => onUpdateSettings({ fontSize: e.target.value as any })}
@@ -308,9 +345,9 @@ export function SettingsModal({
                         isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
                       }`}
                     >
-                      <option value="compact">Compacto (14px)</option>
-                      <option value="normal">Padrão (16px)</option>
-                      <option value="large">Grande (18px)</option>
+                      <option value="compact">{t.settings.fontSizeCompact}</option>
+                      <option value="normal">{t.settings.fontSizeStandard}</option>
+                      <option value="large">{t.settings.fontSizeLarge}</option>
                     </select>
                   </div>
                 </div>
@@ -329,7 +366,7 @@ export function SettingsModal({
                       </div>
                       <div>
                         <div className="font-bold text-sm text-neutral-100 flex items-center gap-2">
-                          <span>Aprendizado Adaptativo ZENO</span>
+                          <span>{t.settings.adaptiveLearning}</span>
                           <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
                             ATIVO
                           </span>
@@ -351,11 +388,11 @@ export function SettingsModal({
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Modelo Padrão</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.aiModel}</h3>
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <p className="text-sm font-medium">Modo Inteligente</p>
-                        <p className="text-[10px] text-neutral-400">Otimização automática de modelos.</p>
+                        <p className="text-sm font-medium">{t.settings.smartMode}</p>
+                        <p className="text-[10px] text-neutral-400">{t.settings.smartModeDesc}</p>
                       </div>
                       <button
                         type="button"
@@ -393,7 +430,7 @@ export function SettingsModal({
                   </div>
 
                   <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Instruções Customizadas</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.composer.uploadDoc}</h3>
                     <textarea
                       rows={3}
                       value={safeSettings.customInstructions || ''}
@@ -407,7 +444,7 @@ export function SettingsModal({
 
                   <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
                     <div className="flex justify-between items-center text-xs font-medium">
-                      <span className="text-neutral-400">Temperatura (Criatividade)</span>
+                      <span className="text-neutral-400">{t.settings.temperature}</span>
                       <span className="font-mono">{safeSettings.temperature ?? 0.7}</span>
                     </div>
                     <input
@@ -428,8 +465,8 @@ export function SettingsModal({
                 <div className="space-y-6 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Leitura Automática de Respostas</p>
-                      <p className="text-xs text-neutral-400">Reproduzir áudio ao receber novas respostas.</p>
+                      <p className="text-sm font-medium">{t.settings.autoReadText}</p>
+                      <p className="text-xs text-neutral-400">{t.settings.autoReadDesc}</p>
                     </div>
                     <button
                       type="button"
@@ -445,7 +482,7 @@ export function SettingsModal({
                   </div>
 
                   <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Idioma de Fala</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.voice}</h3>
                     <select
                       value={safeSettings.speechLanguage || 'pt-BR'}
                       onChange={(e) => onUpdateSettings({ speechLanguage: e.target.value })}
@@ -453,9 +490,9 @@ export function SettingsModal({
                         isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
                       }`}
                     >
-                      <option value="pt-BR">Português (Brasil)</option>
-                      <option value="en-US">English (US)</option>
-                      <option value="es-ES">Español</option>
+                      <option value="pt-BR">{t.settings.voiceLangPt}</option>
+                      <option value="en-US">{t.settings.voiceLangEn}</option>
+                      <option value="es-ES">{t.settings.voiceLangEs}</option>
                     </select>
                   </div>
                 </div>
@@ -466,8 +503,8 @@ export function SettingsModal({
                 <div className="space-y-6 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">Salvar Histórico</p>
-                      <p className="text-xs text-neutral-400">Manter conversas salvas no seu perfil.</p>
+                      <p className="text-sm font-medium">{t.settings.saveHistory}</p>
+                      <p className="text-xs text-neutral-400">{t.settings.saveHistoryDesc}</p>
                     </div>
                     <button
                       type="button"
@@ -489,7 +526,7 @@ export function SettingsModal({
                       className="w-full py-2.5 rounded-xl border border-[#2C2C2E] hover:border-[#2C2C2E] text-xs font-medium transition-all flex items-center justify-center gap-2"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Exportar Histórico (.md)</span>
+                      <span>{t.settings.exportHistory}</span>
                     </button>
 
                     <button
@@ -498,7 +535,7 @@ export function SettingsModal({
                       className="w-full py-2.5 rounded-xl border border-neutral-500/30 text-neutral-400 hover:bg-neutral-500/10 text-xs font-medium transition-all flex items-center justify-center gap-2"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Limpar Todo o Histórico</span>
+                      <span>{t.settings.clearHistory}</span>
                     </button>
                   </div>
                 </div>
@@ -510,7 +547,7 @@ export function SettingsModal({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Notificações da Aplicação</p>
-                      <p className="text-xs text-neutral-400">Receba alertas sobre atualizações e novos recursos.</p>
+                      <p className="text-xs text-neutral-400">{t.settings.notificationsDesc}</p>
                     </div>
                     <button
                       type="button"
@@ -528,7 +565,11 @@ export function SettingsModal({
               )}
 
               {/* 8. DESENVOLVEDOR */}
-              {activeCategory === 'developer' && (
+              
+              {activeCategory === 'support' && (
+                <SupportChatTab />
+              )}
+{activeCategory === 'developer' && (
                 <ProtectedAdminPanel
                   userEmail={userEmail}
                   theme={isDark ? 'dark' : 'light'}
@@ -544,7 +585,7 @@ export function SettingsModal({
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-white text-black hover:bg-neutral-200 font-semibold text-xs transition-all"
           >
-            Concluído
+            {t.common.finish}
           </button>
         </div>
 
@@ -554,7 +595,7 @@ export function SettingsModal({
       {showClearConfirm && (
         <div className="fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4 animate-fadeIn">
           <div className={`p-5 rounded-xl max-w-sm w-full border ${isDark ? 'border-[#2C2C2E] bg-[#17171a] text-white' : 'border-neutral-200 bg-white text-neutral-900'} space-y-3`}>
-            <h3 className="font-semibold text-sm">Apagar Histórico?</h3>
+            <h3 className="font-semibold text-sm">{t.settings.deleteHistoryConfirm}</h3>
             <p className="text-xs text-neutral-400 leading-relaxed">
               Esta ação apagar suas conversas de forma definitiva.
             </p>

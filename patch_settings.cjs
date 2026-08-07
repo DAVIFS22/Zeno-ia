@@ -2,60 +2,51 @@ const fs = require('fs');
 
 let settings = fs.readFileSync('src/components/SettingsModal.tsx', 'utf8');
 
-settings = settings.replace(
-  "onUpdateSettings: (settings: UserSettings) => void;",
-  "onUpdateSettings: (settings: UserSettings) => void;\n  backendLimits?: any;\n  adminConfig?: any;"
-);
+// Insert import
+if (!settings.includes('SupportChatModal')) {
+   settings = settings.replace(/import \{ motion, AnimatePresence \} from 'motion\/react';/, "import { motion, AnimatePresence } from 'motion/react';\nimport { SupportChatModal } from './SupportChatModal';\nimport { HelpCircle } from 'lucide-react';");
+}
 
-settings = settings.replace(
-  "onOpenSubscriptionModal }: SettingsModalProps) {",
-  "onOpenSubscriptionModal,\n  backendLimits,\n  adminConfig }: SettingsModalProps) {\n  const [timeLeft, setTimeLeft] = React.useState<{hours: number, minutes: number}>({hours:0, minutes:0});\n  React.useEffect(() => { const calcTime = () => { const now = new Date(); const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999); const diff = endOfDay.getTime() - now.getTime(); setTimeLeft({ hours: Math.floor(diff / (1000 * 60 * 60)), minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)) }); }; calcTime(); const interval = setInterval(calcTime, 60000); return () => clearInterval(interval); }, []);"
-);
+// Add state for support chat
+if (!settings.includes('showSupportChat')) {
+   settings = settings.replace(/const \[showAdaptiveLearning, setShowAdaptiveLearning\] = useState\(false\);/, "const [showAdaptiveLearning, setShowAdaptiveLearning] = useState(false);\n  const [showSupportChat, setShowSupportChat] = useState(false);");
+}
 
-const usageUI = `
-                  {!isPro && adminConfig && backendLimits && (
-                    <div className="mt-6 border border-[#313131] rounded-xl p-4 bg-[#232323]">
-                      <h4 className="text-white font-medium mb-4">Uso Diário (Plano Gratuito)</h4>
-                      <div className="space-y-3 text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Mensagens</span>
-                          <span className="text-white">{backendLimits.messages} / {adminConfig.messages}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Pesquisa Web</span>
-                          <span className="text-white">{backendLimits.search} / {adminConfig.search}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Imagens</span>
-                          <span className="text-white">{backendLimits.image} / {adminConfig.image}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Análise de PDF</span>
-                          <span className="text-white">{backendLimits.doc} / {adminConfig.doc}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Análise Visual</span>
-                          <span className="text-white">{backendLimits.vision} / {adminConfig.vision}</span>
-                        </div>
-                        <div className="pt-3 mt-3 border-t border-[#313131] flex justify-between items-center">
-                          <span className="text-neutral-400">Próxima renovação:</span>
-                          <span className="text-white font-medium">{String(timeLeft.hours).padStart(2, '0')}h {String(timeLeft.minutes).padStart(2, '0')}m</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+// Add UI for Support button
+// We'll look for "Receba alertas sobre atualizações" (notifications) or similar, or just append a new group before Danger Zone.
+const supportGroup = `
+            {/* Support Group */}
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl overflow-hidden mt-6">
+              <div className="p-4 border-b border-neutral-800 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <HelpCircle className="w-4 h-4 text-blue-400" />
+                </div>
+                <span className="font-semibold text-neutral-200">Ajuda e Suporte</span>
+              </div>
+              <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <div className="font-medium text-white text-sm">Falar com o Suporte</div>
+                  <div className="text-xs text-neutral-400 mt-0.5">Tire dúvidas sobre planos, cobranças ou reporte um problema.</div>
+                </div>
+                <button 
+                  onClick={() => setShowSupportChat(true)}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors border border-neutral-700"
+                >
+                  Abrir Chat de Suporte
+                </button>
+              </div>
+            </div>
 `;
 
-settings = settings.replace(
-  "{onOpenSubscriptionModal && (",
-  usageUI + "\n                  {onOpenSubscriptionModal && ("
-);
+if (!settings.includes('Ajuda e Suporte')) {
+   // Add before Danger Zone
+   settings = settings.replace(/({\/\* Danger Zone \*\/})/, supportGroup + "\n            $1");
+}
+
+// Render SupportChatModal
+if (!settings.includes('<SupportChatModal')) {
+   settings = settings.replace(/(<\/AnimatePresence>)/, "  <SupportChatModal isOpen={showSupportChat} onClose={() => setShowSupportChat(false)} />\n      $1");
+}
 
 fs.writeFileSync('src/components/SettingsModal.tsx', settings);
-
-let app = fs.readFileSync('src/App.tsx', 'utf8');
-app = app.replace(
-  "<SettingsModal",
-  "<SettingsModal backendLimits={backendLimits} adminConfig={adminConfig}"
-);
-fs.writeFileSync('src/App.tsx', app);
+console.log("Settings updated.");

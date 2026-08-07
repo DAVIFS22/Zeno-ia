@@ -14,6 +14,9 @@ import { ProFeatureModal } from './ProFeatureModal';
 import { AuthModal } from './AuthModal';
 import { MusicStudioModal } from './MusicStudioModal';
 import { AdaptiveLearningModal } from './AdaptiveLearningModal';
+import { PythonLearningModule } from './PythonLearningModule';
+import { GamificationModal } from './GamificationModal';
+import { VersionNewsModal } from './VersionNewsModal';
 import { AdaptiveLearningProfile } from '../types';
 
 interface AppModalsProps {
@@ -80,10 +83,13 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const projectsModal = useModal('projects');
   const pluginsModal = useModal('plugins');
   const moreModal = useModal('more');
+  const pythonLearningModal = useModal('pythonLearning');
+  const gamificationModal = useModal('gamification');
   const musicStudioModal = useModal('musicStudio');
   const deleteSessionModal = useModal<{ sessionId: string }>('deleteSession');
   const renewalNotificationModal = useModal<{ activeNotification: any }>('renewalNotification');
   const authModal = useModal<{ message?: string }>('auth');
+  const versionNewsModal = useModal('versionNews');
 
   const activeRenewalNotification = renewalNotificationModal.data?.activeNotification;
   const deletingSessionId = deleteSessionModal.data?.sessionId;
@@ -333,15 +339,28 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onClose={imageLibraryModal.close}
         userPlan={userSettings.plan}
         theme={theme}
+        userId={userId}
+        onOpenChat={() => {
+          imageLibraryModal.close();
+          onSelectSession('');
+        }}
+        onReusePrompt={(promptText) => {
+          imageLibraryModal.close();
+          onSubmitPrompt(undefined, `Gere uma imagem: ${promptText}`);
+        }}
         onOpenConversation={(sessionId) => {
           if (sessions.some(s => s.id === sessionId)) {
             onSelectSession(sessionId);
           }
           imageLibraryModal.close();
         }}
-        onOpenStudioWithPrompt={() => {
+        onOpenStudioWithPrompt={(promptText) => {
           imageLibraryModal.close();
-          ui.openModal('imageStudio');
+          if (promptText) {
+            onSubmitPrompt(undefined, `Gere uma imagem: ${promptText}`);
+          } else {
+            onSelectSession('');
+          }
         }}
         onUpgradeClick={() => {
           imageLibraryModal.close();
@@ -375,6 +394,28 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           moreModal.close();
           ui.openModal('subscription');
         }}
+        onOpenPythonLearning={() => {
+          moreModal.close();
+          pythonLearningModal.open();
+        }}
+        onOpenGamification={() => {
+          moreModal.close();
+          gamificationModal.open();
+        }}
+      />
+
+      {/* Python Learning Module Modal */}
+      <PythonLearningModule
+        isOpen={pythonLearningModal.isOpen}
+        onClose={pythonLearningModal.close}
+        theme={theme}
+      />
+
+      {/* Gamification Modal */}
+      <GamificationModal
+        isOpen={gamificationModal.isOpen}
+        onClose={gamificationModal.close}
+        theme={theme}
       />
 
       {/* Subscription Renewal Notification Modal */}
@@ -449,6 +490,15 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Version News Modal */}
+      {versionNewsModal.isOpen && (
+        <VersionNewsModal
+          isOpen={versionNewsModal.isOpen}
+          onClose={versionNewsModal.close}
+          isDark={theme === 'dark'}
+        />
       )}
     </>
   );

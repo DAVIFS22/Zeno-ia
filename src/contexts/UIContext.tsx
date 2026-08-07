@@ -314,6 +314,16 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
   const openDeleteSession = useCallback((data?: any) => openModal('deleteSession', { data }), [openModal]);
   const closeDeleteSession = useCallback(() => closeModal('deleteSession'), [closeModal]);
 
+  const isPythonLearningOpen = !!modals['pythonLearning']?.isOpen;
+  const openPythonLearning = useCallback((data?: any) => openModal('pythonLearning', { data }), [openModal]);
+  const closePythonLearning = useCallback(() => closeModal('pythonLearning'), [closeModal]);
+  const togglePythonLearning = useCallback(() => toggleModal('pythonLearning'), [toggleModal]);
+
+  const isGamificationOpen = !!modals['gamification']?.isOpen;
+  const openGamification = useCallback((data?: any) => openModal('gamification', { data }), [openModal]);
+  const closeGamification = useCallback(() => closeModal('gamification'), [closeModal]);
+  const toggleGamification = useCallback(() => toggleModal('gamification'), [toggleModal]);
+
   // Global Reset
   const resetUI = useCallback(() => {
     closeAllModals();
@@ -344,7 +354,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [modals, isModelDropdownOpen, isSearchVisible, isSidebarOpen, closeModal]);
 
-  const value = useMemo<UIContextType>(() => ({
+  const value = useMemo(() => ({
     modals,
     activeModalId,
     modalHistory,
@@ -458,6 +468,16 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     closeModelDropdown,
     toggleModelDropdown,
 
+    isPythonLearningOpen,
+    openPythonLearning,
+    closePythonLearning,
+    togglePythonLearning,
+
+    isGamificationOpen,
+    openGamification,
+    closeGamification,
+    toggleGamification,
+
     resetUI,
   }), [
     modals,
@@ -565,6 +585,16 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     openModelDropdown,
     closeModelDropdown,
     toggleModelDropdown,
+
+    isPythonLearningOpen,
+    openPythonLearning,
+    closePythonLearning,
+    togglePythonLearning,
+
+    isGamificationOpen,
+    openGamification,
+    closeGamification,
+    toggleGamification,
 
     resetUI,
   ]);

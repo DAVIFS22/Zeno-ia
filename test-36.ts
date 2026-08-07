@@ -10,7 +10,7 @@ async function testModel(name: string) {
 }
 async function run() {
   await testModel("gemini-3.5-flash-lite");
-  await testModel("gemini-3.6-flash");
+  await testModel("gemini-1.5-flash");
   await testModel("gemini-flash-lite-latest");
   await testModel("gemini-flash-latest");
 }

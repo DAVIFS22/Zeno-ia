@@ -140,7 +140,11 @@ export function useFirebaseAuth() {
       }
 
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-closed-by-user') {
+        console.warn('Google sign-in popup was closed by user.');
+        return;
+      }
       console.error('Firebase login error:', error);
       throw error;
     }

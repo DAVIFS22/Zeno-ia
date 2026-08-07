@@ -1,24 +1,37 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud
 } from 'lucide-react';
 import { FileAttachment, UserPlan, ModelType, DailyUsage } from '../types';
 import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { useTranslation } from '../i18n';
+import { auth } from '../lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { getOrCreateUserId } from '../lib/userId';
+import { startAudioLevelMeter, stopAudioLevelMeter } from '../hooks/useAudioLevel';
+
+const VoiceBlob = ({ className = "" }: { className?: string }) => {
+  return (
+    <div className={`relative flex items-center justify-center ${className}`}>
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+      </span>
+    </div>
+  );
+};
 
 interface ComposerInputProps {
   input: string;
   setInput: (value: string) => void;
   isLoading: boolean;
-  isListening: boolean;
-  speechError: string | null;
   attachments: FileAttachment[];
   onAddAttachment: (file: FileAttachment) => void;
   onRemoveAttachment: (id: string) => void;
-  onToggleListening: () => void;
   onSubmit: (e?: React.FormEvent) => void;
   onStopGeneration: () => void;
-  onOpenImageStudio: () => void;
   speed: ModelType;
   onSelectSpeed: (speed: ModelType) => void;
   theme: 'dark' | 'light';
@@ -35,15 +48,11 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   input,
   setInput,
   isLoading,
-  isListening,
-  speechError,
   attachments,
   onAddAttachment,
   onRemoveAttachment,
-  onToggleListening,
   onSubmit,
   onStopGeneration,
-  onOpenImageStudio,
   speed,
   onSelectSpeed,
   theme,
@@ -55,11 +64,193 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   onAcceptCloudDraft,
   onDismissCloudDraft,
 }) => {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
+
+    // --- Groq Whisper Transcription Logic via MediaRecorder ---
+  const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  const stopRecordingAndTranscribe = useCallback(() => {
+    console.log('[Groq Whisper Stage 1] Stopping microphone recording...');
+    setIsListening(false);
+    stopAudioLevelMeter();
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const onToggleListening = useCallback(async () => {
+    if (isListening) {
+      stopRecordingAndTranscribe();
+      return;
+    }
+
+    setSpeechError(null);
+    audioChunksRef.current = [];
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setSpeechError('Microfone não suportado neste navegador.');
+      return;
+    }
+
+    try {
+      console.log('[Groq Whisper Stage 1] Solicita permissão do microfone...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      console.log('[Groq Whisper Stage 1] Permissão concedida. Iniciando medidor de nível e MediaRecorder...');
+      await startAudioLevelMeter(stream);
+
+      let mimeType = '';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      }
+
+      console.log(`[Groq Whisper Stage 1] MediaRecorder configurado com mimeType: "${mimeType || 'padrão'}"`);
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          console.log(`[Groq Whisper Stage 1] Chunk de áudio gravado: ${event.data.size} bytes. Total de chunks: ${audioChunksRef.current.length}`);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log('[Groq Whisper Stage 1] Gravação finalizada. Criando Blob de áudio...');
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        console.log(`[Groq Whisper Stage 1 Resultado] Audio Blob final criado: tamanho = ${audioBlob.size} bytes, tipo = "${audioBlob.type}"`);
+
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        if (audioBlob.size === 0) {
+          console.warn('[Groq Whisper Stage 1 Falha] Blob de áudio gerado com 0 bytes (vazio).');
+          setSpeechError('Nenhum som/áudio foi capturado pelo microfone.');
+          return;
+        }
+
+        setIsTranscribing(true);
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64String = reader.result as string;
+            const audioBase64 = base64String.split(',')[1];
+
+            console.log(`[Groq Whisper Stage 2] Disparando requisição POST para /api/transcribe. Tamanho do Base64: ${audioBase64.length}`);
+
+            let currentUser = auth.currentUser;
+            if (!currentUser) {
+              try {
+                const cred = await signInAnonymously(auth);
+                currentUser = cred.user;
+              } catch (anonErr) {
+                console.error('[Groq Whisper Auth Error] Anonymous sign in failed:', anonErr);
+              }
+            }
+
+            let idToken = '';
+            if (currentUser) {
+              try {
+                idToken = await currentUser.getIdToken();
+              } catch (tokenErr) {
+                console.error('[Groq Whisper Auth Error] Failed to get ID token:', tokenErr);
+              }
+            }
+
+            if (!idToken || !currentUser) {
+              console.error('[Groq Whisper Auth Error]', 'Usuário não autenticado.');
+              setSpeechError("Por favor, faça login para usar a transcrição.");
+              setIsTranscribing(false);
+              return;
+            }
+
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                audioBase64,
+                userId: currentUser.uid
+              })
+            });
+
+            console.log(`[Groq Whisper Stage 2 & 3] Resposta HTTP recebida do backend: status = ${res.status}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+              console.error('[Groq Whisper Stage 3 Error]', data);
+              setSpeechError(data.error || 'Erro ao transcrever o áudio.');
+            } else if (data.text) {
+              console.log(`[Groq Whisper Stage 4 Success] Texto transcrito recebido com sucesso: "${data.text}"`);
+              setInput(input ? `${input.trim()} ${data.text.trim()}` : data.text.trim());
+            } else {
+              console.warn('[Groq Whisper Stage 4 Warning] Backend retornou texto vazio.');
+              setSpeechError('Nenhuma fala foi identificada no áudio.');
+            }
+
+            setIsTranscribing(false);
+          };
+        } catch (transcribeErr: any) {
+          console.error('[Groq Whisper Exception]', transcribeErr);
+          setSpeechError('Erro ao converter ou enviar o áudio.');
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start(250);
+      setIsListening(true);
+      console.log('[Groq Whisper Stage 1 Success] MediaRecorder iniciado e gravando.');
+    } catch (err: any) {
+      console.error('[Groq Whisper Stage 1 Error]', err);
+      const errMsg = (err.message || err.toString() || '').toLowerCase();
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || errMsg.includes('permission denied')) {
+        setSpeechError('Permissão do microfone negada. Permita o acesso ao microfone no navegador.');
+      } else {
+        setSpeechError(`Erro ao acessar o microfone: ${err.message || err.name}`);
+      }
+      setIsListening(false);
+      stopAudioLevelMeter();
+    }
+  }, [isListening, stopRecordingAndTranscribe, setInput]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      stopAudioLevelMeter();
+    };
+  }, []);
+
 
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
@@ -193,7 +384,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             <div className="flex items-center gap-2 min-w-0">
               <Cloud className="w-4 h-4 text-neutral-500 shrink-0 animate-pulse" />
               <span className="truncate">
-                Encontramos um rascunho diferente salvo na nuvem. Deseja usá-lo?
+                {t.composer.cloudDraft}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -202,7 +393,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 onClick={onAcceptCloudDraft}
                 className="px-2.5 py-1 rounded-lg bg-neutral-500 hover:bg-neutral-600 active:bg-neutral-700 text-white font-medium text-[11px] transition-colors cursor-pointer"
               >
-                Usar Rascunho
+                {t.common.save}
               </button>
               <button
                 type="button"
@@ -260,7 +451,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 <div className={`px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
                     isDark ? 'text-neutral-400 border-[#2C2C2E]' : 'text-neutral-500 border-neutral-100'
                   }`}>
-                    <span>Modo Inteligente</span>
+                    <span>{t.composer.speedSmart}</span>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -315,23 +506,6 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 </div>
             )}
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!isPro && onOpenProFeatureModal) {
-                onOpenProFeatureModal();
-              } else {
-                onOpenImageStudio();
-              }
-            }}
-            className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium transition-colors ${
-              isDark ? 'text-neutral-400 hover:text-neutral-200' : 'text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            <Wand2 className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Gerar Imagem</span>
-          </button>
         </div>
 
         {/* Daily Limit Warning */}
@@ -363,23 +537,16 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
         {/* Speech Error Banner */}
         {speechError && (
-          <div className="mb-2 px-3 py-1.5 rounded-lg bg-[#232326] border border-[#2C2C2E] text-neutral-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
-            <span>{speechError}</span>
-          </div>
-        )}
-
-        {/* Voice Active Bar */}
-        {isListening && (
-          <div className="mb-2 px-3 py-1 rounded-full bg-[#232326] border border-[#2C2C2E] text-neutral-200 text-xs inline-flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-            <span>Ouvindo...</span>
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-[#232326] border border-[#2C2C2E] text-neutral-300 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
+              <span>{speechError}</span>
+            </div>
             <button
-              type="button"
-              onClick={onToggleListening}
-              className="ml-2 font-semibold hover:underline"
+              onClick={() => setSpeechError(null)}
+              className="text-neutral-500 hover:text-neutral-300 p-0.5"
             >
-              Concluir
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
@@ -422,13 +589,13 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               onSubmit(e);
             }
           }}
-          className={`relative flex items-center gap-2 rounded-2xl min-h-[52px] max-h-[180px] px-3.5 py-2 transition-all duration-200 border ${
+          className={`relative flex items-center gap-2 rounded-full min-h-[54px] max-h-[180px] px-4 py-2 transition-all duration-200 border ${
             isDragging 
               ? isDark 
                 ? 'border-neutral-600 bg-[#232326]'
                 : 'border-neutral-400 bg-neutral-50' 
               : isDark
-                ? 'bg-[#151518] border-[#2C2C2E] focus-within:border-[#2C2C2E]'
+                ? 'bg-[#151518] border-[#2C2C2E] focus-within:border-[#3C3C3E]'
                 : 'bg-white border-neutral-200/90 focus-within:border-neutral-400 shadow-2xs'
           }`}
         >
@@ -436,12 +603,12 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            title="Anexar arquivo"
-            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+            disabled={isLoading || isListening || isTranscribing}
+            title={t.composer.uploadDoc}
+            className={`p-2 rounded-full transition-colors flex-shrink-0 cursor-pointer ${
               isDark
-                ? 'text-neutral-400 hover:text-white hover:bg-[#232326]'
-                : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
+                ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
+                : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
             }`}
           >
             <Paperclip className="w-4 h-4" />
@@ -455,86 +622,104 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
           />
 
-          {/* Text Area */}
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (hasContent && !isLoading) {
-                  onSubmit(e);
+          {/* Text Area or Inline Voice Recording Indicator */}
+          {isListening ? (
+            <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
+              <VoiceBlob className="w-4 h-4 text-blue-500 shrink-0" />
+              <span className="text-sm font-medium text-blue-500 animate-pulse truncate">
+                Ouvindo... fale agora
+              </span>
+            </div>
+          ) : isTranscribing ? (
+            <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-sm font-medium text-blue-500 truncate">
+                Transcrevendo áudio...
+              </span>
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (hasContent && !isLoading) {
+                    onSubmit(e);
+                  }
                 }
+              }}
+              placeholder={
+                isDragging ? t.composer.uploadDoc : t.composer.placeholder
               }
-            }}
-            placeholder={
-              isDragging ? "Solte seus arquivos aqui..." :
-              isListening ? "Fale agora..." :
-              "Enviar mensagem para ZENO..."
-            }
-            disabled={isLoading}
-            rows={1}
-            className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-sm py-1 font-normal ${
-              isDark 
-                ? 'text-white placeholder-neutral-500' 
-                : 'text-neutral-900 placeholder-neutral-400'
-            }`}
-          />
+              disabled={isLoading}
+              rows={1}
+              className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-sm py-1.5 font-normal ${
+                isDark 
+                  ? 'text-white placeholder-neutral-500' 
+                  : 'text-neutral-900 placeholder-neutral-400'
+              }`}
+            />
+          )}
 
-          {/* Voice Input */}
-          <button
-            type="button"
-            onClick={onToggleListening}
-            disabled={isLoading}
-            title={isListening ? "Parar de ouvir" : "Falar"}
-            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
-              isListening
-                ? isDark
-                  ? 'bg-neutral-100 text-neutral-950'
-                  : 'bg-[#1C1C1E] text-white'
-                : isDark
-                  ? 'text-neutral-400 hover:text-white hover:bg-[#232326]'
-                  : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
-          >
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-
-          {/* Submit / Stop Button */}
-          {isLoading ? (
+          {/* Voice Input / Finish Button */}
+          {isListening ? (
             <button
               type="button"
-              onClick={onStopGeneration}
-              title="Parar geração"
-              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
-                isDark ? 'bg-white text-black' : 'bg-[#1C1C1E] text-white'
-              }`}
+              onClick={onToggleListening}
+              className="px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs shadow-blue-600/20"
             >
-              <Square className="w-3.5 h-3.5 fill-current" />
+              <span>Finalizar</span>
             </button>
           ) : (
             <button
-              type="submit"
-              disabled={!hasContent}
-              title="Enviar mensagem"
-              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center flex-shrink-0 ${
-                hasContent
-                  ? isDark
-                    ? 'bg-white text-black cursor-pointer'
-                    : 'bg-[#1C1C1E] text-white cursor-pointer'
-                  : isDark
-                    ? 'bg-[#232326] text-neutral-600 cursor-not-allowed'
-                    : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
+              type="button"
+              onClick={onToggleListening}
+              disabled={isLoading || isTranscribing}
+              title={isTranscribing ? "Transcrevendo..." : t.composer.voiceSearch}
+              className={`relative p-2 rounded-full transition-all duration-300 flex items-center justify-center gap-1.5 flex-shrink-0 cursor-pointer overflow-hidden ${
+                isDark
+                  ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
+                  : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
               }`}
             >
-              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+              <Mic className="w-4 h-4" />
             </button>
+          )}
+
+          {/* Submit / Stop Button */}
+          {!isListening && (
+            isLoading ? (
+              <button
+                type="button"
+                onClick={onStopGeneration}
+                title={t.common.stop}
+                className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-blue-600/20"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!hasContent}
+                title={t.common.send}
+                className={`w-9 h-9 rounded-full transition-all flex items-center justify-center flex-shrink-0 ${
+                  hasContent
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs shadow-blue-600/20'
+                    : isDark
+                      ? 'bg-[#232326] text-neutral-600 cursor-not-allowed'
+                      : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
+                }`}
+              >
+                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            )
           )}
         </form>
 
         <div className="text-center text-[10px] text-neutral-500 mt-1.5">
-          ZENO pode apresentar imprecisões. Valide informações importantes.
+          {t.welcome.footer}
         </div>
       </div>
     </div>

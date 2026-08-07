@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import React, { useState, useEffect } from 'react';
 import { 
   X, Music, Sparkles, Copy, Check, Volume2, AlertCircle, AlertTriangle, SlidersHorizontal, ChevronDown, ChevronUp
@@ -5,6 +6,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { checkUsageLimit, FREE_LIMITS } from '../lib/subscription';
 import { hasPremiumAccess } from '../config/admin';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface MusicStudioModalProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
   dailyUsage,
   onUpdateUsage
 }) => {
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [genre, setGenre] = useState('Pop');
   const [keySig, setKeySig] = useState('Alegre e leve');
@@ -32,7 +35,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [progressPercent, setProgressPercent] = useState(0);
-  const [loadingText, setLoadingText] = useState('Criando sua música...');
+  const [loadingText, setLoadingText] = useState(t.musicStudio.generating);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const [songData, setSongData] = useState<{
@@ -112,7 +115,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
 
     if (isGenerating) {
       setProgressPercent(5);
-      setLoadingText('Criando sua música...');
+      setLoadingText(t.musicStudio.generating);
 
       const tick = (now: number) => {
         if (now - lastTime >= 200) {
@@ -175,7 +178,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao gerar música.');
+        throw new Error(data.error || t.musicStudio.errorGen);
       }
 
       setProgressPercent(100);
@@ -219,7 +222,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
       if (err.name === 'AbortError') {
         setErrorMsg('Tempo limite excedido. O servidor demorou para responder, tente novamente.');
       } else {
-        setErrorMsg(err.message || 'Ocorreu um erro ao gerar sua música.');
+        setErrorMsg(err.message || t.musicStudio.errorOccurred);
       }
     } finally {
       setIsGenerating(false);
@@ -228,8 +231,8 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
 
   const handleCopy = () => {
     if (!songData) return;
-    const text = `Música: ${songData.title}\nGênero: ${songData.genre} | Tom: ${songData.key} | Ritmo: ${songData.tempo}\n\nLetra:\n${songData.lyrics}`;
-    navigator.clipboard.writeText(text);
+    const text = `${t.musicStudio.music}: ${songData.title}\n${t.musicStudio.genre}: ${songData.genre} | Tom: ${songData.key} | Ritmo: ${songData.tempo}\n\n${t.musicStudio.lyrics}:\n${songData.lyrics}`;
+    copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -251,8 +254,8 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
               <Music className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-[#F5F5F5] tracking-tight">Estúdio de Criação Musical</h2>
-              <p className="text-xs text-[#9A9A9E]">Crie músicas com inteligência artificial a partir de uma ideia</p>
+              <h2 className="text-base font-semibold text-[#F5F5F5] tracking-tight">{t.musicStudio.title}</h2>
+              <p className="text-xs text-[#9A9A9E]">{t.musicStudio.subtitle}</p>
             </div>
           </div>
           <button 
@@ -268,7 +271,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
           {/* Usage Counter Badge for Free users */}
           {!isAdmin && (
             <div className="flex items-center justify-between bg-[#1C1C1E] border border-[#2C2C2E] px-4 py-2.5 rounded-xl text-xs">
-              <span className="text-[#9A9A9E]">Gerações diárias gratuitas restantes:</span>
+              <span className="text-[#9A9A9E]">{t.musicStudio.freeGenerations}</span>
               <span className="font-semibold text-[#F5F5F5]">
                 {usageCheck.remaining} de {FREE_LIMITS.MUSIC_PER_DAY}
               </span>
@@ -284,11 +287,11 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
 
           {/* Main Prompt Input */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-[#F5F5F5]">Sua ideia para a música</label>
+            <label className="text-xs font-medium text-[#F5F5F5]">{t.musicStudio.yourIdea}</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ex: uma música animada de funk sobre festa de fim de ano"
+              placeholder={t.musicStudio.yourIdeaPlaceholder}
               rows={3}
               className="w-full bg-[#1C1C1E] border border-[#2C2C2E] rounded-xl p-3 text-sm text-[#F5F5F5] placeholder-[#6E6E73] focus:outline-none focus:border-[#4A4A4E] transition-colors resize-none"
             />
@@ -302,7 +305,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
               className="flex items-center gap-2 text-xs font-medium text-[#9A9A9E] hover:text-[#F5F5F5] transition-colors cursor-pointer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Opções avançadas / Personalizar</span>
+              <span>{t.musicStudio.advancedOptions}</span>
               {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
@@ -316,7 +319,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-[#9A9A9E]">Estilo / Estilo Musical</label>
+                      <label className="text-[11px] font-medium text-[#9A9A9E]">{t.musicStudio.style}</label>
                       <select
                         value={genre}
                         onChange={(e) => setGenre(e.target.value)}
@@ -327,7 +330,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-[#9A9A9E]">Tom</label>
+                      <label className="text-[11px] font-medium text-[#9A9A9E]">{t.musicStudio.key}</label>
                       <select
                         value={keySig}
                         onChange={(e) => setKeySig(e.target.value)}
@@ -338,7 +341,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-[#9A9A9E]">Velocidade / Ritmo</label>
+                      <label className="text-[11px] font-medium text-[#9A9A9E]">{t.musicStudio.tempo}</label>
                       <select
                         value={tempo}
                         onChange={(e) => setTempo(e.target.value)}
@@ -349,14 +352,14 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-[#9A9A9E]">Duração</label>
+                      <label className="text-[11px] font-medium text-[#9A9A9E]">{t.musicStudio.duration}</label>
                       <select
                         value={mode}
                         onChange={(e) => setMode(e.target.value as 'pro' | 'clip')}
                         className="w-full bg-[#1C1C1E] border border-[#2C2C2E] rounded-xl px-3 py-2 text-xs text-[#F5F5F5] focus:outline-none focus:border-[#4A4A4E]"
                       >
-                        <option value="pro" className="bg-[#1C1C1E]">Música completa (2-3 min)</option>
-                        <option value="clip" className="bg-[#1C1C1E]">Prévia rápida (30s)</option>
+                        <option value="pro" className="bg-[#1C1C1E]">{t.musicStudio.durationFull}</option>
+                        <option value="clip" className="bg-[#1C1C1E]">{t.musicStudio.durationPreview}</option>
                       </select>
                     </div>
                   </div>
@@ -395,7 +398,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
               className="w-full py-3.5 bg-[#2C2C2E] hover:bg-[#3A3A3C] border border-[#4A4A4E] text-[#F5F5F5] rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
               <Music className="w-4 h-4 text-[#D4D4D8]" />
-              <span>Criar Música com IA</span>
+              <span>{t.musicStudio.generateBtn}</span>
             </button>
           )}
 
@@ -444,7 +447,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
               <div className="bg-[#1C1C1E] border border-[#2C2C2E] rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-medium text-[#F5F5F5]">
                   <Volume2 className="w-4 h-4 text-[#D4D4D8]" />
-                  <span>Sua Música Gerada</span>
+                  <span>{t.musicStudio.generatedMusic}</span>
                 </div>
                 {songData.audioUrl ? (
                   <>
@@ -454,7 +457,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
                     </p>
                   </>
                 ) : (
-                  <p className="text-xs text-[#9A9A9E] italic">Áudio indisponível no momento</p>
+                  <p className="text-xs text-[#9A9A9E] italic">{t.musicStudio.audioUnavailable}</p>
                 )}
               </div>
 

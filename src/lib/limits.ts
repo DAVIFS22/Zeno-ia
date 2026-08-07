@@ -16,6 +16,7 @@ export type UserLimits = {
   image: number;
   doc: number;
   vision: number;
+  voice: number;
 };
 
 export type UserUsage = {
@@ -73,6 +74,8 @@ export async function readDb(): Promise<Database> {
     return cachedDb;
   }
 
+  const local = readLocalDb();
+
   try {
     // 1. Get Admin Config
     const configDoc = await adminDb.collection(COLL_CONFIG).doc('admin_settings').get();
@@ -84,7 +87,7 @@ export async function readDb(): Promise<Database> {
 
     // 3. Create merged DB object
     const db: Database = {
-      users: {}, // We don't load all users into memory anymore
+      users: local.users || {},
       config: {
         ...DEFAULT_FULL_ADMIN_CONFIG,
         ...configData,
@@ -93,9 +96,9 @@ export async function readDb(): Promise<Database> {
         serverSettings: { ...DEFAULT_FULL_ADMIN_CONFIG.serverSettings, ...(configData?.serverSettings || {}) },
         models: configData?.models && configData.models.length > 0 ? configData.models : DEFAULT_FULL_ADMIN_CONFIG.models
       },
-      auditLogs: [], // Load on demand
-      systemLogs: [], // Load on demand
-      stats: statsData as any || {
+      auditLogs: local.auditLogs || [],
+      systemLogs: local.systemLogs || [],
+      stats: statsData as any || local.stats || {
         totalMessagesSent: 0,
         totalImagesGenerated: 0,
         totalWebSearches: 0,
@@ -105,7 +108,7 @@ export async function readDb(): Promise<Database> {
         modelUsage: {},
         totalRevenue: 0
       },
-      tasks: {}
+      tasks: local.tasks || {}
     };
 
     cachedDb = db;
@@ -113,26 +116,37 @@ export async function readDb(): Promise<Database> {
     return db;
   } catch (error: any) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('Development: Firestore DB is not accessible (likely missing dev permissions). Falling back to local DB.', error.message);
-    } else {
-      console.error('Error reading Firestore DB:', error.message);
+      console.warn('Development: Firestore DB is not accessible. Falling back to local DB.', error.message);
     }
-    // Fallback to local if Firestore fails (safety)
-    return readLocalDb();
+    return local;
   }
 }
 
 function readLocalDb(): Database {
   try {
+    ensureDbDir();
     if (fs.existsSync(DB_PATH)) {
       const data = fs.readFileSync(DB_PATH, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      return {
+        users: parsed.users || {},
+        config: parsed.config || DEFAULT_FULL_ADMIN_CONFIG,
+        auditLogs: parsed.auditLogs || [],
+        systemLogs: parsed.systemLogs || [],
+        stats: parsed.stats,
+        tasks: parsed.tasks || {}
+      };
     }
   } catch (e) {}
-  return { users: {}, config: DEFAULT_FULL_ADMIN_CONFIG, auditLogs: [], systemLogs: [] };
+  return { users: {}, config: DEFAULT_FULL_ADMIN_CONFIG, auditLogs: [], systemLogs: [], tasks: {} };
 }
 
 export async function writeDb(db: Database) {
+  ensureDbDir();
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
+  } catch (e) {}
+
   try {
     // 1. Save Config
     await adminDb.collection(COLL_CONFIG).doc('admin_settings').set(db.config);
@@ -147,9 +161,7 @@ export async function writeDb(db: Database) {
     lastReadTime = Date.now();
   } catch (error: any) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('Development: Firestore DB write skipped.', error.message);
-    } else {
-      console.error('Error writing Firestore DB:', error.message);
+      console.warn('Development: Firestore DB write skipped, saved locally.', error.message);
     }
   }
 }
@@ -208,7 +220,7 @@ export async function getUserUsage(userId: string, email?: string, req?: any): P
       plan: user?.plan || 'ZENO Free',
       date: today,
       cycleStart: now,
-      usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
+      usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0, voice: 0 },
       lastActive: now,
       email: email || user?.email || 'davifernandes0024509@gmail.com',
       ip: cleanIp,
@@ -264,7 +276,7 @@ export async function updateUserUsage(userId: string, action: keyof UserLimits) 
       plan: user?.plan || 'ZENO Free',
       date: today,
       cycleStart: now,
-      usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
+      usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0, voice: 0 },
       lastActive: now
     };
     user.usage[action] = 1;
@@ -324,7 +336,7 @@ export async function setUserPlan(userId: string, plan: 'ZENO Free' | 'ZENO Pro'
         userId,
         plan,
         date: getTodayString(),
-        usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0 },
+        usage: { messages: 0, search: 0, image: 0, doc: 0, vision: 0, voice: 0 },
         lastActive: Date.now()
       });
     }

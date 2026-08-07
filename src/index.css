@@ -18,6 +18,12 @@
     --text-secondary-dark: #a1a1aa;
     --text-muted-dark: #71717a;
   }
+
+  body {
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Hiragino Kaku Gothic ProN", "Meiryo", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR", "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
 @layer utilities {
@@ -90,6 +96,29 @@
   .animate-pulse-glow {
     animation: pulseGlow 3s infinite ease-in-out;
   }
+
+  @keyframes micPulseOrganic {
+    0% { transform: scale3d(0.95, 0.95, 1); opacity: 0.3; }
+    35% { transform: scale3d(1.18, 1.18, 1); opacity: 0.7; }
+    50% { transform: scale3d(1.12, 1.12, 1); opacity: 0.55; }
+    65% { transform: scale3d(1.16, 1.16, 1); opacity: 0.65; }
+    100% { transform: scale3d(0.95, 0.95, 1); opacity: 0.3; }
+  }
+  
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  .voice-mic-blob-animation {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+}
+
+@keyframes micPulseGlow {
+  0%, 100% { box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.2); }
+  50% { box-shadow: 0 0 25px 10px rgba(59, 130, 246, 0.4); }
 }
 
 /* ==========================================================================
@@ -97,7 +126,7 @@
    ========================================================================== */
 
 .font-code {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', 'Noto Sans Mono CJK SC', 'Noto Sans Mono CJK', monospace;
   font-feature-settings: "liga" 1, "calt" 1;
 }
 
@@ -232,7 +261,7 @@
    ZENO High-Readability Markdown Formatting
    ========================================================================== */
 .markdown-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Hiragino Kaku Gothic ProN", "Meiryo", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR", "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
   line-height: 1.8;
   font-size: 0.985rem;
   letter-spacing: -0.01em;

@@ -1,12 +1,14 @@
+import { collection, onSnapshot, query, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Lock, Shield, Server, Cpu, Database, Activity, Gauge, Sparkles, 
   CheckCircle2, AlertTriangle, RefreshCw, Save, Sliders, ToggleLeft, ToggleRight,
   Layers, Users, BarChart3, Wrench, ShieldAlert, Check, TrendingUp, Coins, 
-  Terminal, Info, FileText, ArrowUpRight, Search, Eye, Filter, ShieldCheck, 
+  Terminal, Info, FileText, LifeBuoy, CheckCircle, ArrowUpRight, Search, Eye, Filter, ShieldCheck, 
   ShoppingCart, Ban, LogOut, LogIn, CreditCard, Image as ImageIcon, Laptop,
-  Trash2
+  Trash2, Send
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell 
@@ -22,6 +24,7 @@ import {
   maskEmail
 } from '../config/admin';
 import { withAdmin } from './withAdmin';
+import { useTranslation } from '../i18n';
 
 interface AdminPanelProps {
   userEmail: string;
@@ -34,12 +37,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   theme = 'dark',
   onConfigSaved
 }) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const role = getUserRole(userEmail);
   const isAdmin = role === 'admin';
 
   // Sub-tabs in Admin Panel
-  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs' | 'debug'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs' | 'debug' | 'support'>('stats');
 
   // Config State
   const [config, setConfig] = useState<FullAdminConfig>(DEFAULT_FULL_ADMIN_CONFIG);
@@ -79,7 +83,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeLogSubTab, setActiveLogSubTab] = useState<'system' | 'audit'>('system');
   const [logSearch, setLogSearch] = useState<string>('');
   const [systemLogFilter, setSystemLogFilter] = useState<string>('all');
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
+
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [ticketMessages, setTicketMessages] = useState<any[]>([]);
+  const [adminReply, setAdminReply] = useState('');
 
   // Fetch admin config and stats from backend with x-user-email security header
   const fetchAdminData = async () => {
@@ -103,7 +112,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403 || auditRes.status === 403) {
         setSaveStatus({
           type: 'error',
-          message: 'Erro 403: Acesso Negado pelo Servidor Backend.'
+          message: `Erro 403: ${t.admin.denied}`
         });
         setIsLoading(false);
         return;
@@ -149,7 +158,121 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return () => clearInterval(interval);
   }, [userEmail]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    const q = query(collection(db, 'supportTickets'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSupportTickets(tickets);
+    });
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || !selectedTicket) {
+      setTicketMessages([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'supportTickets', selectedTicket.id, 'messages'),
+      orderBy('timestamp', 'asc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTicketMessages(msgs);
+    });
+    return () => unsubscribe();
+  }, [isAdmin, selectedTicket?.id]);
+
+  const handleAssumeTicket = async (ticketId: string) => {
+    if (!isAdmin || !user) return;
+    try {
+      const token = await user.getIdToken();
+      await fetch(`/api/admin/support-tickets/${ticketId}/assume`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-email': userEmail
+        }
+      });
+    } catch (e) {
+      console.error("Erro ao assumir ticket:", e);
+    }
+  };
+
+  const handleResolveTicketAdmin = async (ticketId: string) => {
+    if (!isAdmin || !user) return;
+    try {
+      const token = await user.getIdToken();
+      await fetch(`/api/admin/support-tickets/${ticketId}/resolve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-email': userEmail
+        }
+      });
+      setSelectedTicket(null);
+    } catch (e) {
+      console.error("Erro ao resolver ticket:", e);
+    }
+  };
+
+  const handleRefuseTicket = async (ticketId: string) => {
+    if (!isAdmin || !user) return;
+    const reason = window.prompt("Por que você está recusando este ticket? (O bot verá este motivo)");
+    if (reason === null) return;
+
+    try {
+      const token = await user.getIdToken();
+      await fetch(`/api/admin/support-tickets/${ticketId}/refuse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-user-email': userEmail
+        },
+        body: JSON.stringify({ reason })
+      });
+      setSelectedTicket(null);
+    } catch (e) {
+      console.error("Erro ao recusar ticket:", e);
+    }
+  };
+
+  const handleSendAdminMessage = async () => {
+    if (!isAdmin || !user || !selectedTicket || !adminReply.trim()) return;
+    try {
+      const text = adminReply;
+      setAdminReply('');
+      const token = await user.getIdToken();
+      await fetch(`/api/admin/support-tickets/${selectedTicket.id}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-user-email': userEmail
+        },
+        body: JSON.stringify({ text })
+      });
+    } catch (e) {
+      console.error("Erro ao enviar mensagem:", e);
+    }
+  };
+
+
   // Save Config to Backend (registers audit automatically on backend!)
+  
+    const handleResolveTicket = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'supportTickets', id), {
+        status: 'resolvido',
+        resolvedAt: Date.now()
+      });
+    } catch (e) {
+       console.error("Erro ao resolver ticket", e);
+    }
+  };
+
   const handleSaveConfig = async () => {
     if (!isAdmin || !user) return;
     setIsSaving(true);
@@ -169,7 +292,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.status === 403) {
         setSaveStatus({
           type: 'error',
-          message: 'Erro 403: Acesso Negado. Falta de permissão de admin.'
+          message: `Erro 403: ${t.admin.denied}`
         });
         setIsSaving(false);
         return;
@@ -178,7 +301,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok) {
         setSaveStatus({
           type: 'success',
-          message: 'Configurações salvas e auditadas no servidor com sucesso!'
+          message: t.admin.saveSuccess
         });
         if (onConfigSaved) onConfigSaved(config);
         // Reload logs to show the new audit entry
@@ -187,13 +310,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const err = await res.json();
         setSaveStatus({
           type: 'error',
-          message: err.message || 'Erro ao salvar configurações.'
+          message: err.message || t.admin.saveError
         });
       }
     } catch (e: any) {
       setSaveStatus({
         type: 'error',
-        message: 'Erro de rede ao conectar com o servidor.'
+        message: t.admin.networkError
       });
     } finally {
       setIsSaving(false);
@@ -245,22 +368,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="flex items-center gap-3 text-neutral-400">
           <ShieldAlert className="w-8 h-8 flex-shrink-0" />
           <div>
-            <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
-            <p className="text-xs text-neutral-300 font-mono mt-0.5">Role Atual: {role} | Sessão: {maskEmail(userEmail)}</p>
+            <h3 className="text-xl font-bold tracking-tight text-white">403 - {t.admin.denied}</h3>
+            <p className="text-xs text-neutral-300 font-mono mt-0.5">{t.admin.role}: {role} | {t.admin.session}: {maskEmail(userEmail)}</p>
           </div>
         </div>
 
         <div className="p-4 rounded-xl bg-black/40 border border-neutral-500/20 text-sm leading-relaxed text-neutral-100/90 space-y-2">
           <p>
-            Você não possui permissões administrativas para visualizar ou alterar o Painel Administrativo do ZENO AI.
+            {t.admin.noPermission}
           </p>
           <p className="text-xs text-neutral-300/80">
-            Apenas a conta administradora principal (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) recebe acesso irrestrito às funções de gerenciamento de servidor, modelos e limites.
+            {t.admin.onlyAdminTip} (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) {t.admin.unrestrictedAccess}
           </p>
         </div>
 
         <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-neutral-500/20">
-          <span>Verificação de Segurança Backend & Frontend Ativa</span>
+          <span>{t.admin.securityCheck}</span>
           <span className="font-mono text-neutral-400">HTTP 403 FORBIDDEN</span>
         </div>
       </div>
@@ -277,18 +400,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div>
             <h4 className="text-base font-bold text-white tracking-tight flex items-center gap-2.5">
-              Administrador Verificado
+              {t.admin.verifiedAdmin}
               <div className="w-2.5 h-2.5 rounded-full bg-neutral-400 shadow-[0_0_8px_rgba(255,255,255,0.2)] animate-pulse"></div>
             </h4>
             <p className="text-sm text-neutral-500 font-medium mt-1">
-              Sessão autenticada: <span className="text-white font-mono">{maskEmail(userEmail)}</span>
+              {t.admin.session}: <span className="text-white font-mono">{maskEmail(userEmail)}</span>
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em]">
-            Acesso Root Ativo
+            {t.admin.rootAccess}
           </div>
         </div>
       </div>
@@ -301,10 +424,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold text-white tracking-tight">Painel do Desenvolvedor</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">{t.admin.title}</h3>
             </div>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Gerencie configurações de infraestrutura, modelos e usuários.
+              {t.admin.subtitle}
             </p>
           </div>
         </div>
@@ -314,10 +437,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             onClick={fetchAdminData}
             disabled={isLoading}
             className="p-2 rounded-xl bg-[#242424] hover:bg-[#2F2F2F] text-neutral-300 hover:text-white border border-[#303030] transition-colors text-xs flex items-center gap-1.5"
-            title="Atualizar dados do servidor"
+            title={t.admin.refresh}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Atualizar</span>
+            <span className="hidden sm:inline">{t.common.refresh}</span>
           </button>
 
           <button
@@ -326,7 +449,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             className="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs transition-all active:scale-95 shadow-md flex items-center gap-2"
           >
             {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            <span>Salvar Configurações</span>
+            <span>{t.admin.saveBtn}</span>
           </button>
         </div>
       </div>
@@ -342,7 +465,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {saveStatus.type === 'success' ? <Check className="w-4 h-4 text-sky-400" /> : <AlertTriangle className="w-4 h-4 text-neutral-400" />}
             <span>{saveStatus.message}</span>
           </div>
-          <button onClick={() => setSaveStatus(null)} className="text-xs hover:underline opacity-80">Fechar</button>
+          <button onClick={() => setSaveStatus(null)} className="text-xs hover:underline opacity-80">{t.common.close}</button>
         </div>
       )}
 
@@ -357,7 +480,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <BarChart3 className="w-3.5 h-3.5" />
-          <span>Estatísticas</span>
+          <span>{t.admin.stats}</span>
         </button>
 
         <button
@@ -369,7 +492,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Gauge className="w-3.5 h-3.5" />
-          <span>Limites Grátis</span>
+          <span>{t.admin.limits}</span>
         </button>
 
         <button
@@ -381,7 +504,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Recursos Pro</span>
+          <span>{t.admin.proFeatures}</span>
         </button>
 
         <button
@@ -393,7 +516,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Server className="w-3.5 h-3.5" />
-          <span>Servidor</span>
+          <span>{t.admin.server}</span>
         </button>
 
         <button
@@ -405,7 +528,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Cpu className="w-3.5 h-3.5" />
-          <span>Modelos IA</span>
+          <span>{t.admin.models}</span>
         </button>
 
         <button
@@ -417,8 +540,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
-          <span>Logs & Auditoria</span>
+          <span>{t.admin.audit}</span>
         </button>
+
+            <button
+              onClick={() => setActiveTab('support')}
+              className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'support' ? 'bg-[#232326] text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <LifeBuoy className="w-4 h-4" />
+                <span className="text-sm font-medium">Suporte</span>
+              </div>
+              {supportTickets.filter(t => t.status === 'aberto').length > 0 && (
+                <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {supportTickets.filter(t => t.status === 'aberto').length}
+                </div>
+              )}
+            </button>
+
 
         <button
           onClick={() => setActiveTab('rbac')}
@@ -429,7 +570,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Shield className="w-3.5 h-3.5" />
-          <span>RBAC</span>
+          <span>{t.admin.rbac}</span>
         </button>
 
         <button
@@ -441,7 +582,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Wrench className="w-3.5 h-3.5" />
-          <span>Depuração</span>
+          <span>{t.admin.debug}</span>
         </button>
       </div>
 
@@ -450,11 +591,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="space-y-8 animate-fadeIn">
           {/* AUDIT METRICS SECTION */}
           <div className="space-y-5">
-            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Métricas de Auditoria Real</h5>
+            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">{t.admin.realAuditMetrics}</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-[#2C2C2E]">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Total de Usuários</p>
+                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.totalUsers}</p>
                   <p className="text-4xl font-black text-white">{auditMetrics?.totalUsers || '...'}</p>
                 </div>
                 <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 group-hover:text-white transition-colors shadow-2xl">
@@ -464,7 +605,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               
               <div className="p-8 rounded-3xl bg-[#171717] border border-[#242424] flex items-center justify-between group transition-all hover:border-[#2C2C2E]">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Assinaturas Ativas</p>
+                  <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.activeSubscriptions}</p>
                   <p className="text-4xl font-black text-white">{auditMetrics?.activeSubscriptions || '...'}</p>
                 </div>
                 <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 group-hover:text-white transition-colors shadow-2xl">
@@ -476,17 +617,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* Executive KPI Grid */}
           <div className="space-y-5">
-            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">Desempenho Geral do Sistema</h5>
+            <h5 className="text-[11px] font-bold text-neutral-500 uppercase tracking-[0.25em] px-1">{t.admin.generalPerformance}</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* Financial MRR card */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Receita Mensal</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.monthlyRevenue}</span>
                   <Coins className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <p className="text-4xl font-black text-white">R$ {stats.monthlyRevenue?.toFixed(2)}</p>
                 <div className="flex items-center justify-between text-[11px] text-neutral-600 font-medium pt-2 border-t border-white/5">
-                  <span>Projeção Mensal</span>
+                  <span>{t.admin.monthlyRevenue} (Proj)</span>
                   <span className="text-white flex items-center gap-1.5 font-bold">
                     <TrendingUp className="w-3.5 h-3.5" /> Estável
                   </span>
@@ -496,7 +637,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Total Revenue card */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Faturamento Total</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.totalRevenue}</span>
                   <CreditCard className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <p className="text-4xl font-black text-white">R$ {stats.totalRevenue?.toFixed(2)}</p>
@@ -508,7 +649,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Messages sent */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Conversas IA</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.aiConversations}</span>
                   <Terminal className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <p className="text-4xl font-black text-white">{stats.totalMessagesSent || 0}</p>
@@ -520,7 +661,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Images generated */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Visuais Gerados</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.generatedVisuals}</span>
                   <ImageIcon className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <p className="text-4xl font-black text-white">{stats.totalImagesGenerated || 0}</p>
@@ -532,7 +673,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Server Performance metrics */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Uso de Recursos</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.resourceUsage}</span>
                   <Activity className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <div className="flex justify-between items-baseline">
@@ -547,7 +688,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Online Now card */}
               <div className="p-6 rounded-3xl bg-[#171717] border border-[#242424] flex flex-col justify-between min-h-[140px] group transition-all hover:border-[#2C2C2E]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">Dispositivos Ativos</span>
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.activeDevices}</span>
                   <Laptop className="w-5 h-5 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
                 </div>
                 <p className="text-4xl font-black text-white">{stats.activeOnlineNow || 1}</p>
@@ -567,7 +708,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <h5 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
                   Uso de Modelos IA
                 </h5>
-                <p className="text-[10px] text-neutral-600 mt-1">Distribuição de inferência por modelo.</p>
+                <p className="text-[10px] text-neutral-600 mt-1">{t.admin.inferenceDistribution}</p>
               </div>
 
               <div className="h-48 w-full pr-4">
@@ -596,7 +737,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* Telemetry / secondary tools grid */}
             <div className="md:col-span-5 p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-5">
               <div>
-                <h5 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Telemetria de Recursos</h5>
+                <h5 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{t.admin.telemetry}</h5>
               </div>
 
               <div className="space-y-4 pt-2">
@@ -614,7 +755,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {/* PDF Analyzer */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-400 font-medium">Processamento Docs</span>
+                    <span className="text-neutral-400 font-medium">{t.plugins.categories.docs}</span>
                     <span className="text-white font-mono font-bold">{stats.totalPdfsAnalyzed || 0}</span>
                   </div>
                   <div className="w-full bg-[#232326] rounded-full h-1.5 overflow-hidden">
@@ -625,7 +766,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {/* Code Execution */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-neutral-400 font-medium">Execução de Código</span>
+                    <span className="text-neutral-400 font-medium">{t.plugins.categories.code}</span>
                     <span className="text-white font-mono font-bold">{stats.totalCodeUses || 0}</span>
                   </div>
                   <div className="w-full bg-[#232326] rounded-full h-1.5 overflow-hidden">
@@ -642,15 +783,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'limits' && (
         <div className="space-y-4 animate-fadeIn">
           <div>
-            <h4 className="text-sm font-semibold text-neutral-200">Gerenciamento de Cotas do Plano Gratuito (ZENO Free)</h4>
-            <p className="text-xs text-neutral-400 mt-1">Configure o limite máximo diário de interações permitidas por conta grátis.</p>
+            <h4 className="text-sm font-semibold text-neutral-200">{t.admin.freePlanQuotas}</h4>
+            <p className="text-xs text-neutral-400 mt-1">{t.admin.freePlanQuotasDesc}</p>
           </div>
 
           <div className="space-y-3 bg-[#202020] p-4 rounded-2xl border border-[#2E2E2E]">
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Conversas & Mensagens Diárias</span>
-                <span className="text-xs text-neutral-400">Mensagens comuns respondidas pela IA</span>
+                <span className="text-sm font-medium text-white block">{t.admin.dailyMessages}</span>
+                <span className="text-xs text-neutral-400">{t.admin.dailyMessagesDesc}</span>
               </div>
               <input 
                 type="number" 
@@ -667,8 +808,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Pesquisas Web em Tempo Real</span>
-                <span className="text-xs text-neutral-400">Consultas de busca do Google Grounding</span>
+                <span className="text-sm font-medium text-white block">{t.admin.realTimeSearch}</span>
+                <span className="text-xs text-neutral-400">{t.admin.realTimeSearchDesc}</span>
               </div>
               <input 
                 type="number" 
@@ -685,8 +826,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Geração de Imagens Estúdio Vision</span>
-                <span className="text-xs text-neutral-400">Processamento de prompts no Flux Dev</span>
+                <span className="text-sm font-medium text-white block">{t.admin.studioVisionGen}</span>
+                <span className="text-xs text-neutral-400">{t.admin.studioVisionGenDesc}</span>
               </div>
               <input 
                 type="number" 
@@ -703,8 +844,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Análise de Documentos & PDFs</span>
-                <span className="text-xs text-neutral-400">Extração de textos de PDFs e arquivos</span>
+                <span className="text-sm font-medium text-white block">{t.admin.docAnalysis}</span>
+                <span className="text-xs text-neutral-400">{t.admin.docAnalysisDesc}</span>
               </div>
               <input 
                 type="number" 
@@ -721,8 +862,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2">
               <div>
-                <span className="text-sm font-medium text-white block">Visão Computacional & OCR</span>
-                <span className="text-xs text-neutral-400">Análise de fotos e prints</span>
+                <span className="text-sm font-medium text-white block">{t.admin.visionOCR}</span>
+                <span className="text-xs text-neutral-400">{t.admin.visionOCRDesc}</span>
               </div>
               <input 
                 type="number" 
@@ -744,15 +885,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'pro' && (
         <div className="space-y-4 animate-fadeIn">
           <div>
-            <h4 className="text-sm font-semibold text-neutral-200">Gerenciamento de Benefícios do Plano ZENO Pro</h4>
-            <p className="text-xs text-neutral-400 mt-1">Configure os privilégios e multiplicadores para assinantes pagantes.</p>
+            <h4 className="text-sm font-semibold text-neutral-200">{t.admin.proBenefits}</h4>
+            <p className="text-xs text-neutral-400 mt-1">{t.admin.proBenefitsDesc}</p>
           </div>
 
           <div className="space-y-3 bg-[#202020] p-4 rounded-2xl border border-[#2E2E2E]">
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Multiplicador de Limites para Pro</span>
-                <span className="text-xs text-neutral-400">Aumenta os limites diários de base</span>
+                <span className="text-sm font-medium text-white block">{t.admin.limitMultiplier}</span>
+                <span className="text-xs text-neutral-400">{t.admin.limitMultiplierDesc}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-neutral-400 font-mono font-bold">{config.proFeatures.limitMultiplier}x</span>
@@ -772,8 +913,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Fila de Prioridade em Tempo Real</span>
-                <span className="text-xs text-neutral-400">Processamento de mensagens prioritário</span>
+                <span className="text-sm font-medium text-white block">{t.admin.priorityQueue}</span>
+                <span className="text-xs text-neutral-400">{t.admin.priorityQueueDesc}</span>
               </div>
               <button
                 onClick={() => setConfig({
@@ -788,8 +929,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Geração de Imagens Ilimitada</span>
-                <span className="text-xs text-neutral-400">Permite gerar imagens sem contagem de cota</span>
+                <span className="text-sm font-medium text-white block">{t.admin.unlimitedImages}</span>
+                <span className="text-xs text-neutral-400">{t.admin.unlimitedImagesDesc}</span>
               </div>
               <button
                 onClick={() => setConfig({
@@ -804,8 +945,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2">
               <div>
-                <span className="text-sm font-medium text-white block">Acesso aos Modelos Exclusivos (Mega Sábio / Vision)</span>
-                <span className="text-xs text-neutral-400">Exige assinatura Pro para acessar modelos avançados</span>
+                <span className="text-sm font-medium text-white block">{t.admin.exclusiveModels}</span>
+                <span className="text-xs text-neutral-400">{t.admin.exclusiveModelsDesc}</span>
               </div>
               <button
                 onClick={() => setConfig({
@@ -825,15 +966,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'server' && (
         <div className="space-y-4 animate-fadeIn">
           <div>
-            <h4 className="text-sm font-semibold text-neutral-200">Configurações do Servidor Backend</h4>
-            <p className="text-xs text-neutral-400 mt-1">Parâmetros globais de execução e estabilidade do sistema.</p>
+            <h4 className="text-sm font-semibold text-neutral-200">{t.admin.serverConfig}</h4>
+            <p className="text-xs text-neutral-400 mt-1">{t.admin.serverParams}</p>
           </div>
 
           <div className="space-y-3 bg-[#202020] p-4 rounded-2xl border border-[#2E2E2E]">
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Modo de Manutenção</span>
-                <span className="text-xs text-neutral-400 font-bold">Bloqueia temporariamente novas requisições de usuários comuns</span>
+                <span className="text-sm font-medium text-white block">{t.admin.maintenanceMode}</span>
+                <span className="text-xs text-neutral-400 font-bold">{t.admin.maintenanceModeDesc}</span>
               </div>
               <button
                 onClick={() => setConfig({
@@ -848,8 +989,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Tamanho Máximo de Contexto (Tokens)</span>
-                <span className="text-xs text-neutral-400">Janela de contexto enviada ao modelo</span>
+                <span className="text-sm font-medium text-white block">{t.admin.maxContext}</span>
+                <span className="text-xs text-neutral-400">{t.admin.maxContextDesc}</span>
               </div>
               <select
                 value={config.serverSettings.maxContextLength}
@@ -868,8 +1009,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2 border-b border-[#2B2B2B]">
               <div>
-                <span className="text-sm font-medium text-white block">Memória Vetorial Integrada</span>
-                <span className="text-xs text-neutral-400">Busca semântica de longo prazo por usuário</span>
+                <span className="text-sm font-medium text-white block">{t.admin.vectorMemory}</span>
+                <span className="text-xs text-neutral-400">{t.admin.vectorMemoryDesc}</span>
               </div>
               <button
                 onClick={() => setConfig({
@@ -884,8 +1025,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="flex justify-between items-center py-2">
               <div>
-                <span className="text-sm font-medium text-white block">Timeout de Resposta (ms)</span>
-                <span className="text-xs text-neutral-400">Tempo limite para abortar gerações longas</span>
+                <span className="text-sm font-medium text-white block">{t.admin.timeout}</span>
+                <span className="text-xs text-neutral-400">{t.admin.timeoutDesc}</span>
               </div>
               <input
                 type="number"
@@ -906,8 +1047,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'models' && (
         <div className="space-y-4 animate-fadeIn">
           <div>
-            <h4 className="text-sm font-semibold text-neutral-200">Gerenciamento dos Modelos de Inteligência Artificial</h4>
-            <p className="text-xs text-neutral-400 mt-1">Ative, desative ou altere o plano necessário para cada modelo.</p>
+            <h4 className="text-sm font-semibold text-neutral-200">{t.admin.modelManagement}</h4>
+            <p className="text-xs text-neutral-400 mt-1">{t.admin.modelManagementDesc}</p>
           </div>
 
           <div className="space-y-3">
@@ -935,8 +1076,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     }}
                     className="bg-[#171717] border border-[#333] text-white text-xs rounded-xl px-2.5 py-1 focus:outline-none"
                   >
-                    <option value="free">Livre (Free)</option>
-                    <option value="pro">Exclusivo Pro</option>
+                    <option value="free">{t.admin.free}</option>
+                    <option value="pro">{t.admin.pro}</option>
                   </select>
 
                   <button
@@ -956,6 +1097,203 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 6: SUPPORT TICKETS (HANDOFF) */}
+      {activeTab === 'support' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-[700px] animate-fadeIn">
+          {/* Ticket List Sidebar */}
+          <div className="md:col-span-4 bg-[#171717] border border-[#2E2E2E] rounded-3xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-[#2E2E2E] bg-black/20 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Tickets de Suporte</h4>
+              <div className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[10px] font-bold">
+                {supportTickets.filter(t => t.status !== 'resolved').length} Ativos
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {supportTickets.length === 0 ? (
+                <div className="p-10 text-center space-y-3">
+                  <LifeBuoy className="w-8 h-8 text-neutral-700 mx-auto" />
+                  <p className="text-xs text-neutral-500">Nenhum ticket aberto no momento.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[#242424]">
+                  {supportTickets.map((ticket) => {
+                    const isSelected = selectedTicket?.id === ticket.id;
+                    let statusColor = "bg-neutral-500/20 text-neutral-400";
+                    let statusLabel = "Aguardando";
+                    
+                    if (ticket.status === 'pending_human') {
+                      statusColor = "bg-amber-500/10 text-amber-500 border-amber-500/20";
+                      statusLabel = "Aguardando";
+                    } else if (ticket.status === 'human_active') {
+                      statusColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                      statusLabel = "Em Atendimento";
+                    } else if (ticket.status === 'resolved') {
+                      statusColor = "bg-neutral-500/10 text-neutral-500 border-neutral-500/20";
+                      statusLabel = "Resolvido";
+                    } else if (ticket.status === 'returned_to_ai' || ticket.status === 'ai_active') {
+                      statusColor = "bg-purple-500/10 text-purple-400 border-purple-500/20";
+                      statusLabel = "Com a IA";
+                    }
+
+                    return (
+                      <button
+                        key={ticket.id}
+                        onClick={() => setSelectedTicket(ticket)}
+                        className={`w-full text-left p-4 transition-all hover:bg-white/5 flex flex-col gap-2 ${isSelected ? 'bg-white/10' : ''}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-neutral-500 uppercase">#{ticket.id.slice(-6)}</span>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <h5 className="text-xs font-bold text-neutral-200 line-clamp-1">{ticket.title || 'Sem título'}</h5>
+                        <p className="text-[10px] text-neutral-500 line-clamp-1">{ticket.userEmail}</p>
+                        <span className="text-[9px] text-neutral-600 font-medium">
+                          {new Date(ticket.lastMessageAt || ticket.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Ticket Chat Area */}
+          <div className="md:col-span-8 bg-[#171717] border border-[#2E2E2E] rounded-3xl overflow-hidden flex flex-col relative">
+            {selectedTicket ? (
+              <>
+                {/* Chat Header */}
+                <div className="p-4 border-b border-[#2E2E2E] bg-black/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl">
+                      {selectedTicket.userEmail?.[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{selectedTicket.userEmail}</h4>
+                      <p className="text-[10px] text-neutral-500">ID: {selectedTicket.userId}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedTicket.status === 'pending_human' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleAssumeTicket(selectedTicket.id)}
+                          className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-lg shadow-sky-600/20 active:scale-95"
+                        >
+                          Assumir
+                        </button>
+                        <button
+                          onClick={() => handleRefuseTicket(selectedTicket.id)}
+                          className="px-4 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-500 text-xs font-bold transition-all border border-rose-500/30 active:scale-95"
+                        >
+                          Recusar
+                        </button>
+                      </div>
+                    )}
+                    {selectedTicket.status === 'human_active' && (
+                      <button
+                        onClick={() => handleResolveTicketAdmin(selectedTicket.id)}
+                        className="px-4 py-1.5 rounded-xl bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs font-bold transition-all active:scale-95 border border-neutral-600"
+                      >
+                        Encerrar e Devolver para IA
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* AI Summary Sidebar / Top Bar */}
+                <div className="px-4 py-3 bg-amber-500/5 border-b border-amber-500/10">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest">Resumo da IA (Contexto)</span>
+                      <p className="text-[11px] text-neutral-400 italic leading-relaxed">{selectedTicket.aiSummary || 'A IA não forneceu resumo para este escalonamento.'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Messages List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black/10">
+                  {ticketMessages.map((msg, idx) => {
+                    const isSystem = msg.sender === 'system';
+                    const isMe = msg.sender === 'admin';
+                    const isAi = msg.sender === 'ai';
+                    
+                    if (isSystem) {
+                      return (
+                        <div key={idx} className="flex justify-center my-4">
+                          <span className="px-3 py-1 rounded-full bg-neutral-800/50 text-neutral-500 text-[10px] font-bold uppercase tracking-wider border border-neutral-700/30">
+                            {msg.text}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                          <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                            isMe ? 'bg-sky-600 text-white rounded-tr-none' : 
+                            isAi ? 'bg-neutral-800 text-neutral-300 border border-neutral-700/50 rounded-tl-none' :
+                            'bg-white/10 text-white border border-white/5 rounded-tl-none'
+                          }`}>
+                            <p className="whitespace-pre-wrap">{msg.text}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 px-1">
+                            <span className="text-[9px] font-bold text-neutral-600 uppercase">
+                              {isMe ? 'Você (Admin)' : isAi ? 'ZENO IA' : 'Usuário'}
+                            </span>
+                            <span className="text-[9px] text-neutral-700">
+                              {new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Reply Bar */}
+                <div className="p-4 border-t border-[#2E2E2E] bg-black/20">
+                  <form 
+                    onSubmit={(e) => { e.preventDefault(); handleSendAdminMessage(); }}
+                    className="flex items-center gap-2"
+                  >
+                    <input
+                      type="text"
+                      disabled={selectedTicket.status !== 'human_active'}
+                      placeholder={selectedTicket.status === 'human_active' ? "Escreva sua resposta..." : "Assuma o atendimento para responder"}
+                      value={adminReply}
+                      onChange={(e) => setAdminReply(e.target.value)}
+                      className="flex-1 bg-[#202020] border border-[#2E2E2E] rounded-xl px-4 py-2.5 text-xs text-white focus:border-sky-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button
+                      type="submit"
+                      disabled={selectedTicket.status !== 'human_active' || !adminReply.trim()}
+                      className="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white transition-all disabled:opacity-50 disabled:bg-neutral-800"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4">
+                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center text-neutral-600 border border-white/5">
+                  <LifeBuoy className="w-10 h-10" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white">Selecione um Ticket</h4>
+                  <p className="text-xs text-neutral-500 max-w-[280px] mx-auto mt-2">Clique em uma conversa na lista lateral para visualizar o histórico e responder ao usuário.</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1007,12 +1345,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setSystemLogFilter(e.target.value)}
                   className="bg-transparent border-none text-xs text-neutral-300 focus:outline-none cursor-pointer"
                 >
-                  <option value="all">Todas Categorias</option>
-                  <option value="auth">Autenticação</option>
-                  <option value="info">Sistema/Admin</option>
-                  <option value="ia">Inferência IA</option>
-                  <option value="payment">Pagamentos</option>
-                  <option value="error">Erros e Falhas</option>
+                  <option value="all">{t.admin.allCategories}</option>
+                  <option value="auth">{t.admin.auth}</option>
+                  <option value="info">{t.admin.systemAdmin}</option>
+                  <option value="ia">{t.admin.inferenceAI}</option>
+                  <option value="payment">{t.admin.payments}</option>
+                  <option value="error">{t.admin.errorsFailures}</option>
                 </select>
               </div>
             )}
@@ -1126,7 +1464,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               className="px-2.5 py-1 rounded-lg bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-500/30 transition-colors font-semibold flex items-center gap-1 ml-auto"
                             >
                               <Eye className="w-3 h-3" />
-                              <span>Inspecionar</span>
+                              <span>{t.admin.inspect}</span>
                             </button>
                           </td>
                         </tr>
@@ -1239,7 +1577,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'rbac' && (
         <div className="space-y-4 animate-fadeIn">
           <div>
-            <h4 className="text-sm font-semibold text-neutral-200">Arquitetura de Controle de Acesso Baseado em Funções (RBAC)</h4>
+            <h4 className="text-sm font-semibold text-neutral-200">{t.admin.rbac} Architecture</h4>
             <p className="text-xs text-neutral-400 mt-1">Regras e políticas de segurança aplicadas no sistema.</p>
           </div>
 
@@ -1269,7 +1607,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                  <span>Requisições sem permissão de admin retornam erro HTTP 403 (Acesso Negado) no backend.</span>
+                  <span>{t.admin.adminAccessDesc}</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />

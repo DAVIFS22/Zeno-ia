@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  X, Search, Heart, Download, Share2, Copy, Trash2, 
+  X, Search, Heart, Star, Download, Share2, Copy, Trash2, 
   Plus, Calendar, Sparkles, MessageSquare, Check, Image as ImageIcon, 
   Folder, Layers
 } from 'lucide-react';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { GeneratedImage, ImageCollection, UserPlan } from '../types';
 import { 
   getStoredImages, 
+  saveStoredImages,
   updateImageInLibrary, 
   deleteImageFromLibrary, 
   toggleFavoriteInLibrary, 
@@ -14,14 +17,18 @@ import {
   addStoredCollection
 } from '../lib/imageLibraryStorage';
 import { hasPremiumAccess } from '../config/admin';
+import { copyToClipboard as safeCopyToClipboard } from '../utils/clipboard';
 
 interface ImageLibraryModalProps {
   isOpen: boolean;
   onClose: () => void;
   userPlan: UserPlan;
   theme: 'dark' | 'light';
+  userId?: string;
   onOpenConversation?: (sessionId: string) => void;
   onOpenStudioWithPrompt?: (prompt: string, style?: string) => void;
+  onReusePrompt?: (promptText: string) => void;
+  onOpenChat?: () => void;
   onUpgradeClick?: () => void;
 }
 
@@ -30,8 +37,11 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   onClose,
   userPlan,
   theme,
+  userId,
   onOpenConversation,
   onOpenStudioWithPrompt,
+  onReusePrompt,
+  onOpenChat,
   onUpgradeClick
 }) => {
   const [images, setImages] = useState<GeneratedImage[]>([]);
@@ -45,14 +55,84 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionIcon, setNewCollectionIcon] = useState('Folder');
 
-  // Load images and collections
+  // Load images and collections with real-time Firestore sync
   useEffect(() => {
-    if (isOpen) {
-      const loadedImages = getStoredImages();
-      setImages(loadedImages);
-      setCollections(getStoredCollections());
+    if (!isOpen) return;
+
+    const loadedImages = getStoredImages(userId);
+    setImages(loadedImages);
+    setCollections(getStoredCollections(userId));
+
+    if (!userId || userId === 'user-default' || userId.startsWith('anon_')) {
+      return;
     }
-  }, [isOpen]);
+
+    let unsubscribe = () => {};
+
+    try {
+      const imagesRef = collection(db, 'images');
+      // Requirement 3: Query /images WHERE userId == uid ORDER BY timestamp DESC
+      const qWithOrder = query(
+        imagesRef,
+        where('userId', '==', userId),
+        orderBy('timestamp', 'desc')
+      );
+
+      const handleSnapshot = (snapshot: any) => {
+        const firestoreImages: GeneratedImage[] = snapshot.docs.map((docSnap: any) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            userId: data.userId || userId,
+            conversationId: data.conversationId,
+            conversationTitle: data.conversationTitle,
+            imageUrl: data.imageUrl,
+            thumbnailUrl: data.thumbnailUrl || data.imageUrl,
+            prompt: data.prompt || '',
+            originalPrompt: data.originalPrompt || data.prompt || '',
+            optimizedPrompt: data.optimizedPrompt || data.prompt || '',
+            model: data.model || 'ZENO Vision',
+            provider: data.provider || 'Flux Dev',
+            width: data.width || 1024,
+            height: data.height || 1024,
+            aspectRatio: data.aspectRatio || '1:1',
+            style: data.style || 'photorealistic',
+            seed: data.seed,
+            isFavorite: !!data.isFavorite,
+            collection: data.collection || 'Geral',
+            timestamp: typeof data.timestamp === 'number' ? data.timestamp : (data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now()),
+          };
+        });
+
+        setImages(prev => {
+          const map = new Map<string, GeneratedImage>();
+          prev.forEach(img => map.set(img.id, img));
+          firestoreImages.forEach(img => map.set(img.id, img));
+          const merged = Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
+          saveStoredImages(merged, userId);
+          return merged;
+        });
+      };
+
+      unsubscribe = onSnapshot(
+        qWithOrder,
+        handleSnapshot,
+        (err) => {
+          console.warn('[ImageLibraryModal] Firestore ordered query warning, attempting fallback:', err.message);
+          const qFallback = query(imagesRef, where('userId', '==', userId));
+          unsubscribe = onSnapshot(qFallback, (snap) => handleSnapshot(snap), (err2) => {
+            console.error('[ImageLibraryModal] Firestore query error:', err2.message);
+          });
+        }
+      );
+    } catch (err) {
+      console.error('[ImageLibraryModal] Firestore listener error:', err);
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isOpen, userId]);
 
   // Filter logic (Hook placed at top level before any early return)
   const filteredImages = useMemo(() => {
@@ -100,7 +180,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   // Toggle favorite
   const handleToggleFavorite = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const updated = toggleFavoriteInLibrary(id);
+    const updated = toggleFavoriteInLibrary(id, userId);
     setImages(updated);
     if (selectedImage && selectedImage.id === id) {
       setSelectedImage(prev => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
@@ -111,7 +191,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   const handleDeleteImage = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (confirm('Tem certeza de que deseja excluir esta imagem da sua biblioteca?')) {
-      const updated = deleteImageFromLibrary(id);
+      const updated = deleteImageFromLibrary(id, userId);
       setImages(updated);
       if (selectedImage && selectedImage.id === id) {
         setSelectedImage(null);
@@ -121,7 +201,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
 
   // Move image to collection
   const handleMoveCollection = (id: string, newCollectionName: string) => {
-    const updated = updateImageInLibrary(id, { collection: newCollectionName });
+    const updated = updateImageInLibrary(id, { collection: newCollectionName }, userId);
     setImages(updated);
     if (selectedImage && selectedImage.id === id) {
       setSelectedImage(prev => prev ? { ...prev, collection: newCollectionName } : null);
@@ -132,7 +212,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   const handleCreateCollection = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
-    const updated = addStoredCollection(newCollectionName.trim(), newCollectionIcon);
+    const updated = addStoredCollection(newCollectionName.trim(), newCollectionIcon, '#3B82F6', userId);
     setCollections(updated);
     setSelectedCategory(newCollectionName.trim());
     setNewCollectionName('');
@@ -141,7 +221,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
 
   // Copy helper
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    safeCopyToClipboard(text);
     setCopiedField(label);
     setTimeout(() => setCopiedField(null), 2000);
   };
@@ -404,23 +484,31 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                   <ImageIcon className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Nenhuma imagem encontrada</h3>
+                  <h3 className="text-sm font-semibold text-white">
+                    {searchQuery || selectedCategory !== 'all' ? 'Nenhuma imagem encontrada' : 'Nenhuma imagem gerada ainda'}
+                  </h3>
                   <p className="text-xs text-[#A8A8A8] mt-1 max-w-sm">
-                    {searchQuery ? 'Tente pesquisar com outros termos.' : 'Crie imagens no Estúdio ZENO Vision ou no chat para que elas apareçam aqui.'}
+                    {searchQuery 
+                      ? 'Tente pesquisar com outros termos.' 
+                      : selectedCategory !== 'all'
+                      ? 'Nenhuma imagem nesta categoria ou período.'
+                      : 'Sua galeria do ZENO Vision está vazia. Peça ao ZENO no chat para criar uma imagem (ex: "Crie uma imagem de um astronauta")!'}
                   </p>
                 </div>
-                {onOpenStudioWithPrompt && (
-                  <button
-                    onClick={() => {
-                      onClose();
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onOpenChat) {
+                      onOpenChat();
+                    } else if (onOpenStudioWithPrompt) {
                       onOpenStudioWithPrompt('');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#2F2F2F] text-white font-medium text-xs border border-[#303030] transition-colors flex items-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-white" />
-                    Criar Imagem com ZENO Vision
-                  </button>
-                )}
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs border border-blue-500 transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                >
+                  <MessageSquare className="w-4 h-4 text-white" />
+                  Ir para o Chat
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
@@ -623,27 +711,29 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                     onClick={() => handleToggleFavorite(selectedImage.id)}
                     className={`py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 border transition-colors ${
                       selectedImage.isFavorite
-                        ? 'bg-[#2F2F2F] text-white border-[#505050]'
+                        ? 'bg-[#2F2F2F] text-amber-400 border-amber-500/40'
                         : 'bg-[#242424] text-[#A8A8A8] border-[#303030] hover:text-white'
                     }`}
                   >
-                    <Heart className={`w-3.5 h-3.5 ${selectedImage.isFavorite ? 'fill-white text-white' : ''}`} />
-                    {selectedImage.isFavorite ? 'Favoritado' : 'Favoritar'}
+                    <Star className={`w-3.5 h-3.5 ${selectedImage.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    {selectedImage.isFavorite ? 'Favorito' : 'Favoritar'}
                   </button>
 
-                  {onOpenStudioWithPrompt && (
-                    <button
-                      onClick={() => {
+                  <button
+                    onClick={() => {
+                      if (onReusePrompt) {
+                        onReusePrompt(selectedImage.prompt);
+                      } else if (onOpenStudioWithPrompt) {
                         onOpenStudioWithPrompt(selectedImage.prompt, selectedImage.style);
-                        setSelectedImage(null);
-                        onClose();
-                      }}
-                      className="py-2 px-3 rounded-xl bg-[#242424] hover:bg-[#2F2F2F] text-white border border-[#303030] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-white" />
-                      Variar / Editar
-                    </button>
-                  )}
+                      }
+                      setSelectedImage(null);
+                      onClose();
+                    }}
+                    className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-blue-500/20"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-white" />
+                    Reusar Prompt
+                  </button>
                 </div>
 
                 <button

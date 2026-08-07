@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ADMIN_EMAIL, maskEmail } from '../config/admin';
+import { useTranslation } from '../i18n';
 
 export interface WithAdminProps {
   userEmail?: string;
@@ -10,13 +11,14 @@ export interface WithAdminProps {
 
 /**
  * Higher-Order Component (HOC) to protect administrative components.
- * Checks if userEmail matches the designated administrator email (davifernandes0024509@gmail.com).
+ * Checks if userEmail matches the designated administrator email.
  * If the user is not an admin, blocks rendering and displays a 403 Forbidden Access Denied screen.
  */
 export function withAdmin<P extends WithAdminProps>(
   WrappedComponent: React.ComponentType<P>
 ): React.FC<P> {
   const ProtectedComponent: React.FC<P> = (props: P) => {
+    const { t } = useTranslation();
     const { profile: auth, loading } = useAuth();
 
     if (loading) return null;
@@ -27,24 +29,24 @@ export function withAdmin<P extends WithAdminProps>(
           <div className="flex items-center gap-3 text-neutral-400">
             <ShieldAlert className="w-8 h-8 flex-shrink-0" />
             <div>
-              <h3 className="text-xl font-bold tracking-tight text-white">403 - Acesso Negado (Forbidden)</h3>
+              <h3 className="text-xl font-bold tracking-tight text-white">403 - {t.admin.denied}</h3>
               <p className="text-xs text-neutral-300 font-mono mt-0.5">
-                Role: {auth?.role || 'Visitante'} | Sessão: {maskEmail(auth?.email)}
+                {t.admin.role}: {auth?.role || 'Visitante'} | {t.admin.session}: {maskEmail(auth?.email)}
               </p>
             </div>
           </div>
 
           <div className="p-4 rounded-xl bg-black/40 border border-neutral-500/20 text-sm leading-relaxed text-neutral-100/90 space-y-2">
             <p>
-              Acesso negado ao painel administrativo. Esta área é restrita exclusivamente ao administrador do sistema.
+              {t.admin.noPermission}
             </p>
             <p className="text-xs text-neutral-300/80">
-              Apenas o e-mail autorizado (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) possui acesso administrativo.
+              {t.admin.onlyAdminTip} (<span className="font-mono text-white underline">{maskEmail(ADMIN_EMAIL)}</span>) {t.admin.unrestrictedAccess}
             </p>
           </div>
 
           <div className="flex items-center justify-between pt-2 text-xs text-neutral-400 border-t border-neutral-500/20">
-            <span>Guarda de Segurança HOC (withAdmin) Ativo</span>
+            <span>{t.admin.securityCheck}</span>
             <span className="font-mono text-neutral-400">HTTP 403 FORBIDDEN</span>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 import { 
   Youtube, 
   Download, 
@@ -23,6 +24,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from '../i18n';
 
 interface YouTubeProcessorProps {
   url: string;
@@ -45,6 +47,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
   onProcessed,
   onActionRequest
 }) => {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [data, setData] = useState<any>(null);
@@ -152,7 +155,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
 
   const handleCopyTranscript = () => {
     if (data?.transcript) {
-      navigator.clipboard.writeText(data.transcript);
+      copyToClipboard(data.transcript);
       setCopiedTranscript(true);
       setTimeout(() => setCopiedTranscript(false), 2000);
     }
@@ -177,8 +180,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
         url: url
       }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(url);
-      alert('Link copiado para a área de transferência!');
+      copyToClipboard(url);
     }
   };
 
@@ -246,7 +248,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
             <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-neutral-300 truncate">Processando vídeo...</p>
+            <p className="text-[13px] font-medium text-neutral-300 truncate">{t.youtube.processing}</p>
             <p className="text-[11px] text-neutral-500 truncate mt-0.5">{url}</p>
           </div>
         </div>
@@ -260,7 +262,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
               <Youtube className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-neutral-300">{errorMsg || 'Não foi possível processar este vídeo no momento.'}</p>
+              <p className="text-[13px] font-medium text-neutral-300">{errorMsg || t.common.error}</p>
               <p className="text-[11px] text-neutral-500 truncate mt-0.5">{url}</p>
             </div>
           </div>
@@ -269,7 +271,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#232326] hover:bg-neutral-700 text-neutral-200 text-[12px] font-medium rounded-lg transition-all shrink-0 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Tentar novamente
+            {t.common.tryAgain}
           </button>
         </div>
       )}
@@ -309,7 +311,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
 
             <div className="flex items-center gap-1 text-[11px] font-medium text-sky-400 bg-sky-950/40 border border-sky-900/50 px-2 py-0.5 rounded-full shrink-0">
               <CheckCircle2 className="w-3 h-3 text-sky-400" />
-              <span className="hidden sm:inline">Processado</span>
+              <span className="hidden sm:inline">{t.common.finish}</span>
             </div>
           </div>
 
@@ -317,8 +319,8 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
           <div className="flex items-center gap-1.5 pt-1 relative" ref={moreMenuRef}>
             <button
               onClick={() => setShowDownloadModal(true)}
-              title="Baixar"
-              aria-label="Baixar"
+              title={t.youtube.download}
+              aria-label={t.youtube.download}
               className="flex-1 flex items-center justify-center h-9 sm:h-10 bg-[#1C1C1E]/80 hover:bg-[#232326]/90 border border-[#2C2C2E] rounded-xl text-neutral-300 hover:text-white transition-all cursor-pointer"
             >
               <Download className="w-4 h-4 text-neutral-400" />
@@ -327,8 +329,8 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
             <button
               onClick={() => setShowTranscriptModal(true)}
               disabled={!data?.transcript}
-              title="Transcrição"
-              aria-label="Transcrição"
+              title={t.youtube.transcription}
+              aria-label={t.youtube.transcription}
               className="flex-1 flex items-center justify-center h-9 sm:h-10 bg-[#1C1C1E]/80 hover:bg-[#232326]/90 border border-[#2C2C2E] rounded-xl text-neutral-300 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4 text-neutral-400" />
@@ -337,8 +339,8 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
             <button
               onClick={() => onActionRequest('resumir', data?.transcript, data?.metadata)}
               disabled={!data?.transcript}
-              title="Resumir"
-              aria-label="Resumir"
+              title={t.youtube.summary}
+              aria-label={t.youtube.summary}
               className="flex-1 flex items-center justify-center h-9 sm:h-10 bg-[#1C1C1E]/80 hover:bg-[#232326]/90 border border-[#2C2C2E] rounded-xl text-neutral-300 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-4 h-4 text-neutral-400" />
@@ -347,8 +349,8 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
             <button
               onClick={() => onActionRequest('perguntar', data?.transcript, data?.metadata)}
               disabled={!data?.transcript}
-              title="Perguntar"
-              aria-label="Perguntar"
+              title={t.youtube.ask}
+              aria-label={t.youtube.ask}
               className="flex-1 flex items-center justify-center h-9 sm:h-10 bg-[#1C1C1E]/80 hover:bg-[#232326]/90 border border-[#2C2C2E] rounded-xl text-neutral-300 hover:text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MessageSquare className="w-4 h-4 text-neutral-400" />
@@ -377,28 +379,28 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                       className="w-full text-left px-3.5 py-2.5 text-[12px] text-neutral-300 hover:text-white hover:bg-[#232326]/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <Languages className="w-4 h-4 text-neutral-400" />
-                      <span>Traduzir</span>
+                      <span>{t.youtube.translate}</span>
                     </button>
                     <button
                       onClick={() => { setShowMoreMenu(false); onActionRequest('topicos', data?.transcript, data?.metadata); }}
                       className="w-full text-left px-3.5 py-2.5 text-[12px] text-neutral-300 hover:text-white hover:bg-[#232326]/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <ListChecks className="w-4 h-4 text-neutral-400" />
-                      <span>Tópicos</span>
+                      <span>{t.youtube.topics}</span>
                     </button>
                     <button
                       onClick={() => { setShowMoreMenu(false); onActionRequest('pontos', data?.transcript, data?.metadata); }}
                       className="w-full text-left px-3.5 py-2.5 text-[12px] text-neutral-300 hover:text-white hover:bg-[#232326]/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <Quote className="w-4 h-4 text-neutral-400" />
-                      <span>Principais Pontos</span>
+                      <span>{t.youtube.points}</span>
                     </button>
                     <button
                       onClick={() => { setShowMoreMenu(false); onActionRequest('corrigir', data?.transcript, data?.metadata); }}
                       className="w-full text-left px-3.5 py-2.5 text-[12px] text-neutral-300 hover:text-white hover:bg-[#232326]/80 flex items-center gap-2.5 transition-colors cursor-pointer"
                     >
                       <Hash className="w-4 h-4 text-neutral-400" />
-                      <span>Corrigir</span>
+                      <span>{t.youtube.fix}</span>
                     </button>
                   </motion.div>
                 )}
@@ -419,7 +421,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
               className="bg-[#181818] border border-[#2C2C2E] rounded-2xl w-full max-w-md p-6 shadow-2xl text-neutral-200"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[15px] font-medium text-neutral-100">Baixar vídeo</h3>
+                <h3 className="text-[15px] font-medium text-neutral-100">{t.youtube.download}</h3>
                 <button 
                   onClick={() => setShowDownloadModal(false)}
                   className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-[#232326] transition-colors"
@@ -477,17 +479,17 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                   {downloading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Baixando...</span>
+                      <span>{t.common.loading}...</span>
                     </>
                   ) : downloadSuccess ? (
                     <>
                       <Check className="w-4 h-4 text-sky-600" />
-                      <span>Concluído!</span>
+                      <span>{t.common.finish}!</span>
                     </>
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      <span>Baixar</span>
+                      <span>{t.common.save}</span>
                     </>
                   )}
                 </button>
@@ -514,7 +516,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                     <FileText className="w-4 h-4 text-neutral-400" />
                   </div>
                   <div>
-                    <h3 className="text-[15px] font-medium text-neutral-100">Transcrição</h3>
+                    <h3 className="text-[15px] font-medium text-neutral-100">{t.youtube.transcription}</h3>
                     <p className="text-[12px] text-neutral-400 truncate max-w-sm sm:max-w-md">{title}</p>
                   </div>
                 </div>
@@ -533,7 +535,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#232326] hover:bg-neutral-700 text-neutral-200 rounded-lg transition-colors cursor-pointer"
                 >
                   {copiedTranscript ? <Check className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-400" />}
-                  <span>{copiedTranscript ? 'Copiado!' : 'Copiar'}</span>
+                  <span>{copiedTranscript ? t.common.copied : t.common.copy}</span>
                 </button>
 
                 <button
@@ -557,14 +559,14 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#232326] hover:bg-neutral-700 text-neutral-200 rounded-lg transition-colors cursor-pointer ml-auto"
                 >
                   <Share2 className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>Compartilhar</span>
+                  <span>{t.common.share}</span>
                 </button>
               </div>
 
               {/* Content */}
               <div className="p-5 overflow-y-auto flex-1 custom-scrollbar">
                 <p className="text-[13px] sm:text-[14px] text-neutral-300 leading-relaxed whitespace-pre-wrap">
-                  {data?.transcript || 'Nenhuma transcrição disponível.'}
+                  {data?.transcript || t.sidebar.noHistory}
                 </p>
               </div>
 
@@ -574,7 +576,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                   onClick={() => setShowTranscriptModal(false)}
                   className="px-5 py-2 bg-[#232326] hover:bg-neutral-700 text-neutral-200 text-[13px] font-medium rounded-xl transition-all cursor-pointer"
                 >
-                  Fechar
+                  {t.common.cancel}
                 </button>
               </div>
             </motion.div>

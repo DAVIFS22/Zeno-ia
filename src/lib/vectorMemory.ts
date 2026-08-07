@@ -90,7 +90,7 @@ export async function retrieveRelevantMemories(userId: string, query: string, li
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit).filter(s => s.score > 0.05).map(s => s.chunk);
+    return scored.filter(s => s.score > 0.35).slice(0, limit).map(s => s.chunk);
   } catch (err: any) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn('Dev: Skipped retrieve relevant memories from Firestore:', err?.message || err);

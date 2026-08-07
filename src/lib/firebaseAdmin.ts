@@ -22,7 +22,8 @@ export const adminAuth = adminApp ? getAdminAuth(adminApp) : {
   verifyIdToken: async () => { throw new Error('Admin SDK not initialized'); }
 } as any;
 
-// Use the real Admin Firestore SDK with the named database ID
+// Use the real Admin Firestore SDK with the named database ID from config
+// We still use the databaseId from the config as it might be a named database
 export const adminDb = adminApp ? getAdminFirestore(adminApp, firebaseConfig.firestoreDatabaseId) : {
   collection: () => ({
     doc: () => ({

@@ -3,6 +3,7 @@ import { X, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ZenoLogo } from './ZenoLogo';
+import { useTranslation } from '../i18n';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }) => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
@@ -42,9 +44,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/web-storage-unsupported') {
-        alert("O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.");
+        alert(t.auth.googlePopupError || "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.");
       } else {
-        alert("Erro no login: " + err.message);
+        alert(t.common.error + ": " + err.message);
       }
     }
   };
@@ -84,11 +86,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                 </div>
                 
                 <h2 className="text-[28px] font-bold tracking-tight text-white mb-3">
-                  {isLogin ? 'Entrar no ZENO AI' : 'Criar conta ZENO AI'}
+                  {isLogin ? t.auth.signInTitle || 'Entrar no ZENO AI' : t.auth.signUpTitle || 'Criar conta ZENO AI'}
                 </h2>
                 
                 <p className="text-[14px] text-neutral-400 leading-relaxed max-w-[320px]">
-                  {message || "Faça login para acessar suas conversas, sincronizar seu histórico, gerenciar sua assinatura ZENO Pro e utilizar todos os recursos da plataforma."}
+                  {message || t.auth.welcomeMessage || "Faça login para acessar suas conversas, sincronizar seu histórico, gerenciar sua assinatura ZENO Pro e utilizar todos os recursos da plataforma."}
                 </p>
               </div>
 
@@ -103,12 +105,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
-                  Continuar com Google
+                  {t.auth.google}
                 </button>
 
                 <div className="flex items-center gap-4 py-2">
                   <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
-                  <span className="text-[12px] text-neutral-600 font-medium tracking-widest uppercase">ou</span>
+                  <span className="text-[12px] text-neutral-600 font-medium tracking-widest uppercase">{t.common.or || 'ou'}</span>
                   <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
                 </div>
 
@@ -116,7 +118,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                   <div className="space-y-3">
                     <input 
                       type="email" 
-                      placeholder="Email" 
+                      placeholder={t.auth.email} 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
                       className="w-full px-5 h-[52px] rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
@@ -125,7 +127,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                     <div className="relative">
                       <input 
                         type={showPassword ? "text" : "password"} 
-                        placeholder="Senha" 
+                        placeholder={t.auth.password} 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
                         className="w-full px-5 h-[52px] pr-12 rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
@@ -143,7 +145,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                   {isLogin && (
                     <div className="flex justify-end">
                       <button type="button" className="text-[13px] text-neutral-500 hover:text-white transition-colors">
-                        Esqueceu sua senha?
+                        {t.auth.forgotPassword}
                       </button>
                     </div>
                   )}
@@ -153,20 +155,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                     disabled={isLoading}
                     className="w-full h-[54px] rounded-[18px] bg-white text-black hover:bg-neutral-200 font-bold transition-all text-[16px] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? 'Carregando...' : 'Continuar'}
+                    {isLoading ? t.common.loading : t.common.next}
                   </button>
                 </form>
               </div>
 
               <div className="mt-10 text-center">
                 <p className="text-[14px] text-neutral-500">
-                  {isLogin ? 'Não possui uma conta?' : 'Já tem uma conta?'}
+                  {isLogin ? t.auth.noAccount : t.auth.hasAccount}
                   <button 
                     type="button"
                     onClick={() => setIsLogin(!isLogin)}
                     className="ml-2 text-white font-bold hover:underline focus:outline-none"
                   >
-                    {isLogin ? 'Criar conta' : 'Entrar'}
+                    {isLogin ? t.auth.signUp : t.auth.signIn}
                   </button>
                 </p>
               </div>

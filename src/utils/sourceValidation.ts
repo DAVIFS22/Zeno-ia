@@ -1,6 +1,8 @@
 import { SearchSource } from '../types';
 
-export const isValidSource = (source: SearchSource): boolean => {
+export const isValidSource = (source: any): boolean => {
+  if (!source) return false;
+  
   const url = source.url;
   const domain = source.domain;
   
@@ -16,7 +18,13 @@ export const isValidSource = (source: SearchSource): boolean => {
     return false;
   }
 
-  if (!url) return false;
+  if (!url || typeof url !== 'string') return false;
+  
+  // Guarantee that source URLs are not constructed from search queries
+  // and are real destination URLs from grounding chunks (API mandated)
+  if (url.includes('google.com/search') || url.includes('bing.com/search') || url.includes('duckduckgo.com/?q=')) {
+    return false;
+  }
 
   try {
     const parsedDomain = new URL(url).hostname.toLowerCase();
@@ -26,7 +34,7 @@ export const isValidSource = (source: SearchSource): boolean => {
   }
 };
 
-export const filterValidSources = (sources: SearchSource[] | undefined): SearchSource[] => {
+export const filterValidSources = (sources: any[] | undefined): SearchSource[] => {
   if (!sources || !Array.isArray(sources)) return [];
   return sources.filter(source => isValidSource(source));
 };

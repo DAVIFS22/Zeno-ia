@@ -28,7 +28,8 @@ export const FREE_LIMITS = {
   IMAGES_PER_DAY: 2,
   SEARCHES_PER_DAY: 3,
   DOCS_PER_DAY: 2,
-  MUSIC_PER_DAY: 3
+  MUSIC_PER_DAY: 3,
+  VOICE_PER_DAY: 10
 };
 
 export function getTodayString(): string {
@@ -89,7 +90,7 @@ export function checkModelAccess(plan: UserPlan, model: ModelType | string): { a
 export function checkUsageLimit(
   plan: UserPlan,
   usage: DailyUsage,
-  action: 'message' | 'image' | 'search' | 'doc' | 'music'
+  action: 'message' | 'image' | 'search' | 'doc' | 'music' | 'voice'
 ): { allowed: boolean; current: number; limit: number; remaining: number } {
   // Ensure date matches today, else reset
   const today = getTodayString();
@@ -143,6 +144,16 @@ export function checkUsageLimit(
     case 'music': {
       const current = currentUsage.musicGenCount;
       const limit = FREE_LIMITS.MUSIC_PER_DAY;
+      return {
+        allowed: current < limit,
+        current,
+        limit,
+        remaining: Math.max(0, limit - current)
+      };
+    }
+    case 'voice': {
+      const current = currentUsage.voiceTranscriptionsCount || 0;
+      const limit = FREE_LIMITS.VOICE_PER_DAY;
       return {
         allowed: current < limit,
         current,

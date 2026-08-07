@@ -10,7 +10,7 @@ export interface RealtimeSubscriptionData {
   subscriptionStatus: 'active' | 'inactive' | 'trialing' | 'past_due' | 'unpaid' | 'canceled' | string;
   active: boolean;
   planId: string;
-  billingPeriod: 'Mensal' | 'Anual' | string;
+  billingPeriod: string;
   currentPeriodStart?: number;
   currentPeriodEnd?: number;
   nextRenewal?: number;

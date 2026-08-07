@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check, Share2, Edit3, RotateCcw, Heart } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ImageWithLoaderProps {
   src: string;
@@ -203,24 +204,18 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   };
 
   const handleImageError = () => {
-    if (retryCount === 0) {
-      setRetryCount(1);
-      // Clean fallback URL
-      const cleanAlt = encodeURIComponent(alt || 'digital art masterpiece');
-      setCurrentSrc(`https://image.pollinations.ai/prompt/${cleanAlt}?width=1024&height=1024&nologo=true`);
-    } else {
-      setIsLoading(false);
-      setHasError(true);
-    }
+    setIsLoading(false);
+    setHasError(true);
   };
 
   const handleManualRetry = () => {
     setIsLoading(true);
     setHasError(false);
     setProgress(15);
-    const cleanAlt = encodeURIComponent(alt || 'artistic digital artwork');
-    const randomSeed = Math.floor(Math.random() * 999999);
-    setCurrentSrc(`https://image.pollinations.ai/prompt/${cleanAlt}?width=1024&height=1024&seed=${randomSeed}&nologo=true`);
+    // Reload original src
+    const targetSrc = src;
+    setCurrentSrc('');
+    setTimeout(() => setCurrentSrc(targetSrc), 50);
   };
 
   // Determine message according to progress
@@ -362,7 +357,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
                 if (onShare) {
                   onShare();
                 } else {
-                  navigator.clipboard.writeText(currentSrc);
+                  copyToClipboard(currentSrc);
                   setShareSuccess(true);
                   setTimeout(() => setShareSuccess(false), 2000);
                 }

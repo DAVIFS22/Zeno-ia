@@ -47,17 +47,41 @@ export function useCloudSync(
           // Graceful fallback when cloud sync endpoint is unavailable
         }
 
-        // Fetch Sessions - strictly replace sessions for this UID
+        // Fetch Sessions - intelligently merge cloud sessions with local sessions
         try {
           const sessionsRes = await fetch(`/api/sync/sessions?userId=${encodeURIComponent(userId)}`);
           if (sessionsRes.ok) {
             const sessionsData = await sessionsRes.json().catch(() => ({}));
-            if (isSubscribed) {
-              if (Array.isArray(sessionsData?.sessions)) {
-                const sorted = [...sessionsData.sessions].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-                setSessions(sorted);
-                lastSessionsStr.current = JSON.stringify(sorted);
-              }
+            if (isSubscribed && Array.isArray(sessionsData?.sessions)) {
+              const cloudSessions: ChatSession[] = sessionsData.sessions;
+              
+              setSessions(prev => {
+                const map = new Map<string, ChatSession>();
+                
+                // Add cloud sessions first
+                cloudSessions.forEach(cs => {
+                  if (cs && cs.id) map.set(cs.id, cs);
+                });
+                
+                // Preserve local sessions if missing in cloud or if local has more messages/newer updates
+                prev.forEach(local => {
+                  if (!local || !local.id) return;
+                  const cloud = map.get(local.id);
+                  if (!cloud) {
+                    map.set(local.id, local);
+                  } else {
+                    const localCount = local.messages?.length || 0;
+                    const cloudCount = cloud.messages?.length || 0;
+                    if (localCount >= cloudCount || (local.updatedAt || 0) > (cloud.updatedAt || 0)) {
+                      map.set(local.id, local);
+                    }
+                  }
+                });
+
+                const merged = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                lastSessionsStr.current = JSON.stringify(merged);
+                return merged;
+              });
             }
           }
         } catch (e) {

@@ -17,6 +17,9 @@ export type ModalId =
   | 'accountSwitcher'
   | 'search'
   | 'sidebar'
+  | 'pythonLearning'
+  | 'gamification'
+  | 'versionNews'
   | (string & {});
 
 export interface ModalOptions {
@@ -133,6 +136,16 @@ export interface UIContextType {
   isDeleteSessionOpen: boolean;
   openDeleteSession: (data?: any) => void;
   closeDeleteSession: () => void;
+
+  isPythonLearningOpen: boolean;
+  openPythonLearning: (data?: any) => void;
+  closePythonLearning: () => void;
+  togglePythonLearning: () => void;
+
+  isGamificationOpen: boolean;
+  openGamification: (data?: any) => void;
+  closeGamification: () => void;
+  toggleGamification: () => void;
 
   // Drawers / Overlays / Menus
   isSidebarOpen: boolean;

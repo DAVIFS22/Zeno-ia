@@ -1,0 +1,96 @@
+name: Zeno IA Release & CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Tipo de Release (MAJOR, MINOR, PATCH)'
+        required: true
+        default: 'MINOR'
+        type: choice
+        options:
+          - MAJOR
+          - MINOR
+          - PATCH
+
+jobs:
+  release_and_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run GitHub Release Analyzer & Version Calculator
+        run: npx tsx scripts/githubReleaseAnalyzer.ts
+
+      - name: Build Application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "Zeno Release Bot"
+          git config --global user.email "bot@zenoia.internal"
+
+      - name: Commit Version Bump & Changelog
+        run: |
+          git add src/lib/versionSystem.ts public/changelog.json
+          git commit -m "chore(release): bump version and update changelog [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:main || true
+
+      - name: Get Latest Version Tag
+        id: version
+        run: |
+          VERSION=$(node -e "import('./src/lib/versionSystem.ts').then(m => console.log(m.CURRENT_ZENO_VERSION))")
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git tag -a "$TAG" -m "Zeno IA Release $TAG"
+          git push origin "$TAG" || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Zeno IA ${{ steps.version.outputs.tag }}
+          body_path: public/changelog.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: ai-studio-zenoai-6c7f4f97-880f-4ba1-a9e6-577dff385aa7
+        env:
+          FIREBASE_CLI_PREVIEWS: hostingchannels

@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Sparkles, Zap, Shield, Image, Search, FileText } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface ProFeatureModalProps {
   onClose: () => void;
@@ -8,6 +9,7 @@ interface ProFeatureModalProps {
 }
 
 export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpgrade, theme = 'dark' }) => {
+  const { t } = useTranslation();
   const isDark = theme === 'dark';
 
   return (
@@ -37,36 +39,36 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
 
           <div className="space-y-4">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight mb-2">Recurso exclusivo do ZENO Pro</h2>
+              <h2 className="text-2xl font-bold tracking-tight mb-2">{t.proFeature.title}</h2>
               <p className={`text-sm leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Este recurso está disponível apenas para assinantes do ZENO Pro.
+                {t.proFeature.description}
               </p>
             </div>
             
             <div className={`text-sm text-left p-4 rounded-2xl ${isDark ? 'bg-[#242424]' : 'bg-neutral-50'}`}>
               <p className={`font-semibold mb-3 ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
-                Faça upgrade para o ZENO Pro e desbloqueie:
+                {t.proFeature.upgradePrompt}
               </p>
               <ul className="space-y-2.5">
                 <li className="flex items-center gap-2.5">
                   <Sparkles className="w-4 h-4 text-sky-500 flex-shrink-0" />
-                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Todos os modelos avançados sem limites</span>
+                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureModels}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Zap className="w-4 h-4 text-sky-500 flex-shrink-0" />
-                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Prioridade máxima e maior velocidade</span>
+                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureSpeed}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Image className="w-4 h-4 text-sky-500 flex-shrink-0" />
-                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Geração de imagens ilimitada</span>
+                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureImages}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Search className="w-4 h-4 text-sky-500 flex-shrink-0" />
-                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Pesquisas avançadas e análise de arquivos</span>
+                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureAnalysis}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Shield className="w-4 h-4 text-sky-500 flex-shrink-0" />
-                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>Acesso antecipado aos novos modelos</span>
+                  <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureEarlyAccess}</span>
                 </li>
               </ul>
             </div>
@@ -81,7 +83,7 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
               className="w-full py-4 rounded-2xl font-semibold bg-[#1C1C1E] text-white hover:bg-[#232326] transition-colors flex items-center justify-center gap-2"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Upgrade para o ZENO Pro</span>
+              <span>{t.proFeature.upgradeButton}</span>
             </button>
             
             <button
@@ -92,7 +94,7 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
                   : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
               }`}
             >
-              Agora não
+              {t.proFeature.notNow}
             </button>
           </div>
         </div>

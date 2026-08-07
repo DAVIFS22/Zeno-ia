@@ -14,6 +14,7 @@ export interface FreePlanLimits {
   image: number;
   doc: number;
   vision: number;
+  voice: number;
 }
 
 export interface ProPlanFeatures {
@@ -84,6 +85,7 @@ export const DEFAULT_FULL_ADMIN_CONFIG: FullAdminConfig = {
     image: 10,
     doc: 5,
     vision: 10,
+    voice: 30,
   },
   proFeatures: {
     limitMultiplier: 10,

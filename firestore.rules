@@ -10,16 +10,32 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    function getUserEmail() {
+      return request.auth.token.email != null ? request.auth.token.email.lower() : '';
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserEmail() == 'davifernandes0024509@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(getUserEmail()))
+      );
+    }
+
     // Admins collection: key is email. 
-    // Client needs to read own status to show admin UI.
     match /admins/{email} {
-      allow read: if isAuthenticated() && request.auth.token.email.lower() == email.lower();
-      allow write: if false; // Only via Admin SDK (backend)
+      allow read: if isAuthenticated() && getUserEmail() == email.lower();
+      allow write: if false;
     }
 
     // Users: Keyed by UID. Block client-side modification of isPro, isAdmin, unlimited, adminOverride.
+    // Gamification Profiles: Strictly backend-only writes
+    match /gamificationProfiles/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || userId.startsWith("anon_");
+      allow write: if false;
+    }
+
     match /users/{userId} {
-      allow read: if isOwner(userId) || userId.startsWith('anon_');
+      allow read: if isOwner(userId) || userId.startsWith('anon_') || isAdmin();
       allow create: if isOwner(userId) || userId.startsWith('anon_');
       allow update: if (isOwner(userId) || userId.startsWith('anon_')) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPro', 'isAdmin', 'unlimited', 'adminOverride']);
@@ -27,35 +43,42 @@ service cloud.firestore {
     
     // Subscriptions: Strictly backend-only writes
     match /subscriptions/{userId} {
-      allow read: if isOwner(userId) || userId.startsWith('anon_');
-      allow write: if false; // Only via Backend Admin SDK
+      allow read: if isOwner(userId) || userId.startsWith('anon_') || isAdmin();
+      allow write: if false;
     }
 
     // User-owned data with userId field
     match /images/{docId} {
-      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
     
     match /chats/{docId} {
-      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
     
     match /memory/{docId} {
-      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
-    // Drafts: docId is prefixed with userId (e.g. "{userId}_{sessionId}" or just "{userId}")
+    // Drafts: docId is prefixed with userId
     match /drafts/{docId} {
-      allow read, write: if isAuthenticated() && docId.startsWith(request.auth.uid);
+      allow read, write: if isAuthenticated() && (docId.startsWith(request.auth.uid) || isAdmin());
     }
 
     // Internal collections: strictly backend only
     match /config/{docId} { allow read, write: if false; }
     match /stripe_webhook_logs/{docId} { allow read, write: if false; }
     match /failed_webhooks/{docId} { allow read, write: if false; }
+
+    match /supportTickets/{ticketId} {
+      allow read, create, update: if isAuthenticated();
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated();
+      }
+    }
 
     // Default deny
     match /{document=**} {

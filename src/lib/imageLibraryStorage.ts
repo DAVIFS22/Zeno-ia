@@ -1,4 +1,5 @@
 import { GeneratedImage, ImageCollection } from '../types';
+import { isAuthorizedImageUrl } from '../utils/imageSecurity';
 
 function getStorageKey(userId?: string) {
   return `zeno_image_library_${userId || 'default'}`;
@@ -111,6 +112,9 @@ export function deleteImageFromLibrary(id: string, userId?: string): GeneratedIm
   const updatedList = current.filter(item => item.id !== id);
   saveStoredImages(updatedList, userId);
   
+  if (id) {
+    deleteDoc(doc(db, 'images', id)).catch(() => {});
+  }
   // Call backend delete
   fetch(`/api/images/${id}?userId=${userId || ''}`, { method: 'DELETE' }).catch(() => {});
   return updatedList;
@@ -160,9 +164,20 @@ export function addStoredCollection(name: string, icon = 'Folder', color = '#3B8
   return updated;
 }
 
-// Sync single image to server backend
+import { db } from './firebase';
+import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+
+// Sync single image to server backend and Firestore
 async function syncImageToBackend(image: GeneratedImage) {
   try {
+    if (image.userId && image.userId !== 'user-default' && !image.userId.startsWith('anon_')) {
+      const imgRef = doc(db, 'images', image.id);
+      await setDoc(imgRef, {
+        ...image,
+        userId: image.userId,
+        timestamp: image.timestamp || Date.now()
+      }, { merge: true }).catch(() => {});
+    }
     await fetch('/api/images', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,7 +229,7 @@ export function scanAndSaveImagesFromText(
     const altText = match[1] || 'Imagem Gerada pelo ZENO';
     const url = match[2];
 
-    if (url.includes('pollinations.ai') || url.includes('image')) {
+    if (isAuthorizedImageUrl(url)) {
       addImageToLibrary({
         imageUrl: url,
         prompt: altText,
