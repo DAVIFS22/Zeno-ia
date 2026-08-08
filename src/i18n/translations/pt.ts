@@ -316,7 +316,15 @@ export const pt = {
     signInTitle: "Entrar no ZENO AI",
     signUpTitle: "Criar conta ZENO AI",
     welcomeMessage: "Faça login para acessar suas conversas, sincronizar seu histórico, gerenciar sua assinatura ZENO Pro e utilizar todos os recursos da plataforma.",
-    googlePopupError: "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente."
+    googlePopupError: "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.",
+    emailAlreadyInUse: "Este e-mail já possui uma conta. Deseja entrar em vez de criar uma nova?",
+    invalidCredentials: "E-mail ou senha incorretos.",
+    weakPassword: "A senha deve ter pelo menos 6 caracteres.",
+    invalidEmail: "E-mail inválido.",
+    signInInstead: "Entrar em vez de criar conta",
+    tooManyRequests: "Muitas tentativas. Aguarde um momento e tente novamente.",
+    genericError: "Algo deu errado. Tente novamente em instantes.",
+    unauthorizedDomain: "Este domínio não está autorizado para autenticação no Firebase. Por favor, adicione 'zeno-ia.vercel.app' aos domínios autorizados no Console do Firebase."
   },
   plugins: {
     title: "Plugins & Extensões",

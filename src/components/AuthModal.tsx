@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ZenoLogo } from './ZenoLogo';
@@ -19,11 +19,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+    setErrorCode(null);
     try {
       if (isLogin) {
         await signInWithEmail(email, password);
@@ -32,22 +36,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
       }
       onClose();
     } catch (err: any) {
-      alert(err.message);
+      console.error("Auth Error:", err);
+      setErrorCode(err.code);
+      if (err.code === 'auth/email-already-in-use') {
+        setError(t.auth.emailAlreadyInUse || "Este e-mail já está cadastrado. Que tal entrar na sua conta?");
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        setError(t.auth.invalidCredentials || "E-mail ou senha incorretos. Tente novamente.");
+      } else if (err.code === 'auth/weak-password') {
+        setError(t.auth.weakPassword || "Sua senha precisa ter pelo menos 6 caracteres.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError(t.auth.invalidEmail || "Esse e-mail não parece válido. Confira e tente novamente.");
+      } else if (err.code === 'auth/too-many-requests') {
+        setError(t.auth.tooManyRequests || "Muitas tentativas. Aguarde um momento e tente novamente.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError(t.auth.unauthorizedDomain || "Este domínio não está autorizado para autenticação no Firebase.");
+      } else {
+        setError(t.auth.genericError || "Algo deu errado. Tente novamente em instantes.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    setError(null);
+    setErrorCode(null);
     try {
       await signInWithGoogle();
       onClose();
     } catch (err: any) {
-      console.error(err);
+      console.error("Google Auth Error:", err);
+      setErrorCode(err.code);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/web-storage-unsupported') {
-        alert(t.auth.googlePopupError || "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.");
+        setError(t.auth.googlePopupError || "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.");
       } else {
-        alert(t.common.error + ": " + err.message);
+        setError(err.message || t.common.error);
       }
     }
   };
@@ -94,6 +117,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                   {message || t.auth.welcomeMessage || "Faça login para acessar suas conversas, sincronizar seu histórico, gerenciar sua assinatura ZENO Pro e utilizar todos os recursos da plataforma."}
                 </p>
               </div>
+
+              {error && (
+                <div className="mb-6 p-4 rounded-[16px] bg-[#1C1C1E] border border-[#2C2C2E] flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="text-neutral-500 mt-0.5">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[13px] text-neutral-300 leading-snug">{error}</p>
+                    {errorCode === 'auth/email-already-in-use' && !isLogin && (
+                      <button 
+                        onClick={() => {
+                          setIsLogin(true);
+                          setError(null);
+                          setErrorCode(null);
+                        }}
+                        className="mt-2 text-white text-[13px] font-bold hover:underline block"
+                      >
+                        {t.auth.signInInstead || "Entrar na sua conta"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 <button 

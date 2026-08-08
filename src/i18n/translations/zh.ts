@@ -316,7 +316,15 @@ export const zh = {
     signInTitle: "登录 ZENO AI",
     signUpTitle: "创建 ZENO AI 账户",
     welcomeMessage: "登录以访问您的对话、同步历史记录、管理 ZENO Pro 订阅并使用平台的所有资源。",
-    googlePopupError: "浏览器可能会在预览窗口 (iframe) 中阻止 Google 登录。要进行登录，请在工作区外（新标签页）打开应用程序并重试。"
+    googlePopupError: "浏览器可能会在预览窗口 (iframe) 中阻止 Google 登录。要进行登录，请在工作区外（新标签页）打开应用程序并重试。",
+    emailAlreadyInUse: "此电子邮件已被使用。您想改为登录吗？",
+    invalidCredentials: "电子邮件或密码不正确。",
+    weakPassword: "密码必须至少为 6 个字符。",
+    invalidEmail: "无效的电子邮件。",
+    signInInstead: "改为登录",
+    tooManyRequests: "尝试次数过多。请稍候并重试。",
+    genericError: "出现了一些问题。请稍后重试。",
+    unauthorizedDomain: "此域名未获授权进行 Firebase 身份验证。请在 Firebase 控制台中将 'zeno-ia.vercel.app' 添加到授权域名。"
   },
   plugins: {
     title: "插件与扩展",

@@ -316,7 +316,15 @@ export const en = {
     signInTitle: "Sign in to ZENO AI",
     signUpTitle: "Create ZENO AI account",
     welcomeMessage: "Log in to access your conversations, sync your history, manage your ZENO Pro subscription and use all platform features.",
-    googlePopupError: "Google login may be blocked by the browser inside the preview window (iframe). To log in, open the app in a new tab and try again."
+    googlePopupError: "Google login may be blocked by the browser inside the preview window (iframe). To log in, open the app in a new tab and try again.",
+    emailAlreadyInUse: "This email is already in use. Would you like to sign in instead?",
+    invalidCredentials: "Incorrect email or password.",
+    weakPassword: "Password must be at least 6 characters long.",
+    invalidEmail: "Invalid email.",
+    signInInstead: "Sign in instead",
+    tooManyRequests: "Too many attempts. Please wait a moment and try again.",
+    genericError: "Something went wrong. Please try again in a moment.",
+    unauthorizedDomain: "This domain is not authorized for Firebase authentication. Please add 'zeno-ia.vercel.app' to authorized domains in Firebase Console."
   },
   plugins: {
     title: "Plugins & Extensions",

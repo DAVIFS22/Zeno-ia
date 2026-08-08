@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
+import { X, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleLogo } from './GoogleLogo';
+import { useTranslation } from '../i18n';
 
 export const AuthScreen: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, authLogs } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setErrorCode(null);
     try {
       if (isLogin) {
         await signInWithEmail(email, password);
@@ -17,7 +25,23 @@ export const AuthScreen: React.FC = () => {
         await signUpWithEmail(email, password);
       }
     } catch (err: any) {
-      alert(err.message);
+      console.error("Auth Error:", err);
+      setErrorCode(err.code);
+      if (err.code === 'auth/email-already-in-use') {
+        setError(t.auth.emailAlreadyInUse || "Este e-mail já está cadastrado. Que tal entrar na sua conta?");
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        setError(t.auth.invalidCredentials || "E-mail ou senha incorretos. Tente novamente.");
+      } else if (err.code === 'auth/weak-password') {
+        setError(t.auth.weakPassword || "Sua senha precisa ter pelo menos 6 caracteres.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError(t.auth.invalidEmail || "Esse e-mail não parece válido. Confira e tente novamente.");
+      } else if (err.code === 'auth/too-many-requests') {
+        setError(t.auth.tooManyRequests || "Muitas tentativas. Aguarde um momento e tente novamente.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError(t.auth.unauthorizedDomain || "Este domínio não está autorizado para autenticação no Firebase.");
+      } else {
+        setError(t.auth.genericError || "Algo deu errado. Tente novamente em instantes.");
+      }
     }
   };
 
@@ -25,6 +49,30 @@ export const AuthScreen: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-950 text-white p-4">
       <div className="p-8 bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm border border-gray-800">
         <h2 className="text-2xl font-semibold mb-6 text-center">{isLogin ? 'Login' : 'Criar Conta'}</h2>
+        
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-gray-800/50 border border-gray-700 flex gap-3">
+            <div className="text-gray-400 mt-0.5">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-gray-300">{error}</p>
+              {errorCode === 'auth/email-already-in-use' && !isLogin && (
+                <button 
+                  onClick={() => {
+                    setIsLogin(true);
+                    setError(null);
+                    setErrorCode(null);
+                  }}
+                  className="mt-2 text-sky-400 font-bold hover:underline block"
+                >
+                  {t.auth.signInInstead || "Entrar em vez de criar conta"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input 
             type="email" 
