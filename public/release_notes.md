@@ -1,4 +1,4 @@
-## Zeno IA v2.24.3
+## Zeno IA v2.24.4
 
 *Esta versão foca em melhorias internas de infraestrutura, segurança e manutenção técnica.*
 
