@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - main
-      - master
-    tags:
+    # Avoid triggering on the bot's own tag pushes
+    tags-ignore:
       - 'v*'
   workflow_dispatch:
 
@@ -32,29 +32,42 @@ jobs:
         run: npm ci || npm install
 
       - name: Run AI Release Review & Version Analyzer
-        run: npx tsx scripts/githubReleaseAnalyzer.ts
+        id: analyzer
+        run: |
+          npx tsx scripts/githubReleaseAnalyzer.ts
+          if git diff --quiet src/config/versionConfig.ts; then
+            echo "new_release=false" >> $GITHUB_OUTPUT
+            echo "[INFO] No version bump detected."
+          else
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "[INFO] New version detected."
+          fi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Build Application
+        if: steps.analyzer.outputs.new_release == 'true'
         run: npm run build
         env:
           NODE_ENV: production
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Configure Git Identity
+        if: steps.analyzer.outputs.new_release == 'true'
         run: |
           git config --global user.name "Zeno Release AI Bot"
           git config --global user.email "bot@zenoia.internal"
 
       - name: Commit Version Bump & Summarized Changelog
+        if: steps.analyzer.outputs.new_release == 'true'
         run: |
           git add src/config/versionConfig.ts public/changelog.json public/release_notes.md
           git commit -m "chore(release): automatic version bump & summarized review [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main || true
 
       - name: Get Latest Version Tag
+        if: steps.analyzer.outputs.new_release == 'true'
         id: version
         run: |
           VERSION=$(grep -oP 'export const CURRENT_ZENO_VERSION = "\K[^"]+' src/config/versionConfig.ts)
@@ -62,12 +75,14 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Git Tag
+        if: steps.analyzer.outputs.new_release == 'true'
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           git tag -a "$TAG" -m "Zeno IA Release $TAG (Automated Review)"
           git push origin "$TAG" || true
 
       - name: Create GitHub Release with Summarized Points
+        if: steps.analyzer.outputs.new_release == 'true'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -79,6 +94,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Firebase Hosting
+        if: steps.analyzer.outputs.new_release == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'

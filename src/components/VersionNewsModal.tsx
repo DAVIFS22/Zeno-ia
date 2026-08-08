@@ -25,12 +25,18 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Small delay to prevent initial layout flash
-      const readyTimer = setTimeout(() => setIsReady(true), 100);
+      // Simulate content ready after a small delay to allow animations to breathe
+      const readyTimer = setTimeout(() => {
+        setIsReady(true);
+      }, 150);
       
-      // Only show spinner if content isn't ready within 300ms
+      // If after 300ms it's still not ready (simulated or real), show spinner
       const spinnerTimer = setTimeout(() => {
-        if (!isReady) setShowSpinner(true);
+        // We use the functional update to check the CURRENT value of isReady
+        setIsReady(currentReady => {
+          if (!currentReady) setShowSpinner(true);
+          return currentReady;
+        });
       }, 300);
 
       return () => {
@@ -38,6 +44,7 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
         clearTimeout(spinnerTimer);
       };
     } else {
+      // Reset states when closing
       setIsReady(false);
       setShowSpinner(false);
     }

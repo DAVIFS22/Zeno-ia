@@ -154,7 +154,7 @@ Arquivos modificados:
 ${files.join('\\n')}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -351,19 +351,20 @@ export function markVersionAsSeen(versionStr: string) {
   console.log(`[ZENO RELEASE REVIEW] changelog.json gerado com sucesso (agora como array).`);
 
   // 3. Generate GitHub Release Markdown Body
+  const hasDetails = novidades.length > 0 || correcoes.length > 0 || desempenho.length > 0 || arquitetura.length > 0;
+  
   const releaseMarkdown = `## Zeno IA v${nextVersion}
 
-Novidades:
-${novidades.map(p => `- ${p}`).join('\n') || '- N/A'}
+${hasDetails ? '' : '*Esta versão foca em melhorias internas de infraestrutura, segurança e manutenção técnica.*'}
 
-Correções:
-${correcoes.map(p => `- ${p}`).join('\n') || '- N/A'}
+${novidades.length > 0 ? `### Novidades\n${novidades.map(p => `- ${p}`).join('\n')}\n` : ''}
+${correcoes.length > 0 ? `### Correções\n${correcoes.map(p => `- ${p}`).join('\n')}\n` : ''}
+${desempenho.length > 0 ? `### Desempenho\n${desempenho.map(p => `- ${p}`).join('\n')}\n` : ''}
+${arquitetura.length > 0 ? `### Arquitetura\n${arquitetura.map(p => `- ${p}`).join('\n')}\n` : ''}
 
-Desempenho:
-${desempenho.map(p => `- ${p}`).join('\n') || '- N/A'}
-
-- Data de Publicação: ${today}
-- Tipo de Release: ${bumpType}
+- **Data de Publicação**: ${today}
+- **Tipo de Release**: ${bumpType}
+- **Status de Conteúdo**: ${hasDetails ? 'Relevante ao Usuário' : 'Manutenção Interna'}
 `;
 
   const releaseMdPath = path.join(outputDir, 'release_notes.md');
