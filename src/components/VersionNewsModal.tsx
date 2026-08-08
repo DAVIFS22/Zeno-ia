@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { History, X, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { History, X, ChevronRight, Loader2 } from 'lucide-react';
 import { useVersion } from '../contexts/VersionContext';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -20,6 +20,28 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
     initialVersion || latestVersion.version
   );
   const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [isReady, setIsReady] = useState(false);
+  const [showSpinner, setShowSpinner] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to prevent initial layout flash
+      const readyTimer = setTimeout(() => setIsReady(true), 100);
+      
+      // Only show spinner if content isn't ready within 300ms
+      const spinnerTimer = setTimeout(() => {
+        if (!isReady) setShowSpinner(true);
+      }, 300);
+
+      return () => {
+        clearTimeout(readyTimer);
+        clearTimeout(spinnerTimer);
+      };
+    } else {
+      setIsReady(false);
+      setShowSpinner(false);
+    }
+  }, [isOpen]);
 
   const currentEntry = versionHistory.find(v => v.version === selectedVersion) || latestVersion;
 
@@ -38,10 +60,10 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
     return dateStr;
   };
 
-  const novidadesList = currentEntry.novidades || currentEntry.news || [];
-  const correcoesList = currentEntry.correcoes || currentEntry.fixes || [];
-  const desempenhoList = currentEntry.desempenho || currentEntry.performance || [];
-  const arquiteturaList = currentEntry?.arquitetura || currentEntry?.architecture || [];
+  const novidadesList = currentEntry.changes?.novidades || currentEntry.novidades || currentEntry.news || [];
+  const correcoesList = currentEntry.changes?.correcoes || currentEntry.correcoes || currentEntry.fixes || [];
+  const desempenhoList = currentEntry.changes?.desempenho || currentEntry.desempenho || currentEntry.performance || [];
+  const arquiteturaList = currentEntry.changes?.arquitetura || currentEntry.arquitetura || currentEntry.architecture || [];
 
   return (
     <AnimatePresence>
@@ -96,102 +118,116 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto px-10 py-2 space-y-10">
-          {showHistory ? (
-            <div className="space-y-4 py-2">
-              <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-4">Histórico de Versões</h3>
-              <div className="space-y-2">
-                {versionHistory.map((ver) => (
-                  <div
-                    key={ver.version}
-                    onClick={() => {
-                      setSelectedVersion(ver.version);
-                      setShowHistory(false);
-                    }}
-                    className={`flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all bg-[#161618] hover:bg-[#1c1c20] ${
-                      selectedVersion === ver.version ? 'border border-neutral-700' : 'border border-transparent'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-medium text-sm text-white">v{ver.version}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
-                          {ver.type}
-                        </span>
-                      </div>
-                      <p className="text-xs text-neutral-400 mt-1">{formatDate(ver.date)}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-neutral-500" />
-                  </div>
-                ))}
-              </div>
+        <div className="flex-1 overflow-y-auto px-10 py-2 space-y-10 min-h-[300px] flex flex-col relative">
+          {!isReady ? (
+            <div className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-300 ${showSpinner ? 'opacity-100' : 'opacity-0'}`}>
+              <Loader2 className="w-8 h-8 text-white/40 animate-spin" />
+              <p className="text-[10px] font-medium tracking-widest uppercase text-neutral-600 mt-4">Sincronizando</p>
             </div>
           ) : (
-            <div className="space-y-8 py-2">
-              {/* Novidades */}
-              {novidadesList.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Novidades</h3>
-                  <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {novidadesList.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <span className="text-white select-none mt-0.5">•</span>
-                        <span className="leading-relaxed">{item}</span>
-                      </li>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-10 pb-8"
+            >
+              {showHistory ? (
+                <div className="space-y-4 py-2">
+                  <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-4">Histórico de Versões</h3>
+                  <div className="space-y-2">
+                    {versionHistory.map((ver) => (
+                      <div
+                        key={ver.version}
+                        onClick={() => {
+                          setSelectedVersion(ver.version);
+                          setShowHistory(false);
+                        }}
+                        className={`flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all bg-[#161618] hover:bg-[#1c1c20] ${
+                          selectedVersion === ver.version ? 'border border-neutral-700' : 'border border-transparent'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-medium text-sm text-white">v{ver.version}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
+                              {ver.type}
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-400 mt-1">{formatDate(ver.date)}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-neutral-500" />
+                      </div>
                     ))}
-                  </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-8 py-2">
+                  {/* Novidades */}
+                  {novidadesList.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Novidades</h3>
+                      <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
+                        {novidadesList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-white select-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Correções */}
+                  {correcoesList.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Correções</h3>
+                      <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
+                        {correcoesList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-white select-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Desempenho */}
+                  {desempenhoList.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Desempenho</h3>
+                      <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
+                        {desempenhoList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-white select-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Arquitetura */}
+                  {arquiteturaList.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Arquitetura</h3>
+                      <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
+                        {arquiteturaList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-white select-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {novidadesList.length === 0 && correcoesList.length === 0 && desempenhoList.length === 0 && arquiteturaList.length === 0 && (
+                    <p className="text-neutral-400 text-sm">Nenhum detalhe registrado para esta versão.</p>
+                  )}
                 </div>
               )}
-
-              {/* Correções */}
-              {correcoesList.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Correções</h3>
-                  <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {correcoesList.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <span className="text-white select-none mt-0.5">•</span>
-                        <span className="leading-relaxed">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Desempenho */}
-              {desempenhoList.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Desempenho</h3>
-                  <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {desempenhoList.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <span className="text-white select-none mt-0.5">•</span>
-                        <span className="leading-relaxed">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Arquitetura */}
-              {arquiteturaList.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Arquitetura</h3>
-                  <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
-                    {arquiteturaList.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-3">
-                        <span className="text-white select-none mt-0.5">•</span>
-                        <span className="leading-relaxed">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {novidadesList.length === 0 && correcoesList.length === 0 && desempenhoList.length === 0 && arquiteturaList.length === 0 && (
-                <p className="text-neutral-400 text-sm">Nenhum detalhe registrado para esta versão.</p>
-              )}
-            </div>
+            </motion.div>
           )}
         </div>
 

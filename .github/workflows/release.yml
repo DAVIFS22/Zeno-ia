@@ -8,16 +8,6 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Tipo de Release (MAJOR, MINOR, PATCH)'
-        required: true
-        default: 'MINOR'
-        type: choice
-        options:
-          - MAJOR
-          - MINOR
-          - PATCH
 
 jobs:
   automatic_release_review:
@@ -60,14 +50,14 @@ jobs:
 
       - name: Commit Version Bump & Summarized Changelog
         run: |
-          git add src/lib/versionSystem.ts public/changelog.json public/release_notes.md
+          git add src/config/versionConfig.ts public/changelog.json public/release_notes.md
           git commit -m "chore(release): automatic version bump & summarized review [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main || true
 
       - name: Get Latest Version Tag
         id: version
         run: |
-          VERSION=$(node -e "import('./src/lib/versionSystem.ts').then(m => console.log(m.CURRENT_ZENO_VERSION))")
+          VERSION=$(grep -oP 'export const CURRENT_ZENO_VERSION = "\K[^"]+' src/config/versionConfig.ts)
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 

@@ -39,7 +39,7 @@ import { hasPremiumAccess } from './config/admin';
 import { filterValidSources } from './utils/sourceValidation';
 import { isAuthorizedImageUrl } from './utils/imageSecurity';
 import { copyToClipboard as performCopyToClipboard } from './utils/clipboard';
-import { checkAndGetNewVersion } from './lib/versionSystem';
+import { checkAndGetNewVersion, markVersionAsSeen, hasRelevantContent } from './lib/versionSystem';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
 const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
@@ -89,9 +89,13 @@ function MainAppInner() {
   const [showUsageCard, setShowUsageCard] = useState(true);
 
   useEffect(() => {
-    const { isNew } = checkAndGetNewVersion();
+    const { isNew, version } = checkAndGetNewVersion();
     if (isNew) {
-      ui.openModal('versionNews');
+      if (hasRelevantContent(version)) {
+        ui.openModal('versionNews');
+      } else {
+        markVersionAsSeen(version.version);
+      }
     }
   }, []);
 

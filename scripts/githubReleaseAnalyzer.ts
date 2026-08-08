@@ -19,12 +19,21 @@ function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
     try {
       lastTag = execSync('git describe --tags --abbrev=0', { encoding: 'utf-8' }).trim();
     } catch (e) {
-      lastTag = '';
+      try {
+        const lastCommitWithTag = execSync('git rev-list --tags --max-count=1', { encoding: 'utf-8' }).trim();
+        if (lastCommitWithTag) {
+          lastTag = execSync(`git describe --tags ${lastCommitWithTag}`, { encoding: 'utf-8' }).trim();
+        }
+      } catch (innerE) {
+        lastTag = '';
+      }
     }
+
+    console.log(`[ZENO RELEASE REVIEW] Última tag detectada: ${lastTag || 'Nenhuma'}`);
 
     const logCmd = lastTag 
       ? `git log ${lastTag}..HEAD --pretty=format:"%s"`
-      : `git log --pretty=format:"%s" -n 30`;
+      : `git log --pretty=format:"%s" -n 15`; // Reduzido para evitar repetições massivas
 
     const diffCmd = lastTag
       ? `git diff --name-only ${lastTag} HEAD`
@@ -34,11 +43,20 @@ function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
     const filesOutput = execSync(diffCmd, { encoding: 'utf-8' }).trim();
 
     const commits = commitsOutput ? commitsOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
+    
+    // Filtragem crítica: Remove commits que mencionam a versão atual ou são apenas chores de release
+    const filteredCommits = commits.filter(c => {
+      const lower = c.toLowerCase();
+      return !lower.includes('chore(release)') && 
+             !lower.includes(`v${CURRENT_ZENO_VERSION}`) &&
+             !lower.includes(CURRENT_ZENO_VERSION);
+    });
+
     const files = filesOutput ? filesOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
 
-    return { commits, files };
+    return { commits: filteredCommits, files };
   } catch (e) {
-    console.warn('[ZENO RELEASE REVIEW] Aviso: Histórico Git não disponível. Usando modo padrão.');
+    console.warn('[ZENO RELEASE REVIEW] Aviso: Histórico Git não disponível. Usando modo vazio.');
     return { commits: [], files: [] };
   }
 }
@@ -50,7 +68,7 @@ function calculateBumpType(commits: string[]): 'MAJOR' | 'MINOR' | 'PATCH' {
     const lower = commit.toLowerCase();
     
     // 1. MUDANÇA GRANDE (breaking change)
-    if (/^[a-z]+!:/i.test(commit) || lower.includes('breaking change')) {
+    if (/^[a-z]+(\([^)]+\))?!:/i.test(commit) || lower.includes('breaking change')) {
       return 'MAJOR';
     }
     
@@ -63,20 +81,20 @@ function calculateBumpType(commits: string[]): 'MAJOR' | 'MINOR' | 'PATCH' {
   return hasMinor ? 'MINOR' : 'PATCH';
 }
 
-async function evaluateReleaseImpact(commits: string[], files: string[]): Promise<{ bumpType: 'MAJOR' | 'MINOR' | 'PATCH'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] }> {
-  const bumpType = calculateBumpType(commits);
-
-  if (commits.length === 0 && files.length === 0) {
+async function evaluateReleaseImpact(commits: string[], files: string[]): Promise<{ bumpType: 'MAJOR' | 'MINOR' | 'PATCH' | 'NONE'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] }> {
+  if (commits.length === 0) {
     return {
-      bumpType: 'PATCH',
-      novidades: ['Refinamentos no sistema de chat e interface'],
-      correcoes: ['Correções de estabilidade'],
-      desempenho: ['Melhorias gerais de desempenho'],
-      arquitetura: ['Atualizações de rotas e metadados']
+      bumpType: 'NONE',
+      novidades: [],
+      correcoes: [],
+      desempenho: [],
+      arquitetura: []
     };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  const bumpType = calculateBumpType(commits);
+
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn('[ZENO RELEASE REVIEW] API Key não encontrada. Usando fallback heurístico.');
     return fallbackEvaluateReleaseImpact(commits, files);
@@ -85,6 +103,26 @@ async function evaluateReleaseImpact(commits: string[], files: string[]): Promis
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
     
+    // Filtro inicial básico no nível do script para ajudar a IA:
+    const validCommits = commits.filter(commit => {
+      const lower = commit.toLowerCase();
+      if (lower.startsWith('ci') || lower.startsWith('test') || lower.startsWith('lint') || lower.startsWith('chore') || lower.startsWith('build') || lower.startsWith('docs')) {
+        // Se for um 'chore' relacionado à release ou refatoração, podemos manter, senão drop.
+        if (lower.startsWith('chore') && (lower.includes('release') || lower.includes('deps'))) return true;
+        return false;
+      }
+      
+      // Keep only specific prefixes: feat, fix, perf, refactor, style(maybe?), or generic things that don't match the bad list.
+      // Explicitly keeping the requested ones:
+      if (/^(feat|fix|perf|refactor)/i.test(lower)) {
+        return true;
+      }
+      
+      // If it has no conventional commit prefix, we might want to keep it to let Claude decide,
+      // but to be safe and strict, let's keep it unless it matches the dropped ones above.
+      return true;
+    });
+
     const prompt = `Você vai receber uma lista de commits técnicos de uma atualização do app ZENO AI. Gere um changelog para o usuário final em português, com bullets curtos, específicos e concretos — cada bullet deve dizer exatamente o que mudou ou foi corrigido.
 
 REGRAS DE REVISÃO E FILTRAGEM:
@@ -100,15 +138,17 @@ Categorize as mudanças válidas em: novidades (feat), correcoes (fix), desempen
 
 Responda estritamente em JSON válido: 
 { 
-  "novidades": [...], 
-  "correcoes": [...], 
-  "desempenho": [...], 
-  "arquitetura": [...] 
+  "changes": {
+    "novidades": [...], 
+    "correcoes": [...], 
+    "desempenho": [...], 
+    "arquitetura": [...] 
+  }
 }
 Se, depois de filtrar as mudanças, uma categoria ficar vazia, omita a chave correspondente no JSON.
 
 Commits:
-${commits.join('\\n')}
+${validCommits.join('\\n')}
 
 Arquivos modificados:
 ${files.join('\\n')}`;
@@ -124,12 +164,13 @@ ${files.join('\\n')}`;
     const text = response.text?.replace(/```json/g, '').replace(/```/g, '').trim();
     if (text) {
       const parsed = JSON.parse(text);
+      const changes = parsed.changes || parsed || {};
       return {
         bumpType,
-        novidades: parsed.novidades || [],
-        correcoes: parsed.correcoes || [],
-        desempenho: parsed.desempenho || [],
-        arquitetura: parsed.arquitetura || []
+        novidades: changes.novidades || [],
+        correcoes: changes.correcoes || [],
+        desempenho: changes.desempenho || [],
+        arquitetura: changes.arquitetura || []
       };
     }
   } catch (error) {
@@ -139,14 +180,26 @@ ${files.join('\\n')}`;
   return fallbackEvaluateReleaseImpact(commits, files);
 }
 
-function fallbackEvaluateReleaseImpact(commits: string[], files: string[]): { bumpType: 'MAJOR' | 'MINOR' | 'PATCH'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] } {
+function fallbackEvaluateReleaseImpact(commits: string[], files: string[]): { bumpType: 'MAJOR' | 'MINOR' | 'PATCH' | 'NONE'; novidades: string[]; correcoes: string[]; desempenho: string[]; arquitetura: string[] } {
+  if (commits.length === 0) {
+    return { bumpType: 'NONE', novidades: [], correcoes: [], desempenho: [], arquitetura: [] };
+  }
   const bumpType = calculateBumpType(commits);
   const novidadesSet = new Set<string>();
   const correcoesSet = new Set<string>();
   const desempenhoSet = new Set<string>();
   const arquiteturaSet = new Set<string>();
 
-  for (const commit of commits) {
+  const validCommits = commits.filter(commit => {
+    const lower = commit.toLowerCase();
+    if (lower.startsWith('ci') || lower.startsWith('test') || lower.startsWith('lint') || lower.startsWith('chore') || lower.startsWith('build') || lower.startsWith('docs')) {
+      if (lower.startsWith('chore') && (lower.includes('release') || lower.includes('deps'))) return true;
+      return false;
+    }
+    return true;
+  });
+
+  for (const commit of validCommits) {
     const lower = commit.toLowerCase();
     if (lower.includes('breaking') || lower.includes('major!') || lower.includes('feat!:')) {
       arquiteturaSet.add('Atualização estrutural significativa e mudanças em APIs');
@@ -176,6 +229,11 @@ async function runAutomaticReleaseReview() {
   const { commits, files } = getGitChangesSinceLastTag();
   console.log(`[ZENO RELEASE REVIEW] Commits detectados: ${commits.length} | Arquivos modificados: ${files.length}`);
 
+  if (commits.length === 0) {
+    console.log('[ZENO RELEASE REVIEW] Nenhuma mudança detectada desde a última tag. Pulando atualização de versão.');
+    return;
+  }
+
   const { bumpType, novidades, correcoes, desempenho, arquitetura } = await evaluateReleaseImpact(commits, files);
 
   const [major, minor, patch] = parseSemVer(CURRENT_ZENO_VERSION);
@@ -203,12 +261,14 @@ async function runAutomaticReleaseReview() {
     minor: nextMinor,
     patch: nextPatch,
     date: today,
-    type: bumpType,
-    ...(novidades.length > 0 ? { novidades } : {}),
-    ...(correcoes.length > 0 ? { correcoes } : {}),
-    ...(desempenho.length > 0 ? { desempenho } : {}),
-    ...(arquitetura.length > 0 ? { arquitetura } : {}),
-    security: ['Atualização de segurança e validação de tokens']
+    type: bumpType as 'MAJOR' | 'MINOR' | 'PATCH',
+    changes: {
+      ...(novidades.length > 0 ? { novidades } : {}),
+      ...(correcoes.length > 0 ? { correcoes } : {}),
+      ...(desempenho.length > 0 ? { desempenho } : {}),
+      ...(arquitetura.length > 0 ? { arquitetura } : {}),
+      security: ['Atualização de segurança e validação de tokens']
+    }
   };
 
   const updatedHistory = [newEntry, ...ZENO_VERSION_HISTORY];
@@ -222,15 +282,19 @@ async function runAutomaticReleaseReview() {
   patch: number;
   date: string;
   type: 'MAJOR' | 'MINOR' | 'PATCH';
-  news?: string[];
+  changes?: {
+    novidades?: string[];
+    correcoes?: string[];
+    desempenho?: string[];
+    arquitetura?: string[];
+    security?: string[];
+  };
+  // Fallbacks for older entries if necessary, though it seems we can migrate them
   novidades?: string[];
-  fixes?: string[];
   correcoes?: string[];
-  performance?: string[];
   desempenho?: string[];
-  security?: string[];
-  architecture?: string[];
   arquitetura?: string[];
+  security?: string[];
 }
 
 export const CURRENT_ZENO_VERSION = "${nextVersion}";

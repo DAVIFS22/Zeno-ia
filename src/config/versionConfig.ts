@@ -5,595 +5,74 @@ export interface VersionEntry {
   patch: number;
   date: string;
   type: 'MAJOR' | 'MINOR' | 'PATCH';
-  news?: string[];
+  changes?: {
+    novidades?: string[];
+    correcoes?: string[];
+    desempenho?: string[];
+    arquitetura?: string[];
+    security?: string[];
+    news?: string[];
+    fixes?: string[];
+    performance?: string[];
+    architecture?: string[];
+  };
+  // Fallbacks for older entries if necessary, though it seems we can migrate them
   novidades?: string[];
-  fixes?: string[];
   correcoes?: string[];
-  performance?: string[];
   desempenho?: string[];
-  security?: string[];
-  architecture?: string[];
   arquitetura?: string[];
+  security?: string[];
+  news?: string[];
+  fixes?: string[];
+  performance?: string[];
+  architecture?: string[];
 }
 
-export const CURRENT_ZENO_VERSION = "2.12.0";
-export const RELEASE_DATE = "2026-08-07";
-export const GIT_TAG = "v2.12.0";
+export const CURRENT_ZENO_VERSION = "2.24.1";
+export const RELEASE_DATE = "2026-08-08";
+export const GIT_TAG = "v2.24.1";
 
 export const ZENO_VERSION_HISTORY: VersionEntry[] = [
   {
-    "version": "2.12.0",
+    "version": "2.24.1",
     "major": 2,
-    "minor": 12,
+    "minor": 24,
+    "patch": 1,
+    "date": "2026-08-08",
+    "type": "PATCH",
+    "changes": {
+      "correcoes": [
+        "teste de validação do pipeline de release"
+      ],
+      "security": [
+        "Atualização de segurança e validação de tokens"
+      ]
+    }
+  },
+  {
+    "version": "2.24.0",
+    "major": 2,
+    "minor": 24,
     "patch": 0,
     "date": "2026-08-07",
     "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.11.0",
-    "major": 2,
-    "minor": 11,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.10.0",
-    "major": 2,
-    "minor": 10,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.9.0",
-    "major": 2,
-    "minor": 9,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.8.0",
-    "major": 2,
-    "minor": 8,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.7.0",
-    "major": 2,
-    "minor": 7,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.6.0",
-    "major": 2,
-    "minor": 6,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.5.0",
-    "major": 2,
-    "minor": 5,
-    "patch": 0,
-    "date": "2026-08-07",
-    "type": "MINOR",
-    "novidades": [
-      "adiciona historico de imagens no menu lateral"
-    ],
-    "correcoes": [
-      "corrige loop infinito no microfone que travava a interface"
-    ],
-    "desempenho": [
-      "otimiza o carregamento da lista de mensagens renderizando apenas itens visiveis"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.19",
-    "major": 2,
-    "minor": 4,
-    "patch": 19,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.18",
-    "major": 2,
-    "minor": 4,
-    "patch": 18,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.17",
-    "major": 2,
-    "minor": 4,
-    "patch": 17,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.16",
-    "major": 2,
-    "minor": 4,
-    "patch": 16,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.15",
-    "major": 2,
-    "minor": 4,
-    "patch": 15,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.14",
-    "major": 2,
-    "minor": 4,
-    "patch": 14,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.13",
-    "major": 2,
-    "minor": 4,
-    "patch": 13,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.12",
-    "major": 2,
-    "minor": 4,
-    "patch": 12,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.11",
-    "major": 2,
-    "minor": 4,
-    "patch": 11,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.10",
-    "major": 2,
-    "minor": 4,
-    "patch": 10,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.9",
-    "major": 2,
-    "minor": 4,
-    "patch": 9,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.8",
-    "major": 2,
-    "minor": 4,
-    "patch": 8,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.7",
-    "major": 2,
-    "minor": 4,
-    "patch": 7,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.6",
-    "major": 2,
-    "minor": 4,
-    "patch": 6,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.5",
-    "major": 2,
-    "minor": 4,
-    "patch": 5,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.4",
-    "major": 2,
-    "minor": 4,
-    "patch": 4,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.3",
-    "major": 2,
-    "minor": 4,
-    "patch": 3,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
-  },
-  {
-    "version": "2.4.2",
-    "major": 2,
-    "minor": 4,
-    "patch": 2,
-    "date": "2026-08-07",
-    "type": "PATCH",
-    "novidades": [
-      "Refinamentos no sistema de chat e interface"
-    ],
-    "correcoes": [
-      "Correções de estabilidade"
-    ],
-    "desempenho": [
-      "Melhorias gerais de desempenho"
-    ],
-    "arquitetura": [
-      "Atualizações de rotas e metadados"
-    ],
-    "security": [
-      "Atualização de segurança e validação de tokens"
-    ]
+    "changes": {
+      "novidades": [
+        "Adicionado histórico de imagens geradas no menu lateral para acesso rápido",
+        "Implementado suporte a novos modelos de visão e processamento de imagem"
+      ],
+      "correcoes": [
+        "Corrigido erro de loop infinito no processamento de áudio/microfone",
+        "Ajustada a exibição de avatares no modo escuro"
+      ],
+      "desempenho": [
+        "Otimizado o carregamento da lista de mensagens com virtualização",
+        "Redução no tempo de resposta inicial do chat"
+      ],
+      "security": [
+        "Atualização de segurança e validação de tokens de autenticação"
+      ]
+    }
   },
   {
     "version": "2.4.1",
@@ -670,53 +149,6 @@ export const ZENO_VERSION_HISTORY: VersionEntry[] = [
     ]
   },
   {
-    "version": "2.2.0",
-    "major": 2,
-    "minor": 2,
-    "patch": 0,
-    "date": "2026-06-15",
-    "type": "MINOR",
-    "novidades": [
-      "Estúdio de Música e Síntese de Áudio com IA",
-      "Suporte a upload e processamento de vídeos e PDFs"
-    ],
-    "correcoes": [
-      "Correção de crash ao carregar anexos grandes no chat"
-    ],
-    "desempenho": [
-      "Aceleração de renderização com React.memo"
-    ],
-    "security": [
-      "Proteção contra injeção de parâmetros em rotas de API"
-    ],
-    "arquitetura": [
-      "Migração para arquitetura full-stack integrada com Firestore"
-    ]
-  },
-  {
-    "version": "2.1.0",
-    "major": 2,
-    "minor": 1,
-    "patch": 0,
-    "date": "2026-05-10",
-    "type": "MINOR",
-    "novidades": [
-      "Lançamento do painel administrativo e controle de planos Pro"
-    ],
-    "correcoes": [
-      "Correção de pequenos bugs no login com Google Auth"
-    ],
-    "desempenho": [
-      "Melhoria no tempo de resposta das rotas de estatísticas"
-    ],
-    "security": [
-      "Validação estrita de papéis administrativos"
-    ],
-    "arquitetura": [
-      "Implementação de adaptadores de banco de dados híbridos"
-    ]
-  },
-  {
     "version": "2.0.0",
     "major": 2,
     "minor": 0,
@@ -738,17 +170,6 @@ export const ZENO_VERSION_HISTORY: VersionEntry[] = [
     ],
     "arquitetura": [
       "Arquitetura modular em React e TypeScript"
-    ]
-  },
-  {
-    "version": "1.0.0",
-    "major": 1,
-    "minor": 0,
-    "patch": 0,
-    "date": "2026-01-10",
-    "type": "MAJOR",
-    "novidades": [
-      "Lançamento inicial da Zeno IA"
     ]
   }
 ];
@@ -773,6 +194,34 @@ export async function fetchRemoteChangelog(): Promise<VersionEntry | null> {
     // fallback
   }
   return null;
+}
+
+export function hasRelevantContent(version: VersionEntry): boolean {
+  if (!version) return false;
+  
+  const c = version.changes;
+  if (c) {
+    if (c.novidades && c.novidades.length > 0) return true;
+    if (c.correcoes && c.correcoes.length > 0) return true;
+    if (c.desempenho && c.desempenho.length > 0) return true;
+    if (c.arquitetura && c.arquitetura.length > 0) return true;
+    if (c.news && c.news.length > 0) return true;
+    if (c.fixes && c.fixes.length > 0) return true;
+    if (c.performance && c.performance.length > 0) return true;
+    if (c.architecture && c.architecture.length > 0) return true;
+  }
+
+  // Check direct properties (fallbacks/older format)
+  if (version.novidades && version.novidades.length > 0) return true;
+  if (version.correcoes && version.correcoes.length > 0) return true;
+  if (version.desempenho && version.desempenho.length > 0) return true;
+  if (version.arquitetura && version.arquitetura.length > 0) return true;
+  if (version.news && version.news.length > 0) return true;
+  if (version.fixes && version.fixes.length > 0) return true;
+  if (version.performance && version.performance.length > 0) return true;
+  if (version.architecture && version.architecture.length > 0) return true;
+
+  return false;
 }
 
 export function checkAndGetNewVersion(): { isNew: boolean; version: VersionEntry } {
