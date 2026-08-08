@@ -1,3 +1,4 @@
+// fix: valida pipeline de release apos correcao do email do bot
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
