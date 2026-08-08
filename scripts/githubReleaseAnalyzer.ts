@@ -44,12 +44,22 @@ function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
 
     const commits = commitsOutput ? commitsOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
     
-    // Filtragem crítica: Remove commits que mencionam a versão atual ou são apenas chores de release
+    // Filtragem crítica: Remove commits que mencionam a versão atual, são automáticos ou chores sem relevância
     const filteredCommits = commits.filter(c => {
       const lower = c.toLowerCase();
-      return !lower.includes('chore(release)') && 
-             !lower.includes(`v${CURRENT_ZENO_VERSION}`) &&
-             !lower.includes(CURRENT_ZENO_VERSION);
+      const isAuto = lower.includes('chore(release)') || 
+                     lower.includes('[skip ci]') || 
+                     lower.includes('tarefa(lançamento)') ||
+                     lower.includes(`v${CURRENT_ZENO_VERSION}`) ||
+                     lower.includes(CURRENT_ZENO_VERSION);
+      
+      const isInternal = lower.startsWith('ci') || 
+                         lower.startsWith('test') || 
+                         lower.startsWith('lint') || 
+                         lower.startsWith('build') || 
+                         lower.startsWith('docs');
+
+      return !isAuto && !isInternal;
     });
 
     const files = filesOutput ? filesOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
@@ -134,7 +144,7 @@ async function evaluateReleaseImpact(commits: string[], files: string[]): Promis
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
     const prompt = `Você vai receber uma lista de commits técnicos de uma atualização do app ZENO AI. Gere um changelog para o usuário final em português, com bullets curtos, específicos e concretos — cada bullet deve dizer exatamente o que mudou ou foi corrigido.
 
@@ -255,6 +265,11 @@ async function runAutomaticReleaseReview() {
   }
 
   const { bumpType, novidades, correcoes, desempenho, arquitetura } = await evaluateReleaseImpact(commits, files);
+
+  if (bumpType === 'NONE') {
+    console.log('[ZENO RELEASE REVIEW] Impacto da release nulo ou nenhum commit relevante. Encerrando.');
+    return;
+  }
 
   const [major, minor, patch] = parseSemVer(CURRENT_ZENO_VERSION);
   let nextMajor = major;
