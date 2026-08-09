@@ -149,6 +149,7 @@ interface SidebarNavProps {
   onOpenSettings: () => void;
   onOpenSubscriptionModal: (reason?: string) => void;
   onOpenVersionNews?: () => void;
+  onOpenAuthModal: () => void;
   user?: any;
   session?: any;
   onSwitchAccount?: (uid: string) => void;
@@ -183,6 +184,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   onOpenSettings,
   onOpenSubscriptionModal,
   onOpenVersionNews,
+  onOpenAuthModal,
   user,
   session,
   onSwitchAccount
@@ -399,8 +401,20 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         </div>
         <div ref={listContainerRef} className="flex-1 w-full min-h-0">
           {flatItems.length === 0 ? (
-            <div className={`text-center py-4 px-2 text-xs ${textMuted}`}>
-              {t.sidebar.noHistory}
+            <div className={`flex flex-col items-center justify-center text-center py-8 px-2 text-xs ${textMuted} gap-3`}>
+              <span>{t.sidebar.noHistory}</span>
+              {(!user || user.isAnonymous) && (
+                <button
+                  onClick={onOpenAuthModal}
+                  className={`px-4 py-1.5 rounded-lg border font-medium transition-all ${
+                    isDark
+                      ? 'bg-[#1C1C1E] border-[#2C2C2E] hover:bg-[#232326] text-neutral-200'
+                      : 'bg-white border-neutral-200 hover:bg-neutral-50 text-neutral-700'
+                  }`}
+                >
+                  Faça login para salvar
+                </button>
+              )}
             </div>
           ) : (
             <List<{ items: FlatSessionListItem[] }>
@@ -458,7 +472,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         <div className="relative pt-0.5">
           <div 
             onClick={() => {
-              if (session?.accounts?.length > 1) {
+              if (!user || user.isAnonymous) {
+                onOpenAuthModal();
+              } else if (session?.accounts?.length > 1) {
                 setShowAccountSwitcher(!showAccountSwitcher);
               } else {
                 onOpenSettings();
@@ -466,7 +482,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             }}
             className={`flex items-center justify-between p-2 rounded-xl ${hoverItemBg} transition-all cursor-pointer group`}
           >
-            {user ? (
+            {user && !user.isAnonymous ? (
               <div className="flex items-center justify-between w-full min-w-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {user.photoURL ? (
@@ -495,10 +511,17 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             ) : (
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
-                  <GoogleLogo className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className={`text-xs font-medium ${textMuted}`}>
-                    Entrar com Google
-                  </span>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-[#232326]' : 'bg-neutral-200'}`}>
+                    <User className="w-4 h-4 text-neutral-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold truncate ${textMain}`}>
+                      Visitante
+                    </p>
+                    <p className="text-[10px] text-blue-500 font-medium truncate">
+                      Faça login
+                    </p>
+                  </div>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
               </div>

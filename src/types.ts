@@ -213,6 +213,7 @@ export type UserSettings = {
   rememberDevice: boolean;
   // Personalização & Idioma
   language: 'pt-BR' | 'en-US' | 'es-ES' | 'fr-FR' | 'zh-CN' | 'auto';
+  geminiApiKey?: string;
   groupByDate?: boolean;
   isSmartMode: boolean;
   // Notificações

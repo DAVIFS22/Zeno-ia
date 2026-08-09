@@ -53,13 +53,13 @@ export const SupportChatTab: React.FC = () => {
     if (!user) return;
     const q = query(
       collection(db, 'supportTickets'),
+      where('userId', '==', user.uid),
       limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const userTickets = tickets.filter((t: any) => t.userId === user.uid || t.userEmail === user.email);
-      const active = userTickets.find((t: any) => t.status === 'pending_human' || t.status === 'human_active');
+      const active = tickets.find((t: any) => t.status === 'pending_human' || t.status === 'human_active');
       if (active) {
         setActiveTicket(active);
       } else {

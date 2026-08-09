@@ -1,14 +1,12 @@
-## Zeno IA v2.25.0
+## Zeno IA v2.24.3
 
+*Esta versão foca em melhorias internas de infraestrutura, segurança e manutenção técnica.*
 
-
-### Novidades
-- implement localized error handling
 
 
 
 
 
 - **Data de Publicação**: 2026-08-08
-- **Tipo de Release**: MINOR
-- **Status de Conteúdo**: Relevante ao Usuário
+- **Tipo de Release**: PATCH
+- **Status de Conteúdo**: Manutenção Interna

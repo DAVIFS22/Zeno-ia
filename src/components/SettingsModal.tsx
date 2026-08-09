@@ -3,7 +3,7 @@ import {
   X, User, Moon, Sun, Brain, Shield,
   Download, Trash2, Check, Sparkles, Plus, RefreshCw,
   Lock, Zap, Wand2, Globe, ArrowLeft, ChevronRight, Laptop,
-  Volume2, Bell, Code, Fingerprint, ExternalLink
+  Volume2, Bell, Code, Fingerprint, ExternalLink, LogOut
 } from 'lucide-react';
 import { UserSettings } from '../types';
 import { SupportChatTab } from "./SupportChatTab";
@@ -72,6 +72,7 @@ export function SettingsModal({
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('account');
   const [subView, setSubView] = useState<'main' | 'subscriptions'>('main');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const safeSettings: UserSettings = {
     userName: settings?.userName || user?.displayName || 'Usuário ZENO',
@@ -189,35 +190,52 @@ export function SettingsModal({
                   <div className="space-y-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.profileAccounts}</h3>
                     {session?.accounts?.length > 0 ? (
-                      session.accounts.map((acc: any) => (
-                        <div key={acc.uid} className={`p-4 rounded-xl border flex items-center justify-between ${
-                          acc.uid === session.activeUid
-                            ? isDark ? 'bg-[#232326]/60 border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'
-                            : isDark ? 'bg-[#17171a] border-[#2C2C2E]' : 'bg-white border-neutral-200'
-                        }`}>
-                          <div className="flex items-center gap-3 min-w-0">
-                            {acc.photoURL ? (
-                              <img src={acc.photoURL} alt={acc.displayName} className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-full bg-[#232326] flex items-center justify-center">
-                                <User className="w-4 h-4 text-neutral-400" />
+                      <div className="space-y-2">
+                        {session.accounts.map((acc: any) => (
+                          <div key={acc.uid} className={`p-4 rounded-xl border flex items-center justify-between ${
+                            acc.uid === session.activeUid
+                              ? isDark ? 'bg-[#232326]/60 border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'
+                              : isDark ? 'bg-[#17171a] border-[#2C2C2E]' : 'bg-white border-neutral-200'
+                          }`}>
+                            <div className="flex items-center gap-3 min-w-0">
+                              {acc.photoURL ? (
+                                <img src={acc.photoURL} alt={acc.displayName} className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-[#232326] flex items-center justify-center">
+                                  <User className="w-4 h-4 text-neutral-400" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold truncate">{acc.displayName || 'Usuário ZENO'}</p>
+                                <p className="text-xs text-neutral-400 truncate">{maskEmail(acc.email)}</p>
                               </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold truncate">{acc.displayName || 'Usuário ZENO'}</p>
-                              <p className="text-xs text-neutral-400 truncate">{maskEmail(acc.email)}</p>
                             </div>
+                            {acc.uid !== session.activeUid && (
+                              <button
+                                onClick={() => onSwitchAccount?.(acc.uid)}
+                                className="px-3 py-1 rounded-lg text-xs font-medium bg-[#232326] hover:bg-neutral-700 text-neutral-200 transition-colors"
+                              >
+                                Alternar
+                              </button>
+                            )}
                           </div>
-                          {acc.uid !== session.activeUid && (
-                            <button
-                              onClick={() => onSwitchAccount?.(acc.uid)}
-                              className="px-3 py-1 rounded-lg text-xs font-medium bg-[#232326] hover:bg-neutral-700 text-neutral-200 transition-colors"
-                            >
-                              Alternar
-                            </button>
-                          )}
-                        </div>
-                      ))
+                        ))}
+
+                        {isAuthenticated && (
+                          <button
+                            type="button"
+                            onClick={() => setShowLogoutConfirm(true)}
+                            className={`w-full py-2.5 mt-2 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                              isDark 
+                                ? 'border-sky-500/30 bg-sky-500/5 text-sky-400 hover:bg-sky-500/10' 
+                                : 'border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100'
+                            }`}
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Sair da conta</span>
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <div className={`p-5 rounded-xl border text-center ${isDark ? 'border-[#2C2C2E] bg-[#17171a]' : 'border-neutral-200 bg-neutral-50'}`}>
                         <p className="text-xs text-neutral-400 mb-3">{t.settings.connectGoogle}</p>
@@ -248,10 +266,10 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ rememberDevice: !settings.rememberDevice })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        settings.rememberDevice ? 'bg-neutral-200' : 'bg-[#232326]'
+                        settings.rememberDevice ? 'bg-sky-600' : 'bg-[#232326]'
                       }`}
                     >
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
                         settings.rememberDevice ? 'translate-x-4' : 'translate-x-1'
                       }`} />
                     </button>
@@ -461,6 +479,25 @@ export function SettingsModal({
                       className="w-full accent-neutral-200 cursor-pointer"
                     />
                   </div>
+
+                  <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-neutral-400" />
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Chave de API Pessoal (Opcional)</h3>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 leading-relaxed">
+                      Se você possui sua própria chave da Gemini API, pode inseri-la abaixo. Isso garante que você sempre tenha acesso mesmo que a cota global do ZENO seja atingida. A chave é salva localmente e enviada apenas para processar suas mensagens.
+                    </p>
+                    <input
+                      type="password"
+                      value={settings.geminiApiKey || ''}
+                      onChange={(e) => onUpdateSettings({ geminiApiKey: e.target.value })}
+                      placeholder="Cole sua GEMINI_API_KEY aqui..."
+                      className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none ${
+                        isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
+                      }`}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -594,6 +631,54 @@ export function SettingsModal({
         </div>
 
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4 animate-fadeIn">
+          <div className={`p-6 rounded-2xl max-w-sm w-full border ${
+            isDark ? 'border-[#2C2C2E] bg-[#17171a] text-white' : 'border-neutral-200 bg-white text-neutral-900 shadow-2xl'
+          } space-y-4`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>
+                <LogOut className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-base">Tem certeza que deseja sair?</h3>
+            </div>
+            <p className="text-sm text-neutral-400 leading-relaxed">
+              Você precisará fazer login novamente para acessar suas conversas e configurações personalizadas.
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await onLogout?.();
+                    setShowLogoutConfirm(false);
+                    onClose();
+                  } catch (err) {
+                    console.error("Erro ao realizar logout:", err);
+                    setShowLogoutConfirm(false);
+                  }
+                }}
+                className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
+                  isDark ? 'bg-white text-black hover:bg-neutral-200' : 'bg-neutral-900 text-white hover:bg-neutral-800'
+                }`}
+              >
+                Sim, sair agora
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${
+                  isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
+                }`}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showClearConfirm && (

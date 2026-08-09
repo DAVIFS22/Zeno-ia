@@ -15,6 +15,7 @@ interface MusicStudioModalProps {
   userEmail: string;
   dailyUsage: any;
   onUpdateUsage: (newUsage: any) => void;
+  geminiApiKey?: string;
 }
 
 export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
@@ -23,7 +24,8 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
   userPlan,
   userEmail,
   dailyUsage,
-  onUpdateUsage
+  onUpdateUsage,
+  geminiApiKey
 }) => {
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
@@ -170,7 +172,8 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
           genre,
           keySig: technicalKeySig,
           tempo,
-          mode
+          mode,
+          geminiApiKey
         })
       });
       clearTimeout(timeoutId);

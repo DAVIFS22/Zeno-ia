@@ -308,10 +308,6 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   }, [input]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isPro && onOpenProFeatureModal) {
-      onOpenProFeatureModal();
-      return;
-    }
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -321,22 +317,61 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
       const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md|csv|txt)$/i);
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-      reader.onload = (event) => {
-        const newAttachment: FileAttachment = {
-          id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          name: file.name,
-          size: file.size,
-          type: isImg ? 'image' : isPdf ? 'document' : isCode ? 'code' : 'document',
-          url: (isImg || isPdf) ? (event.target?.result as string) : undefined,
-          content: !(isImg || isPdf) ? (event.target?.result as string) : undefined,
-        };
-        onAddAttachment(newAttachment);
-      };
+      if (isImg) {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
 
-      if (isImg || isPdf) {
-        reader.readAsDataURL(file);
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            const newAttachment: FileAttachment = {
+              id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+              name: file.name,
+              size: Math.round((dataUrl.length - 22) * 3 / 4), // Approximate size
+              type: 'image',
+              url: dataUrl,
+            };
+            onAddAttachment(newAttachment);
+          }
+        };
+        img.src = URL.createObjectURL(file);
       } else {
-        reader.readAsText(file);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const newAttachment: FileAttachment = {
+            id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            name: file.name,
+            size: file.size,
+            type: isPdf ? 'document' : isCode ? 'code' : 'document',
+            url: isPdf ? (event.target?.result as string) : undefined,
+            content: !isPdf ? (event.target?.result as string) : undefined,
+          };
+          onAddAttachment(newAttachment);
+        };
+        if (isPdf) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
       }
     });
 
@@ -551,36 +586,6 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           </div>
         )}
 
-        {/* Attached Files */}
-        {attachments.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
-            {attachments.map(att => (
-              <div
-                key={att.id}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                  isDark ? 'bg-[#232326] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
-                }`}
-              >
-                {att.type === 'image' && att.url ? (
-                  <img src={att.url} alt={att.name} className="w-3.5 h-3.5 rounded object-cover" />
-                ) : att.type === 'code' ? (
-                  <Code className="w-3.5 h-3.5 text-neutral-400" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-neutral-400" />
-                )}
-                <span className="truncate max-w-[120px]">{att.name}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachment(att.id)}
-                  className="p-0.5 hover:bg-neutral-700/40 rounded text-neutral-400 hover:text-white"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Input Bar */}
         <form
           onSubmit={(e) => {
@@ -589,7 +594,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               onSubmit(e);
             }
           }}
-          className={`relative flex items-center gap-2 rounded-full min-h-[54px] max-h-[180px] px-4 py-2 transition-all duration-200 border ${
+          className={`relative flex flex-col rounded-[24px] min-h-[54px] max-h-[300px] py-2 transition-all duration-200 border ${
             isDragging 
               ? isDark 
                 ? 'border-neutral-600 bg-[#232326]'
@@ -599,8 +604,43 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 : 'bg-white border-neutral-200/90 focus-within:border-neutral-400 shadow-2xs'
           }`}
         >
-          {/* File Attachment */}
-          <button
+          {/* Attached Files Preview */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 pt-2 pb-2 px-4">
+              {attachments.map(att => (
+                <div
+                  key={att.id}
+                  className="relative group shrink-0"
+                  title={att.name}
+                >
+                  <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
+                    isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
+                  }`}>
+                    {att.type === 'image' && att.url ? (
+                      <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <>
+                        {att.type === 'code' ? <Code className="w-5 h-5 text-neutral-400 mb-0.5" /> : <FileText className="w-5 h-5 text-neutral-400 mb-0.5" />}
+                        <span className="truncate w-full text-center px-1 text-[9px] font-medium text-neutral-500">{att.name.split('.').pop()?.toUpperCase()}</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(att.id)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-black text-white rounded-full backdrop-blur-md shadow-sm transition-colors border border-white/10"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input Controls Row */}
+          <div className="flex items-center gap-2 w-full px-2">
+            {/* File Attachment */}
+            <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || isListening || isTranscribing}
@@ -716,6 +756,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
               </button>
             )
           )}
+          </div>
         </form>
 
         <div className="text-center text-[10px] text-neutral-500 mt-1.5">

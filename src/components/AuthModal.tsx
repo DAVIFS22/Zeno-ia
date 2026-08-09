@@ -78,7 +78,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -93,7 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-            className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[440px] border border-[#2C2C2E]/50 overflow-hidden z-10"
+            className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[360px] border border-[#2C2C2E]/50 max-h-[90vh] overflow-y-auto z-10"
             onClick={e => e.stopPropagation()}
           >
             <button 
@@ -103,28 +103,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
               <X className="w-5 h-5" />
             </button>
             
-            <div className="p-8 sm:p-12">
-              <div className="flex flex-col items-center text-center mb-10">
-                <div className="mb-6">
-                  <ZenoLogo size={48} variant="monochrome" theme="dark" />
+            <div className="p-5 sm:p-8">
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="mb-3">
+                  <ZenoLogo size={36} variant="monochrome" theme="dark" />
                 </div>
                 
-                <h2 className="text-[28px] font-bold tracking-tight text-white mb-3">
-                  {isLogin ? t.auth.signInTitle || 'Entrar no ZENO AI' : t.auth.signUpTitle || 'Criar conta ZENO AI'}
+                <h2 className="text-[22px] font-bold tracking-tight text-white mb-2">
+                  Entre ou cadastre-se
                 </h2>
                 
-                <p className="text-[14px] text-neutral-400 leading-relaxed max-w-[320px]">
-                  {message || t.auth.welcomeMessage || "Faça login para acessar suas conversas, sincronizar seu histórico, gerenciar sua assinatura ZENO Pro e utilizar todos os recursos da plataforma."}
+                <p className="text-[13px] text-neutral-400 leading-relaxed max-w-[280px]">
+                  Você vai poder aproveitar respostas inteligentes e, além disso, carregar imagens, arquivos e muito mais.
                 </p>
               </div>
 
               {error && (
-                <div className="mb-6 p-4 rounded-[16px] bg-[#1C1C1E] border border-[#2C2C2E] flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="mb-5 p-3 rounded-[12px] bg-[#1C1C1E] border border-[#2C2C2E] flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="text-neutral-500 mt-0.5">
                     <AlertCircle className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-[13px] text-neutral-300 leading-snug">{error}</p>
+                    <p className="text-[12px] text-neutral-300 leading-snug">{error}</p>
                     {errorCode === 'auth/email-already-in-use' && !isLogin && (
                       <button 
                         onClick={() => {
@@ -132,38 +132,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                           setError(null);
                           setErrorCode(null);
                         }}
-                        className="mt-2 text-white text-[13px] font-bold hover:underline block"
+                        className="mt-2 text-white text-[12px] font-bold hover:underline block"
                       >
                         {t.auth.signInInstead || "Entrar na sua conta"}
+                      </button>
+                    )}
+                    {errorCode === 'auth/weak-password' && (
+                      <p className="mt-1 text-[11px] text-neutral-500">
+                        Sugestão: Use uma combinação de letras, números e símbolos para maior segurança.
+                      </p>
+                    )}
+                    {(errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password') && isLogin && (
+                      <button 
+                        type="button"
+                        className="mt-2 text-white text-[12px] font-bold hover:underline block"
+                      >
+                        {t.auth.forgotPassword || "Esqueci minha senha"}
                       </button>
                     )}
                   </div>
                 </div>
               )}
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <button 
                   onClick={handleGoogleSignIn} 
-                  className="w-full h-[52px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[15px]"
+                  className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[14px]"
                 >
                   <GoogleLogo className="w-5 h-5 flex-shrink-0" />
-                  {t.auth.google}
+                  Continuar com o Google
                 </button>
 
-                <div className="flex items-center gap-4 py-2">
-                  <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
-                  <span className="text-[12px] text-neutral-600 font-medium tracking-widest uppercase">{t.common.or || 'ou'}</span>
-                  <div className="flex-1 h-[1px] bg-[#1C1C1E]"></div>
+                <button 
+                  onClick={() => setError("O login por telefone requer configuração de SMS no Firebase. Em breve!")} 
+                  className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[14px]"
+                >
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Continuar com um telefone
+                </button>
+
+                <div className="flex items-center gap-4 py-1.5">
+                  <div className="flex-1 h-[1px] bg-[#2C2C2E]"></div>
+                  <span className="text-[11px] text-neutral-500 font-medium tracking-widest uppercase">OU</span>
+                  <div className="flex-1 h-[1px] bg-[#2C2C2E]"></div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-3">
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="space-y-2">
                     <input 
                       type="email" 
-                      placeholder={t.auth.email} 
+                      placeholder="Endereço de e-mail" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
-                      className="w-full px-5 h-[52px] rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
+                      className="w-full px-5 h-[46px] rounded-full bg-black text-white border-none focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-all text-[14px] placeholder:text-neutral-500"
                     />
                     
                     <div className="relative">
@@ -172,12 +195,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                         placeholder={t.auth.password} 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        className="w-full px-5 h-[52px] pr-12 rounded-[16px] bg-[#1a1a1a] text-white border border-[#2C2C2E] focus:outline-none focus:border-neutral-600 transition-all text-[15px] placeholder:text-neutral-600"
+                        className="w-full px-5 h-[46px] pr-12 rounded-full bg-black text-white border-none focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-all text-[14px] placeholder:text-neutral-500"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-400 transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
                       >
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -185,8 +208,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                   </div>
 
                   {isLogin && (
-                    <div className="flex justify-end">
-                      <button type="button" className="text-[13px] text-neutral-500 hover:text-white transition-colors">
+                    <div className="flex justify-end px-2">
+                      <button type="button" className="text-[12px] text-neutral-500 hover:text-white transition-colors">
                         {t.auth.forgotPassword}
                       </button>
                     </div>
@@ -195,22 +218,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
                   <button 
                     type="submit" 
                     disabled={isLoading}
-                    className="w-full h-[54px] rounded-[18px] bg-white text-black hover:bg-neutral-200 font-bold transition-all text-[16px] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full h-[48px] rounded-full bg-white text-black hover:bg-neutral-200 font-medium transition-all text-[15px] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? t.common.loading : t.common.next}
+                    {isLoading ? t.common.loading : "Continuar"}
                   </button>
                 </form>
               </div>
 
-              <div className="mt-10 text-center">
-                <p className="text-[14px] text-neutral-500">
-                  {isLogin ? t.auth.noAccount : t.auth.hasAccount}
+              <div className="mt-6 text-center">
+                <p className="text-[13px] text-neutral-500">
+                  {isLogin ? "Não tem uma conta?" : "Já tem uma conta?"}
                   <button 
                     type="button"
                     onClick={() => setIsLogin(!isLogin)}
-                    className="ml-2 text-white font-bold hover:underline focus:outline-none"
+                    className="ml-2 text-white hover:underline focus:outline-none"
                   >
-                    {isLogin ? t.auth.signUp : t.auth.signIn}
+                    {isLogin ? "Cadastre-se" : "Entrar"}
                   </button>
                 </p>
               </div>

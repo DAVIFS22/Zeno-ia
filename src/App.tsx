@@ -172,16 +172,27 @@ function MainAppInner() {
   const prevUserIdRef = useRef<string>(userId);
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to be determined
+
     if (prevUserIdRef.current !== userId) {
       prevUserIdRef.current = userId;
       console.log('[ACCOUNT ISOLATION] Alternando contexto para o UID:', userId);
 
-      // 1. Initialize account on frontend directly, because backend admin SDK lacks permissions in preview
+      // Defensive check: If we have a profile UID but Firebase Auth isn't matching it yet, wait
+      // This avoids "Missing or insufficient permissions" during the split-second of auth transition
+      if (profile && user && user.uid !== userId) {
+        console.warn('[ACCOUNT ISOLATION] UID mismatch during transition. Skipping init.');
+        return;
+      }
+
+      // 1. Initialize account on frontend directly
       const initAccountLocally = async () => {
         try {
           const userRef = doc(db, 'users', userId);
           const userSnap = await getDoc(userRef);
+          
           if (!userSnap.exists()) {
+            console.log('[ACCOUNT ISOLATION] Initializing new user document for:', userId);
             await setDoc(userRef, {
               userId,
               email: profile?.email || '',
@@ -202,6 +213,7 @@ function MainAppInner() {
               trialUsed: false,
               history: []
             }, { merge: true });
+            console.log('[ACCOUNT ISOLATION] User initialization successful.');
           }
         } catch(e) {
           console.error("Failed to initialize user in Firestore:", e);
@@ -257,23 +269,6 @@ function MainAppInner() {
       } catch (e) {
         console.error('Erro ao carregar configurações isoladas:', e);
       }
-
-      // 3. Load chat sessions for new UID
-      try {
-        const savedSessions = localStorage.getItem(`${STORAGE_KEY_SESSIONS}_${userId}`);
-        if (savedSessions) {
-          const parsed = JSON.parse(savedSessions);
-          setSessions(Array.isArray(parsed) ? parsed : []);
-        } else {
-          setSessions([]);
-        }
-      } catch (e) {
-        setSessions([]);
-      }
-
-      // 4. Load current session ID for new UID
-      const savedId = localStorage.getItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`);
-      setCurrentSessionId(savedId && savedId !== 'null' ? savedId : null);
 
       // 5. Fetch limits for new UID
       fetchLimits();
@@ -380,9 +375,13 @@ function MainAppInner() {
   );
 
   const handleChatSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
+    if (!user || user.isAnonymous) {
+      ui.openModal('auth', { data: { message: "Faça login para salvar seu progresso e acessar todos os recursos." } });
+      return;
+    }
     setIsNewChat(false);
     await handleSubmit(e, overrideText, extraContext);
-  }, [handleSubmit]);
+  }, [handleSubmit, user, ui]);
 
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
@@ -407,6 +406,26 @@ function MainAppInner() {
     }
     return userSettings.theme || 'dark';
   }, [userSettings.theme, systemTheme]);
+
+  const handleLogout = useCallback(async () => {
+    console.log('[LOGOUT] Iniciando logout do usuário...');
+    try {
+      await logout();
+      console.log('[LOGOUT] signOut do Firebase concluído.');
+      
+      // Redirect to new chat and clear local state
+      setIsNewChat(true);
+      setCurrentSessionId(null);
+      setSearchQuery('');
+      
+      // Force UI to reset to default speed
+      setSpeed('smart');
+      
+      console.log('[LOGOUT] Estado local resetado com sucesso.');
+    } catch (error) {
+      console.error('[LOGOUT] Erro durante o processo de logout:', error);
+    }
+  }, [logout]);
 
   const logoVariant = userSettings.logoVariant;
 
@@ -586,23 +605,13 @@ function MainAppInner() {
   // Persistence Effects
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
-    } catch (e) {
-      console.error('Error saving sessions:', e);
+      // Clear legacy global key if it exists to free up quota
+      localStorage.removeItem(STORAGE_KEY_SESSIONS);
+      localStorage.removeItem(STORAGE_KEY_CURRENT_ID);
+    } catch (e: any) {
+      console.error('Error clearing legacy storage keys:', e);
     }
-  }, [sessions]);
-
-  useEffect(() => {
-    try {
-      if (currentSessionId) {
-        localStorage.setItem(STORAGE_KEY_CURRENT_ID, currentSessionId);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_CURRENT_ID);
-      }
-    } catch (e) {
-      console.error('Error saving current session ID:', e);
-    }
-  }, [currentSessionId]);
+  }, []);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -836,10 +845,10 @@ function MainAppInner() {
   const handleClearAllHistory = useCallback(() => {
     setSessions([]);
     setCurrentSessionId(null);
-    localStorage.removeItem(STORAGE_KEY_SESSIONS);
-    localStorage.removeItem(STORAGE_KEY_CURRENT_ID);
+    localStorage.removeItem(`${STORAGE_KEY_SESSIONS}_${userId}`);
+    localStorage.removeItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`);
     ui.closeModal('settings');
-  }, [ui]);
+  }, [ui, userId]);
 
   const handleExportAllData = useCallback(() => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessions, null, 2));
@@ -915,6 +924,7 @@ function MainAppInner() {
         onNewChat={handleNewChat}
         onToggleSearchVisible={handleToggleSearchVisible}
         onOpenSettings={() => ui.openModal('settings')}
+        onOpenAuthModal={() => ui.openModal('auth')}
         onOpenImageLibrary={() => ui.openModal('imageLibrary')}
         onOpenProjects={() => ui.openModal('projects')}
         onOpenPlugins={() => ui.openModal('plugins')}
@@ -954,6 +964,7 @@ function MainAppInner() {
           onOpenSubscriptionModal={handleOpenSubscriptionModal}
           onToggleTheme={handleToggleTheme}
           onOpenSettings={() => ui.openModal('settings')}
+          onOpenAuthModal={() => ui.openModal('auth')}
           onNewChat={handleNewChat}
           user={profile}
         />
@@ -1083,7 +1094,7 @@ function MainAppInner() {
         userId={userId}
         profile={profile}
         session={session}
-        logout={logout}
+        logout={handleLogout}
         signInWithGoogle={signInWithGoogle}
         switchAccount={switchAccount}
         authLoading={authLoading}

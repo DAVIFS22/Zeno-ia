@@ -28,27 +28,11 @@ export interface VersionEntry {
   architecture?: string[];
 }
 
-export const CURRENT_ZENO_VERSION = "2.25.0";
+export const CURRENT_ZENO_VERSION = "2.24.3";
 export const RELEASE_DATE = "2026-08-08";
-export const GIT_TAG = "v2.25.0";
+export const GIT_TAG = "v2.24.3";
 
 export const ZENO_VERSION_HISTORY: VersionEntry[] = [
-  {
-    "version": "2.25.0",
-    "major": 2,
-    "minor": 25,
-    "patch": 0,
-    "date": "2026-08-08",
-    "type": "MINOR",
-    "changes": {
-      "novidades": [
-        "implement localized error handling"
-      ],
-      "security": [
-        "Atualização de segurança e validação de tokens"
-      ]
-    }
-  },
   {
     "version": "2.24.3",
     "major": 2,

@@ -32,7 +32,18 @@ export function useChat(
   const handleSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
     if (e) e.preventDefault();
 
-    const textToSend = overrideText !== undefined ? overrideText : input;
+    let textToSend = overrideText !== undefined ? overrideText : input;
+    
+    // Auto-inject default prompt if attachments exist but text is empty
+    if (textToSend.trim() === '' && attachments.length > 0) {
+      const firstAttachment = attachments[0];
+      if (firstAttachment.type === 'image') {
+        textToSend = "Descreva esta imagem.";
+      } else {
+        textToSend = "Analise este arquivo.";
+      }
+    }
+
     if ((!textToSend.trim() && attachments.length === 0) || isLoading) return;
 
     const intent = detectIntent(textToSend);
@@ -131,6 +142,7 @@ export function useChat(
         userId,
         userEmail: userSettings.userEmail,
         plan: isPro ? 'ZENO Pro' : userSettings.plan,
+        geminiApiKey: userSettings.geminiApiKey,
         history: sessions.find(s => s.id === sessionId)?.messages.slice(-10).map(m => ({ role: m.role, text: m.text })) || [],
       };
 
@@ -293,6 +305,8 @@ export function useChat(
 
       if (errorMessage === "Failed to fetch" || err.name === "TypeError") {
         errorMessage = "Falha na conexão com o servidor. Verifique sua conexão com a internet e tente novamente em instantes.";
+      } else if (errorMessage.includes("Mensagem é obrigatória") || errorMessage.includes("message is required")) {
+        errorMessage = "Por favor, digite uma mensagem ou inclua um anexo para enviar.";
       }
 
       setSessions(prev =>

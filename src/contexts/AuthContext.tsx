@@ -28,6 +28,7 @@ export interface AuthProfile {
   photoURL: string | null;
   isAdmin: boolean;
   isPro: boolean;
+  isAnonymous: boolean;
   unlimited: boolean;
   role: string;
   rememberDevice: boolean;
@@ -84,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: currentUser.photoURL,
           isAdmin: isAdmin,
           isPro: isAdmin,
+          isAnonymous: currentUser.isAnonymous,
           unlimited: isAdmin,
           role: isAdmin ? 'admin' : 'user',
           rememberDevice: true,
@@ -92,7 +94,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         setLoading(false);
       } else {
-        addLog('AuthProvider: No user detected, signing in anonymously');
+        addLog('AuthProvider: No user detected, clearing local auth state');
+        // CRITICAL FIX: Clear state immediately before signing in anonymously
+        setUser(null);
+        setProfile(null);
+        
+        addLog('AuthProvider: Signing in anonymously');
         try {
           await signInAnonymously(auth);
         } catch (error) {
@@ -121,14 +128,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithGoogle = async (options?: { rememberDevice: boolean }) => {
+    addLog('AuthContext: Initiating Google Sign-In');
     try {
       if (options?.rememberDevice) {
         setPersistence(auth, browserLocalPersistence);
       } else {
         setPersistence(auth, browserSessionPersistence);
       }
+      addLog('AuthContext: Opening Google Sign-In popup');
       await signInWithPopup(auth, googleProvider);
+      addLog('AuthContext: Google Sign-In successful');
     } catch (error: any) {
+      addLog(`AuthContext: Google Sign-In ERROR: [${error.code}] ${error.message}`);
       if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-closed-by-user') {
         console.warn('Google sign-in popup was closed by user.');
         return;

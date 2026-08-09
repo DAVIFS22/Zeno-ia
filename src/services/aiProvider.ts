@@ -9,6 +9,7 @@ export interface AIProviderOptions {
   tools?: any[];
   isSearchIntent?: boolean;
   category?: 'general' | 'think' | 'code' | 'speed' | 'search' | 'image';
+  userGeminiApiKey?: string;
 }
 
 export interface AIProviderResult {
@@ -132,7 +133,9 @@ export function startHealthCheckLoop(aiClient: GoogleGenAI) {
         
         // Chamada mínima para testar a saúde
         if (provider === 'gemini') {
-            if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY faltando");
+            if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'dummy_key') {
+               throw new Error("GEMINI_API_KEY ausente ou inválida (dummy)");
+            }
             await aiClient.models.generateContent({
               model,
               contents: ["1"],
@@ -239,9 +242,15 @@ export async function generateTextWithFallback(
         try {
           console.log(`[AI Provider] Calling Gemini (${item.model}). Tools: ${tools?.length || 0}`);
           
+          // Use user-provided API key if available for Gemini
+          let effectiveClient = aiClient;
+          if (options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10) {
+            console.log(`[AI Provider] Using user-provided Gemini API Key for request.`);
+            effectiveClient = new GoogleGenAI({ apiKey: options.userGeminiApiKey.trim() });
+          }
           
           const response = await Promise.race([
-            aiClient.models.generateContent({
+            effectiveClient.models.generateContent({
               model: item.model,
               contents,
               config: {
@@ -304,14 +313,41 @@ clearTimeout(timeoutId);
           }
         } catch (geminiErr: any) {
           clearTimeout(timeoutId);
-          console.error(`[AI Provider] Gemini API Error (${item.model}):`, {
-            message: geminiErr.message,
-            status: geminiErr.status,
-            code: geminiErr.code,
-            details: geminiErr.details,
-            stack: geminiErr.stack ? (geminiErr.stack.split('\n')[1] || geminiErr.stack) : 'no stack'
-          });
-          recordFailure(key, geminiErr.message?.includes('429'));
+          
+          let errorBody: any = {};
+          try {
+            if (geminiErr.message && geminiErr.message.includes('{')) {
+              const jsonStart = geminiErr.message.indexOf('{');
+              const jsonStr = geminiErr.message.substring(jsonStart);
+              errorBody = JSON.parse(jsonStr);
+            }
+          } catch (e) {}
+
+          const isInvalidKey = 
+            geminiErr.message?.includes('API_KEY_INVALID') || 
+            geminiErr.message?.includes('API key not valid') || 
+            errorBody?.error?.message?.includes('API key not valid') ||
+            errorBody?.error?.status === 'INVALID_ARGUMENT';
+
+          const isQuota = 
+            geminiErr.message?.includes('429') || 
+            geminiErr.message?.includes('QUOTA') || 
+            geminiErr.message?.includes('RESOURCE_EXHAUSTED') ||
+            errorBody?.error?.status === 'RESOURCE_EXHAUSTED';
+
+          if (!isInvalidKey && !isQuota) {
+            console.error(`[AI Provider] Gemini API Error (${item.model}):`, {
+              message: geminiErr.message,
+              status: geminiErr.status,
+              code: geminiErr.code,
+              details: geminiErr.details,
+              stack: geminiErr.stack ? (geminiErr.stack.split('\n')[1] || geminiErr.stack) : 'no stack'
+            });
+          } else {
+            console.log(`[AI Provider] Gemini ${isInvalidKey ? 'Auth' : 'Quota'} issue (${item.model}): ${isInvalidKey ? 'Invalid API Key' : 'Rate Limit/Quota'}`);
+          }
+
+          recordFailure(key, isQuota);
           lastError = geminiErr;
           continue; // Try next model in list
         }
@@ -387,7 +423,37 @@ clearTimeout(timeoutId);
     }
   }
 
-  if (lastError && (lastError.message?.includes('API_KEY_INVALID') || lastError.message?.includes('API key not valid') || lastError.message?.includes('400'))) {
+  let isInvalidKey = false;
+  let isQuota = false;
+
+  if (lastError) {
+    let errorBody: any = {};
+    try {
+      if (lastError.message && lastError.message.includes('{')) {
+        const jsonStart = lastError.message.indexOf('{');
+        const jsonStr = lastError.message.substring(jsonStart);
+        errorBody = JSON.parse(jsonStr);
+      }
+    } catch (e) {}
+
+    isInvalidKey = 
+      lastError.message?.includes('API_KEY_INVALID') || 
+      lastError.message?.includes('API key not valid') || 
+      lastError.message?.includes('INVALID_ARGUMENT') ||
+      errorBody?.error?.message?.includes('API key not valid') ||
+      errorBody?.error?.status === 'INVALID_ARGUMENT' ||
+      String(lastError.status) === '400' ||
+      String(lastError.code) === '400';
+
+    isQuota = 
+      lastError.message?.includes('429') || 
+      lastError.message?.includes('QUOTA') || 
+      lastError.message?.includes('RESOURCE_EXHAUSTED') ||
+      lastError.message?.includes('resource_exhausted') ||
+      errorBody?.error?.status === 'RESOURCE_EXHAUSTED';
+  }
+
+  if (isInvalidKey) {
     return {
       text: "⚠️ **Configuração de API Necessária**: A chave de API fornecida é inválida ou ausente. Para interagir com o ZENO IA, configure uma `GEMINI_API_KEY` válida no painel de configurações ou nas variáveis de ambiente.",
       provider: 'gemini',
@@ -396,7 +462,7 @@ clearTimeout(timeoutId);
     };
   }
 
-  if (lastError && (lastError.message?.toLowerCase().includes('quota') || lastError.message?.toLowerCase().includes('rate limit') || lastError.message?.includes('429') || lastError.message?.includes('RESOURCE_EXHAUSTED') || lastError.message?.includes('resource_exhausted'))) {
+  if (isQuota) {
     return {
       text: "⚠️ **Cota de API Exaurida / Rate Limit**: O limite de uso da API (quota/rate limit) foi atingido. Por favor, aguarde alguns minutos ou configure uma chave de API alternativa nas configurações.",
       provider: 'gemini',

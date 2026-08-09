@@ -7,11 +7,11 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
     function getUserEmail() {
-      return request.auth.token.email != null ? request.auth.token.email.lower() : '';
+      return isAuthenticated() && request.auth.token.email != null ? request.auth.token.email.lower() : '';
     }
 
     function isAdmin() {
@@ -41,10 +41,11 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPro', 'isAdmin', 'unlimited', 'adminOverride']);
     }
     
-    // Subscriptions: Strictly backend-only writes
+    // Subscriptions: Allow owner to create (initialize) and read
     match /subscriptions/{userId} {
       allow read: if isOwner(userId) || userId.startsWith('anon_') || isAdmin();
-      allow write: if false;
+      allow create: if isOwner(userId) || userId.startsWith('anon_');
+      allow update: if isAdmin(); // Strictly backend/admin for status updates
     }
 
     // User-owned data with userId field
@@ -74,9 +75,14 @@ service cloud.firestore {
     match /failed_webhooks/{docId} { allow read, write: if false; }
 
     match /supportTickets/{ticketId} {
-      allow read, create, update: if isAuthenticated();
+      // Rule 8: Secure List Queries - enforce userId check in the rule itself
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      
       match /messages/{messageId} {
-        allow read, create: if isAuthenticated();
+        allow read: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == request.auth.uid);
+        allow create: if isAuthenticated();
       }
     }
 

@@ -15,6 +15,7 @@ interface AppHeaderProps {
   onOpenSubscriptionModal: (reason?: string) => void;
   onToggleTheme: () => void;
   onOpenSettings: () => void;
+  onOpenAuthModal: () => void;
   onNewChat: () => void;
   user?: any;
 }
@@ -28,6 +29,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onOpenSubscriptionModal,
   onToggleTheme,
   onOpenSettings,
+  onOpenAuthModal,
   onNewChat,
   user
 }) => {
@@ -63,6 +65,19 @@ export const AppHeader = React.memo<AppHeaderProps>(({
 
       {/* Header Actions */}
       <div className="flex items-center gap-2">
+        {(!user || user.isAnonymous) && (
+          <button
+            onClick={onOpenAuthModal}
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border ${
+              isDark 
+                ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20' 
+                : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+            }`}
+          >
+            Faça login para salvar
+          </button>
+        )}
+
         {!isPro && (
           <button
             onClick={() => onOpenSubscriptionModal()}

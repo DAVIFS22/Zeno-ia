@@ -104,6 +104,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           userEmail={userSettings.userEmail || profile?.email || ''}
           dailyUsage={dailyUsage}
           onUpdateUsage={onUpdateUsage}
+          geminiApiKey={userSettings.geminiApiKey}
         />
       )}
       {/* Pro Feature Modal */}

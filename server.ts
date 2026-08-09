@@ -53,6 +53,13 @@ const ai = new GoogleGenAI({
   }
 });
 
+function getAiClient(userKey?: string) {
+  if (userKey && userKey.trim().length > 10) {
+    return new GoogleGenAI({ apiKey: userKey.trim() });
+  }
+  return ai;
+}
+
 // Start provider health check loop in background
 startHealthCheckLoop(ai);
 
@@ -72,6 +79,10 @@ async function getAvailableModels() {
   }
 
   try {
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'dummy_key') {
+      console.warn('[MODELS] Skipping model list: No valid API key configured.');
+      return [];
+    }
     const response = await ai.models.list();
     const models = [];
     // Pager is an async iterator
@@ -82,8 +93,12 @@ async function getAvailableModels() {
     lastModelFetch = now;
     console.log(`[MODELS] Discovered ${availableModelsCache.length} models from API.`);
     return availableModelsCache;
-  } catch (err) {
-    console.error('[MODELS ERROR] Failed to list models:', err);
+  } catch (err: any) {
+    if (err.message?.includes('API_KEY_INVALID') || err.message?.includes('400')) {
+       console.warn('[MODELS] Could not list models: Invalid API Key.');
+    } else {
+       console.error('[MODELS ERROR] Failed to list models:', err);
+    }
     return [];
   }
 }
@@ -274,11 +289,12 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
   // API Routes
   app.post("/api/generate-music", async (req, res) => {
     try {
-      const { prompt, genre, keySig, tempo, mode } = req.body;
+      const { prompt, genre, keySig, tempo, mode, geminiApiKey } = req.body;
       if (!prompt) return res.status(400).json({ error: "Tema da música é obrigatório." });
 
       const modelName = mode === 'clip' ? 'lyria-3-clip-preview' : 'lyria-3-pro-preview';
-      const apiKey = process.env.GEMINI_API_KEY;
+      const effectiveAi = getAiClient(geminiApiKey);
+      const apiKey = geminiApiKey && geminiApiKey.trim().length > 10 ? geminiApiKey.trim() : process.env.GEMINI_API_KEY;
 
       if (!apiKey) {
         return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
@@ -305,7 +321,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         // Fallback to Gemini Flash for lyrics & chords if Lyria quota exceeded (429) or error
         try {
           const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre}, tom ${keySig}, andamento ${tempo}, com base no tema: "${prompt}". VÁ DIRETO para a composição (com título, versos, refrão e acordes). NÃO inclua nenhuma saudação, introdução ou explicação como "Aqui está..." ou "Esta é uma composição...". NÃO use linhas com "---".`;
-          const fallbackResponse = await ai.models.generateContent({
+          const fallbackResponse = await effectiveAi.models.generateContent({
             model: 'gemini-1.5-flash',
             contents: fallbackPrompt,
           });
@@ -390,9 +406,10 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
     } catch (err: any) {
       console.error("[GENERATE MUSIC EXCEPTION]:", err);
       try {
-        const { prompt, genre, keySig, tempo } = req.body;
+        const { prompt, genre, keySig, tempo, geminiApiKey } = req.body;
+        const effectiveAi = getAiClient(geminiApiKey);
         const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre || 'Pop'}, tom ${keySig || 'C Major'}, andamento ${tempo || '110 BPM'}, com base no tema: "${prompt || 'Inovação'}". VÁ DIRETO para a composição. NÃO inclua saudações, introduções ou explicações. NÃO use linhas com "---".`;
-        const fallbackResponse = await ai.models.generateContent({
+        const fallbackResponse = await effectiveAi.models.generateContent({
           model: 'gemini-1.5-flash',
           contents: fallbackPrompt,
         });
@@ -565,7 +582,7 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
     let currentIsSearch = false;
 
     try {
-      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile } = req.body;
+      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile, geminiApiKey } = req.body;
       if (userId) currentUserId = userId;
       
       if (!message || typeof message !== 'string') {
@@ -878,7 +895,8 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
         maxOutputTokens: 2048,
         tools: tools.length > 0 ? tools : undefined,
         isSearchIntent,
-        category: taskType as any
+        category: taskType as any,
+        userGeminiApiKey: geminiApiKey
       }, ai);
 
       if (aiResult.functionCalls && aiResult.functionCalls.length > 0) {

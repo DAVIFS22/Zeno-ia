@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Copy, Check, Download, Maximize2, Minimize2, 
   WrapText, Hash, Search, X, Code2, Eye, FileCode2,
-  ZoomIn, ZoomOut, CheckCircle2
+  ZoomIn, ZoomOut, CheckCircle2, Play, MoreVertical
 } from 'lucide-react';
 import hljs from 'highlight.js';
 import { copyToClipboard } from '../utils/clipboard';
@@ -26,12 +26,16 @@ const LANGUAGE_MAP: Record<string, LanguageMeta> = {
   javascript: { name: 'JavaScript', extension: 'js', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   ts: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   typescript: { name: 'TypeScript', extension: 'ts', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  next: { name: 'Next.js', extension: 'tsx', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  flutter: { name: 'Flutter', extension: 'dart', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  dart: { name: 'Dart', extension: 'dart', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  node: { name: 'Node.js', extension: 'js', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   jsx: { name: 'React JSX', extension: 'jsx', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   tsx: { name: 'React TSX', extension: 'tsx', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   py: { name: 'Python', extension: 'py', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   python: { name: 'Python', extension: 'py', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
-  html: { name: 'HTML5', extension: 'html', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
-  css: { name: 'CSS3', extension: 'css', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  html: { name: 'HTML', extension: 'html', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
+  css: { name: 'CSS', extension: 'css', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   scss: { name: 'SCSS', extension: 'scss', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   json: { name: 'JSON', extension: 'json', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   yaml: { name: 'YAML', extension: 'yaml', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
@@ -61,7 +65,6 @@ go: { name: 'Go', extension: 'go', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-
   php: { name: 'PHP', extension: 'php', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   ruby: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   rb: { name: 'Ruby', extension: 'rb', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
-  dart: { name: 'Dart', extension: 'dart', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   lua: { name: 'Lua', extension: 'lua', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   r: { name: 'R', extension: 'r', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
   perl: { name: 'Perl', extension: 'pl', badgeBg: 'bg-[#232326] border-[#2C2C2E] text-neutral-300', badgeText: 'text-neutral-400' },
@@ -104,6 +107,59 @@ function splitHtmlLines(html: string): string[] {
   return result;
 }
 
+const CodeLinesArea = React.memo(({ 
+  rawLines, 
+  wordWrap, 
+  highlightedLines, 
+  fontSize, 
+  isRawView, 
+  searchQuery 
+}: {
+  rawLines: string[];
+  wordWrap: boolean;
+  highlightedLines: string[];
+  fontSize: number;
+  isRawView: boolean;
+  searchQuery: string;
+}) => {
+  const lineMatchesSearch = (lineText: string) => {
+    if (!searchQuery.trim()) return false;
+    return lineText.toLowerCase().includes(searchQuery.toLowerCase());
+  };
+
+  return (
+    <div className="flex py-4 text-xs sm:text-sm font-code leading-relaxed">
+      {/* Code Content Area */}
+      <div className={`px-4 flex-1 overflow-x-auto scrollbar-custom ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}>
+        {rawLines.map((lineText, idx) => {
+          const isMatch = lineMatchesSearch(lineText);
+          const lineHtml = highlightedLines[idx] || '';
+
+          return (
+            <div 
+              key={idx} 
+              className={`group flex items-center min-h-[1.5rem] rounded-sm px-1.5 transition-colors ${
+                isMatch 
+                  ? 'bg-neutral-500/20 border-l-2 border-neutral-400 text-neutral-100 font-semibold' 
+                  : 'hover:bg-white/[0.04]'
+              }`}
+              style={{ fontSize: `${fontSize}px` }}
+            >
+              {isRawView ? (
+                <span>{lineText || ' '}</span>
+              ) : (
+                <span 
+                  dangerouslySetInnerHTML={{ __html: lineHtml || ' ' }} 
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({ 
   language = '', 
   value = '', 
@@ -111,25 +167,49 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
   filename
 }) => {
   const [copied, setCopied] = useState(false);
-  const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [wordWrap, setWordWrap] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRawView, setIsRawView] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isViewingPreview, setIsViewingPreview] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [fontSize, setFontSize] = useState(13); // in px
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const cleanValue = useMemo(() => value.replace(/\n$/, ''), [value]);
+  const [debouncedPreviewDoc, setDebouncedPreviewDoc] = useState(cleanValue);
+
+  // Debounce preview updates to avoid flickering and performance issues while streaming
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedPreviewDoc(cleanValue);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [cleanValue]);
 
   // Highlight execution with highlight.js & auto-detect fallback
   const { highlightedLines, detectedLang, isAutoDetected } = useMemo(() => {
     let lang = (language || '').toLowerCase().trim();
+    
+    // Map custom/friendly language aliases to hljs supported languages
+    const hljsLangMap: Record<string, string> = {
+      next: 'typescript',
+      node: 'javascript',
+      flutter: 'dart',
+      react: 'typescript',
+      nextjs: 'typescript',
+      express: 'javascript',
+      vue: 'xml', // hljs uses xml for vue templates often
+      svelte: 'xml'
+    };
+    
+    const effectiveLang = hljsLangMap[lang] || lang;
     let auto = false;
 
     let html = '';
-    if (lang && hljs.getLanguage(lang)) {
+    if (effectiveLang && hljs.getLanguage(effectiveLang)) {
       try {
-        html = hljs.highlight(cleanValue, { language: lang, ignoreIllegals: true }).value;
+        html = hljs.highlight(cleanValue, { language: effectiveLang, ignoreIllegals: true }).value;
       } catch (e) {
         html = hljs.highlightAuto(cleanValue).value;
         auto = true;
@@ -148,6 +228,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
       isAutoDetected: auto
     };
   }, [cleanValue, language]);
+
+  const isHTML = useMemo(() => {
+    const lang = detectedLang.toLowerCase();
+    const val = cleanValue.trim().toLowerCase();
+    return lang === 'html' || val.startsWith('<!doctype html') || val.startsWith('<html') || (val.includes('<html') && val.includes('</html>'));
+  }, [detectedLang, cleanValue]);
 
   const rawLines = useMemo(() => cleanValue.split(/\r?\n/), [cleanValue]);
   const totalLines = rawLines.length;
@@ -209,195 +295,140 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
     return lineText.toLowerCase().includes(searchQuery.toLowerCase());
   };
 
-  const renderCodeLines = () => {
-    return (
-      <div className="flex pt-12 text-xs sm:text-sm font-code leading-relaxed">
-        {/* Line Numbers Column */}
-        {showLineNumbers && (
-          <div className="select-none pb-4 pr-3.5 pl-3 text-right font-mono text-neutral-600 border-r border-[#2C2C2E]/80 bg-black/20 flex flex-col min-w-[2.75rem]">
-            {rawLines.map((_, idx) => {
-              const isMatch = lineMatchesSearch(rawLines[idx]);
-              return (
-                <span 
-                  key={idx} 
-                  className={`leading-relaxed transition-colors ${
-                    isMatch ? 'text-neutral-400 font-bold' : 'hover:text-neutral-400'
-                  }`}
-                >
-                  {idx + 1}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Code Content Area */}
-        <div className={`pb-4 pl-3 pr-14 flex-1 overflow-x-auto scrollbar-custom ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}>
-          {rawLines.map((lineText, idx) => {
-            const isMatch = lineMatchesSearch(lineText);
-            const lineHtml = highlightedLines[idx] || '';
-
-            return (
-              <div 
-                key={idx} 
-                className={`group flex items-center min-h-[1.5rem] rounded-sm px-1.5 transition-colors ${
-                  isMatch 
-                    ? 'bg-neutral-500/20 border-l-2 border-neutral-400 text-neutral-100 font-semibold' 
-                    : 'hover:bg-white/[0.04]'
-                }`}
-                style={{ fontSize: `${fontSize}px` }}
-              >
-                {isRawView ? (
-                  <span>{lineText || ' '}</span>
-                ) : (
-                  <span 
-                    dangerouslySetInnerHTML={{ __html: lineHtml || ' ' }} 
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
       {/* Standard Embedded CodeBlock Card */}
-      <div className={`my-4 rounded-2xl overflow-hidden border shadow-xl transition-all font-sans code-theme-dark ${
+      <div className={`my-4 rounded-2xl border shadow-xl transition-all font-sans code-theme-dark ${
         theme === 'dark' 
           ? 'bg-[#0b0c10] border-[#2C2C2E]/90 text-neutral-200 shadow-black/40' 
           : 'bg-[#0f1117] border-[#2C2C2E]/80 text-neutral-100 shadow-black/30'
       }`}>
         {/* Code Block Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-[#212121] border-b border-[#2C2C2E]/60 text-xs font-medium text-neutral-400">
+        <div className="flex flex-wrap items-center justify-between px-4 py-2 bg-[#212121] border-b border-[#2C2C2E]/60 text-xs text-neutral-400 rounded-t-2xl">
           
-          {/* Left Side: Language Tag & Metadata */}
-          <div className="flex items-center gap-2.5">
-            <span className="flex items-center gap-1.5 font-semibold">
-              <FileCode2 className="w-4 h-4 text-neutral-400" />
-              <span className={`px-2 py-0.5 rounded-md border text-[11px] font-bold font-mono tracking-wide ${langMeta.badgeBg}`}>
-                {langMeta.name}
-              </span>
+          {/* Left Side: Language Tag */}
+          <div className="flex items-center gap-1.5">
+            <Code2 className="w-[18px] h-[18px] text-neutral-400" />
+            <span className="text-sm text-neutral-300 font-sans select-none">
+              {langMeta.name}
             </span>
-
-            {filename && (
-              <span className="hidden sm:inline-block text-neutral-300 font-mono text-[11px] truncate max-w-[160px]">
-                {filename}
-              </span>
-            )}
-
-            <span className="text-neutral-500 text-[11px] hidden sm:inline">
-              • {totalLines} {totalLines === 1 ? 'linha' : 'linhas'} ({formattedSize})
-            </span>
-
-            {isAutoDetected && !language && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#232326] text-neutral-400 font-mono hidden md:inline">
-                auto
-              </span>
-            )}
           </div>
 
           {/* Right Side: Quick Action Buttons */}
-          <div className="flex items-center gap-1">
-            {/* Word Wrap Toggle */}
-            <button
-              type="button"
-              onClick={() => setWordWrap(!wordWrap)}
-              className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
-                wordWrap 
-                  ? 'bg-neutral-700 text-neutral-100 border border-neutral-600' 
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326]'
-              }`}
-              title={wordWrap ? 'Desativar Quebra de Linhas' : 'Ativar Quebra de Linhas'}
-              aria-label="Alternar quebra de linhas"
-            >
-              <WrapText className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Line Numbers Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowLineNumbers(!showLineNumbers)}
-              className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
-                showLineNumbers 
-                  ? 'bg-neutral-700 text-neutral-100 border border-neutral-600' 
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326]'
-              }`}
-              title={showLineNumbers ? 'Ocultar Números de Linha' : 'Mostrar Números de Linha'}
-              aria-label="Alternar números de linha"
-            >
-              <Hash className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Fullscreen Expand */}
-            <button
-              type="button"
-              onClick={() => setIsExpanded(true)}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] transition-colors"
-              title="Expandir em Tela Cheia"
-              aria-label="Expandir visualizador de código"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Download Code Button */}
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] transition-colors"
-              title="Baixar Arquivo de Código"
-              aria-label="Baixar código como arquivo"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-
+          <div className="flex items-center gap-3 relative">
+            
             {/* Copy Button */}
             <button
               type="button"
               onClick={handleCopy}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium text-xs transition-all shadow-sm ${
+              className={`p-1 rounded-md transition-colors ${
                 copied
-                  ? 'bg-neutral-700 border border-neutral-600 text-sky-400 font-semibold'
-                  : 'bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-300 hover:text-white'
+                  ? 'text-sky-400'
+                  : 'text-neutral-400 hover:text-white'
               }`}
               title="Copiar código"
               aria-label="Copiar código para área de transferência"
             >
               {copied ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="font-sans">Copiado!</span>
-                </>
+                <Check className="w-[18px] h-[18px]" />
               ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span className="font-sans">Copiar</span>
-                </>
+                <Copy className="w-[18px] h-[18px]" />
               )}
             </button>
+
+            {/* HTML Visualize Toggle */}
+            {isHTML && (
+              <button
+                type="button"
+                onClick={() => setIsViewingPreview(!isViewingPreview)}
+                className={`p-1 rounded-md transition-colors ${
+                  isViewingPreview 
+                    ? 'text-sky-400' 
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title={isViewingPreview ? 'Ver Código' : 'Visualizar Resultado'}
+              >
+                {isViewingPreview ? <Code2 className="w-[18px] h-[18px]" /> : <Play className="w-[18px] h-[18px]" />}
+              </button>
+            )}
+
+            {/* Menu Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              onBlur={() => setTimeout(() => setIsMenuOpen(false), 200)}
+              className={`p-1 rounded-md transition-colors ${isMenuOpen ? 'text-white' : 'text-neutral-400 hover:text-white'}`}
+              title="Mais opções"
+            >
+              <MoreVertical className="w-[18px] h-[18px]" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-[#212121] border border-[#2C2C2E] rounded-md shadow-lg z-20 py-1 flex flex-col">
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setWordWrap(!wordWrap); setIsMenuOpen(false); }}
+                  className="flex items-center justify-between px-3 py-2 text-left hover:bg-[#2C2C2E] text-neutral-300 hover:text-white transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <WrapText className="w-4 h-4" />
+                    <span>Quebrar linha</span>
+                  </span>
+                  {wordWrap && <Check className="w-3.5 h-3.5 text-sky-400" />}
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setIsExpanded(true); setIsMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 text-left hover:bg-[#2C2C2E] text-neutral-300 hover:text-white transition-colors"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  <span>Expandir</span>
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleDownload(); setIsMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 text-left hover:bg-[#2C2C2E] text-neutral-300 hover:text-white transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar arquivo</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Code Content Container */}
         <div className="relative group/code-content overflow-hidden bg-[#171717] text-neutral-100">
-          {/* Floating Copy Button for quick extraction */}
-          <button
-            type="button"
-            onClick={handleCopy}
-            className={`absolute top-2.5 right-2.5 z-30 p-2 rounded-lg backdrop-blur-md transition-all border shadow-xl ${
-              copied 
-                ? 'bg-sky-500/30 border-sky-500/50 text-sky-400' 
-                : 'bg-black/60 border-white/20 text-neutral-400 hover:text-white hover:bg-black/80 hover:scale-105 active:scale-95'
-            }`}
-            title="Copiar código"
-            aria-label="Copiar código rápido"
-          >
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          </button>
+          {/* Preview Panel - Always mounted if isHTML to avoid re-parse/re-mount jank */}
+          {isHTML && (
+            <div className={`w-full h-[400px] bg-white overflow-hidden relative border-t border-[#2C2C2E]/60 ${isViewingPreview ? 'block' : 'hidden'}`}>
+              <iframe
+                srcDoc={debouncedPreviewDoc}
+                title="HTML Preview"
+                sandbox="allow-scripts"
+                className="w-full h-full border-none"
+                loading="lazy"
+              />
+              <div className="absolute bottom-2 right-2 flex items-center gap-2">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white/70 backdrop-blur-sm border border-white/10">
+                  Sandboxed Preview
+                </span>
+              </div>
+            </div>
+          )}
 
-          {renderCodeLines()}
+          {/* Code Lines Panel */}
+          <div className={isViewingPreview ? 'hidden' : 'block'}>
+            <CodeLinesArea
+              rawLines={rawLines}
+              wordWrap={wordWrap}
+              highlightedLines={highlightedLines}
+              fontSize={fontSize}
+              isRawView={isRawView}
+              searchQuery={searchQuery}
+            />
+          </div>
         </div>
       </div>
 
@@ -409,9 +440,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
             {/* Modal Header Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#212121] border-b border-[#2C2C2E] text-sm">
               <div className="flex items-center gap-3">
-                <span className={`px-2.5 py-1 rounded-md border text-xs font-bold font-mono ${langMeta.badgeBg}`}>
-                  {langMeta.name}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <Code2 className="w-[18px] h-[18px] text-neutral-400" />
+                  <span className="text-sm text-neutral-300 font-sans select-none">
+                    {langMeta.name}
+                  </span>
+                </div>
 
                 <span className="text-neutral-300 font-mono text-xs font-medium">
                   {filename || `snippet.${langMeta.extension}`}
@@ -493,14 +527,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium text-xs transition-all ${
+                  className={`p-1.5 rounded-md transition-colors ${
                     copied
-                      ? 'bg-neutral-700 border border-neutral-600 text-sky-400 font-semibold'
-                      : 'bg-[#232326] hover:bg-neutral-700 border border-[#2C2C2E] text-neutral-200 shadow-sm'
+                      ? 'text-sky-400'
+                      : 'text-neutral-400 hover:text-white hover:bg-[#232326]'
                   }`}
+                  title="Copiar código"
                 >
-                  {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Copiado!' : 'Copiar'}</span>
+                  {copied ? <CheckCircle2 className="w-[18px] h-[18px] text-sky-400" /> : <Copy className="w-[18px] h-[18px]" />}
                 </button>
 
                 {/* Close Fullscreen Modal */}
@@ -517,7 +551,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
 
             {/* Modal Main Code Display Area */}
             <div className="flex-1 overflow-auto bg-[#171717] text-neutral-100 p-2">
-              {renderCodeLines()}
+              <CodeLinesArea
+                rawLines={rawLines}
+                wordWrap={wordWrap}
+                highlightedLines={highlightedLines}
+                fontSize={fontSize}
+                isRawView={isRawView}
+                searchQuery={searchQuery}
+              />
             </div>
           </div>
         </div>

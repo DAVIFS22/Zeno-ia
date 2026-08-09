@@ -1,7 +1,53 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { UserSettings } from '../types';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('[REALTIME FIRESTORE LISTENER ERROR]:', JSON.stringify(errInfo));
+}
 
 export interface RealtimeSubscriptionData {
   userId: string;
@@ -44,6 +90,16 @@ export function useRealtimeSubscription(
 
     setLoading(true);
 
+    // CRITICAL: Only attach the listener if we have a current authenticated user 
+    // AND that user matches the ID we are trying to subscribe to.
+    // If we are not logged in yet, Firestore rules will block the read and throw an error.
+    if (!auth.currentUser || auth.currentUser.uid !== userId) {
+      console.log(`[Subscription] Waiting for auth sync for UID: ${userId}. Current UID: ${auth.currentUser?.uid || 'none'}`);
+      setLoading(false);
+      return;
+    }
+
+    console.log(`[Subscription] Attaching listener for UID: ${userId}`);
     // REAL-TIME FIRESTORE LISTENER USING onSnapshot
     const subDocRef = doc(db, 'subscriptions', userId);
 
@@ -67,7 +123,7 @@ export function useRealtimeSubscription(
             onSettingsUpdate({ plan: newPlan });
           }
 
-          console.log(`[REALTIME FIRESTORE LISTENER] Assinatura atualizada instantaneamente para UID ${userId}: status = ${data.subscriptionStatus}, Plano = ${newPlan}`);
+          console.log(`[REALTIME FIRESTORE LISTENER SUCCESS] Assinatura para UID ${userId}: status = ${data.subscriptionStatus}, Plano = ${newPlan}`);
         } else {
           setSubscription(null);
           setIsPro(false);
@@ -77,7 +133,9 @@ export function useRealtimeSubscription(
         setLoading(false);
       },
       (error) => {
-        console.error('[REALTIME FIRESTORE LISTENER ERROR]:', error);
+        if (error.code !== 'cancelled') {
+          handleFirestoreError(error, OperationType.GET, `subscriptions/${userId}`);
+        }
         setLoading(false);
       }
     );

@@ -37,7 +37,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
-  const displayName = user?.displayName?.split(' ')[0] || userName?.split(' ')[0] || '';
+  const isAnonymous = user?.isAnonymous;
+  const displayName = isAnonymous ? '' : (user?.displayName?.split(' ')[0] || userName?.split(' ')[0] || '');
   const { isPro } = useSubscription();
 
   const currentModelDef = getModelDef(speed);
@@ -162,7 +163,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
         </div>
       </div>
 
-      {!user && (
+      {( !user || isAnonymous ) && (
         <div className="mt-6">
           <button
             onClick={() => onLogin?.(true)}
