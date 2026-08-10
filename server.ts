@@ -41,7 +41,7 @@ import { StripeService, getStripe } from "./src/services/stripeService";
 import { SubscriptionManager } from "./src/services/subscriptionManager";
 import { getYoutubeTranscript, getYoutubeMetadata, extractYoutubeId, downloadYoutubeAudio } from "./src/lib/youtube";
 import { buildAdaptiveSystemPrompt, updateProfileWithFeedback, DEFAULT_ADAPTIVE_PROFILE } from "./src/lib/adaptiveLearning";
-import { generateTextWithFallback, startHealthCheckLoop } from "./src/services/aiProvider";
+import { generateTextWithFallback, generateImageWithFallback, startHealthCheckLoop } from "./src/services/aiProvider";
 import { getAllProviderMetricsSummary } from "./src/services/ai/healthManager";
 import { getGlobalAiStats } from "./src/services/ai/metrics";
 import { sanitizeResponseText } from "./src/utils/imageSecurity";
@@ -158,75 +158,45 @@ async function startServer() {
   initFallbackQueueRunner();
   registerImageGenerator(async (options) => {
     const { prompt, style, aspectRatio, enhance, engine, seed, userEmail } = options;
-    console.log(`[ZENO VISION ENGINE] Executando tarefa de imagem. Prompt: "${prompt}", Estilo: ${style}, Proporção: ${aspectRatio}`);
+    console.log(`[ZENO VISION ENGINE] Executando tarefa de imagem resiliente. Prompt: "${prompt}"`);
     
     const enhancedPrompt = enhance ? `${prompt}, highly detailed, 8k resolution, professional lighting, masterpiece` : prompt;
     
-    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 10) {
-      try {
-        console.log(`[ZENO VISION ENGINE] Utilizando OpenAI DALL-E 3 API para geração de imagem...`);
-        const size = aspectRatio === '16:9' ? '1792x1024' : aspectRatio === '9:16' ? '1024x1792' : '1024x1024';
-        const openAiRes = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY.trim()}`
-          },
-          body: JSON.stringify({
-            model: 'dall-e-3',
-            prompt: enhancedPrompt,
-            n: 1,
-            size,
-            quality: 'standard'
-          })
-        });
-        if (openAiRes.ok) {
-          const data = await openAiRes.json();
-          const imageUrl = data.data?.[0]?.url;
-          if (imageUrl) {
-            try {
-              await incrementStatCounter('totalImagesGenerated');
-            } catch (e) {}
-            return {
-              imageUrl,
-              prompt: enhancedPrompt,
-              originalPrompt: prompt,
-              aspectRatio: aspectRatio || '1:1',
-              style: style || 'photorealistic',
-              seed: seed || 0,
-              model: 'DALL-E 3',
-              provider: 'OpenAI'
-            };
-          }
-        } else {
-          const errText = await openAiRes.text();
-          console.warn('[ZENO VISION ENGINE] OpenAI DALL-E 3 falhou, caindo para fallback:', errText);
-        }
-      } catch (err) {
-        console.warn('[ZENO VISION ENGINE] Erro ao chamar OpenAI DALL-E 3:', err);
-      }
-    }
-
-    const width = aspectRatio === '16:9' ? 1280 : aspectRatio === '9:16' ? 720 : 1024;
-    const height = aspectRatio === '16:9' ? 720 : aspectRatio === '9:16' ? 1280 : 1024;
-    const randomSeed = seed || Math.floor(Math.random() * 1000000);
-    
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=${width}&height=${height}&seed=${randomSeed}&nologo=true&model=${engine || 'flux'}`;
-    
     try {
-      await incrementStatCounter('totalImagesGenerated');
-    } catch (e) {}
+      const result = await generateImageWithFallback({
+        contents: [],
+        category: 'image_generation',
+        imageOptions: {
+          prompt: enhancedPrompt,
+          aspectRatio: aspectRatio || '1:1',
+          style: style || 'photorealistic',
+          seed: seed || 0
+        },
+        userGeminiApiKey: process.env.GEMINI_API_KEY
+      }, ai);
 
-    return {
-      imageUrl,
-      prompt: enhancedPrompt,
-      originalPrompt: prompt,
-      aspectRatio: aspectRatio || '1:1',
-      style: style || 'photorealistic',
-      seed: randomSeed,
-      model: 'ZENO Vision Studio',
-      provider: 'Flux AI'
-    };
+      if (result.imageUrl) {
+        try {
+          await incrementStatCounter('totalImagesGenerated');
+        } catch (e) {}
+
+        return {
+          imageUrl: result.imageUrl,
+          prompt: enhancedPrompt,
+          originalPrompt: prompt,
+          aspectRatio: aspectRatio || '1:1',
+          style: style || 'photorealistic',
+          seed: seed || result.groundingMetadata?.seed || 0,
+          model: result.modelUsed,
+          provider: result.provider
+        };
+      }
+
+      throw new Error("Falha na geração: Nenhuma URL de imagem retornada.");
+    } catch (err: any) {
+      console.error('[ZENO VISION ENGINE] Falha crítica em todos os provedores:', err.message);
+      throw err;
+    }
   });
 
 async function getVerifiedUser(req: any): Promise<{ uid: string; email: string } | null> {
@@ -684,7 +654,12 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         'o que aconteceu', 'como está', 'qual é o', 'qual e o', 'quando foi',
         'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre'
       ];
-      let isSearchIntent = normSpeed === 'search' || searchTriggers.some(t => msgLower.includes(t));
+      const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+      const hasImages = hasAttachments && attachments.some(a => (a.mimeType || a.type || '').includes('image'));
+      console.log(`[DEBUG] hasAttachments: ${hasAttachments}, hasImages: ${hasImages}, msg: ${msgLower}`);
+
+      let isSearchIntent = (normSpeed === 'search' || searchTriggers.some(t => msgLower.includes(t))) && !hasImages;
+      console.log(`[DEBUG] isSearchIntent: ${isSearchIntent}`);
       currentIsSearch = isSearchIntent;
 
       if (isSearchIntent) {
@@ -698,7 +673,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         
         if (Array.isArray(attachments) && attachments.length > 0) {
           const mainFile = attachments[0];
-          const mime = mainFile.mimeType || '';
+          const mime = mainFile.mimeType || mainFile.type || '';
           if (mime.includes('pdf')) taskType = 'search'; // Documents often fall into search/context
           else if (mime.includes('image')) taskType = 'vision';
           else if (mime.includes('audio')) taskType = 'general';
@@ -772,10 +747,11 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 
       // Check if speed is 'image' or 'vision', or if message is explicitly asking to generate or show an image
       const isImageMode = 
-        normSpeed === "image" || 
-        normSpeed === "vision" || 
-        /^(gerar|crie|criar|desenhe|desenhar|faça|fazer|gere|mostre|me dá|me mostre)\s*(uma?|um)?\s*(imagem|foto|arte|ilustração|wallpaper|quadro|desenho|logotipo|logo|personagem|grafico|gráfico|infográfico|infografico|diagrama|wireframe|mockup|render|3d|pintura|avatar|ícone|icone)/i.test(message.trim()) ||
-        /(desenhe|gere uma imagem|crie uma arte|faça uma ilustração|faça um wallpaper|anime|manga|logotipo|personagem|foto realista|fotografia de|imagem de|image of|generate image|draw a|create an image|crie um mockup|faça um diagrama|crie um infográfico)/i.test(message.trim());
+        (normSpeed === "image" || 
+         normSpeed === "vision" || 
+         /^(gerar|crie|criar|desenhe|desenhar|faça|fazer|gere|mostre|me dá|me mostre)\s*(uma?|um)?\s*(imagem|foto|arte|ilustração|wallpaper|quadro|desenho|logotipo|logo|personagem|grafico|gráfico|infográfico|infografico|diagrama|wireframe|mockup|render|3d|pintura|avatar|ícone|icone)/i.test(message.trim()) ||
+         /(desenhe|gere uma imagem|crie uma arte|faça uma ilustração|faça um wallpaper|anime|manga|logotipo|personagem|foto realista|fotografia de|imagem de|image of|generate image|draw a|create an image|crie um mockup|faça um diagrama|crie um infográfico)/i.test(message.trim())) && 
+        !hasAttachments;
 
       if (userId) {
         await setUserPlan(userId, isPro ? 'ZENO Pro' : 'ZENO Free');
@@ -967,6 +943,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         maxOutputTokens: 2048,
         tools: tools.length > 0 ? tools : undefined,
         isSearchIntent,
+        hasImages,
         category: taskType as any,
         userGeminiApiKey: geminiApiKey
       }, ai);

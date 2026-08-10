@@ -30,31 +30,133 @@ export async function callProviderAdapter(
     let groundingMetadata: any = null;
     let functionCalls: any[] = [];
 
+    if (options.category === 'image_generation') {
+      if (provider === 'gemini') {
+        let client = aiClient;
+        if (options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10) {
+          client = new GoogleGenAI({ apiKey: options.userGeminiApiKey.trim() });
+        }
+
+        const imgConfig = options.imageOptions || { prompt: '' };
+        const response = await (client as any).models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: imgConfig.prompt }] }],
+          config: {
+            imageConfig: {
+              aspectRatio: (imgConfig.aspectRatio as any) || "1:1",
+              imageSize: (imgConfig.imageSize as any) || "1K"
+            }
+          }
+        });
+
+        const candidates = (response as any).candidates;
+        const imagePart = candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+        
+        if (imagePart?.inlineData?.data) {
+          return {
+            text: "Imagem gerada com sucesso via Gemini.",
+            imageUrl: `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`,
+            provider,
+            modelUsed: model,
+            isAlternative: false,
+            latencyMs: Date.now() - startTime,
+            attempts: 1,
+            fallbackUsed: false
+          };
+        }
+        throw new Error("Nenhuma imagem retornada pelo Gemini (Formato incompatível ou não retornado).");
+
+      } else if (provider === 'openai') {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) throw new Error("OpenAI API key missing");
+
+        const imgConfig = options.imageOptions || { prompt: '' };
+        const size = imgConfig.aspectRatio === '16:9' ? '1792x1024' : imgConfig.aspectRatio === '9:16' ? '1024x1792' : '1024x1024';
+        
+        const res = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-image-2',
+            prompt: imgConfig.prompt,
+            n: 1,
+            size,
+            quality: 'standard'
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`OpenAI Image Error (${res.status}): ${errText}`);
+        }
+
+        const data = await res.json();
+        const imageUrl = data.data?.[0]?.url;
+        if (imageUrl) {
+          return {
+            text: "Imagem gerada com sucesso via OpenAI.",
+            imageUrl,
+            provider,
+            modelUsed: model,
+            isAlternative: true,
+            latencyMs: Date.now() - startTime,
+            attempts: 1,
+            fallbackUsed: false
+          };
+        }
+        throw new Error("Nenhuma URL de imagem retornada pela OpenAI.");
+      } else if (provider === 'replicate') {
+        // Simple fallback to pollinations for replicate if needed, or implement real replicate call
+        const imgConfig = options.imageOptions || { prompt: '' };
+        const width = imgConfig.aspectRatio === '16:9' ? 1280 : imgConfig.aspectRatio === '9:16' ? 720 : 1024;
+        const height = imgConfig.aspectRatio === '16:9' ? 720 : imgConfig.aspectRatio === '9:16' ? 1280 : 1024;
+        const seed = imgConfig.seed || Math.floor(Math.random() * 1000000);
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imgConfig.prompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`;
+
+        return {
+          text: "Imagem gerada via Flux (Pollinations).",
+          imageUrl,
+          provider,
+          modelUsed: model,
+          isAlternative: true,
+          latencyMs: Date.now() - startTime,
+          attempts: 1,
+          fallbackUsed: false
+        };
+      }
+    }
+
     if (provider === 'gemini') {
       let client = aiClient;
       if (options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10) {
         client = new GoogleGenAI({ apiKey: options.userGeminiApiKey.trim() });
       }
 
-      const response = await client.models.generateContent({
+      console.log(`[Gemini Adapter] Calling model: ${model} with contents:`, JSON.stringify(options.contents).substring(0, 500));
+
+      const response = await (client as any).models.generateContent({
         model,
         contents: options.contents,
         config: {
-          tools: options.tools && options.tools.length > 0 ? options.tools : undefined,
           systemInstruction: options.systemInstruction ? { parts: [{ text: options.systemInstruction }] } : undefined,
           temperature: options.temperature || 0.7,
-          maxOutputTokens: options.maxOutputTokens || 1024,
+          maxOutputTokens: options.maxOutputTokens || 2048,
+          tools: options.tools && options.tools.length > 0 ? options.tools : undefined,
         }
       });
 
-      if ((response as any).text) {
-        text = (response as any).text;
-      } else if ((response as any).candidates?.[0]?.content?.parts?.[0]?.text) {
-        text = response.candidates[0].content.parts[0].text;
-      }
+      console.log(`[Gemini Adapter] Response received from ${model}`);
 
-      functionCalls = (response as any).functionCalls || [];
-      groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+      text = (response as any).text || "";
+      
+      const candidates = (response as any).candidates;
+      if (candidates && candidates[0]) {
+        groundingMetadata = candidates[0].groundingMetadata;
+        functionCalls = (response as any).functionCalls ? (response as any).functionCalls() : [];
+      }
       if (groundingMetadata && groundingMetadata.groundingChunks) {
         sources = groundingMetadata.groundingChunks.map((chunk: any) => {
           if (chunk.web?.uri) {
@@ -113,37 +215,55 @@ export async function callProviderAdapter(
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
     const msg = err?.message || String(err);
-    const is429 = msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted');
+    const is429 = msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('resource_exhausted');
+    const isPermanentAuthOrBillingError = msg.toLowerCase().includes('invalid_api_key') || msg.toLowerCase().includes('api_key_invalid') || msg.toLowerCase().includes('api key not valid') || msg.includes('402') || msg.toLowerCase().includes('insufficient_quota');
     const isTimeout = msg.includes('timeout') || msg.includes('aborted');
 
     recordCircuitFailure(key, is429);
-    if (is429) {
+    if (isPermanentAuthOrBillingError) {
       setProviderQuotaExhausted(provider);
     }
     recordMetricEvent(key, false, latencyMs, is429, isTimeout, 0, false, false, msg);
     incrementAiStat('errorsToday', 1);
-    logAiEvent('ERROR', { provider, model, requestId, error: msg, retry: true, attempt: 1 });
+    logAiEvent('ERROR', { provider, model, requestId, error: msg });
 
     throw err;
   }
 }
 
 function prepareOpenAiMessages(contents: any[], systemInstruction?: string) {
-  const messages: Array<{ role: string; content: string }> = [];
+  const messages: Array<{ role: string; content: any }> = [];
   let baseSystem = systemInstruction || "Você é o ZENO AI, assistente inteligente.";
   baseSystem += "\n\n[REGRA CRÍTICA DE MÍDIA]: Você NUNCA deve gerar links de imagem, URLs de serviços externos nem tags markdown de imagem. Se o usuário pedir imagem, informe para usar o Estúdio de Imagens do ZENO.";
 
   messages.push({ role: 'system', content: baseSystem });
   for (const c of contents) {
     let role = c.role === 'model' ? 'assistant' : 'user';
-    let textPart = "";
+
     if (Array.isArray(c.parts)) {
-      textPart = c.parts.map((p: any) => p.text || "").filter(Boolean).join("\n");
+      const hasImage = c.parts.some((p: any) => p.inlineData);
+      if (hasImage) {
+        const contentArray = c.parts.map((p: any) => {
+          if (p.text) return { type: 'text', text: p.text };
+          if (p.inlineData) {
+            return { 
+              type: 'image_url', 
+              image_url: { 
+                url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` 
+              } 
+            };
+          }
+          return null;
+        }).filter(Boolean);
+        messages.push({ role, content: contentArray });
+      } else {
+        const textPart = c.parts.map((p: any) => p.text || "").filter(Boolean).join("\n");
+        if (textPart) {
+          messages.push({ role, content: textPart });
+        }
+      }
     } else if (typeof c === 'string') {
-      textPart = c;
-    }
-    if (textPart) {
-      messages.push({ role, content: textPart });
+      if (c) messages.push({ role, content: c });
     }
   }
   return messages;

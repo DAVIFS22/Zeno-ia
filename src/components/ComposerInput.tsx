@@ -304,7 +304,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
     Array.from(files).forEach(file => {
       const reader = new FileReader();
-      const isImg = file.type.startsWith('image/');
+      const isImg = file.type.startsWith('image/') || !!file.name.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i);
       const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md|csv|txt)$/i);
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
@@ -343,6 +343,22 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             };
             onAddAttachment(newAttachment);
           }
+        };
+        img.onerror = () => {
+          // Fallback if canvas compression fails or image format is unsupported by HTML Image element
+          const fallbackReader = new FileReader();
+          fallbackReader.onload = (evt) => {
+            const dataUrl = evt.target?.result as string;
+            const newAttachment: FileAttachment = {
+              id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+              name: file.name,
+              size: file.size,
+              type: 'image',
+              url: dataUrl,
+            };
+            onAddAttachment(newAttachment);
+          };
+          fallbackReader.readAsDataURL(file);
         };
         img.src = URL.createObjectURL(file);
       } else {
@@ -607,7 +623,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                   <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
                     isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
                   }`}>
-                    {att.type === 'image' && att.url ? (
+                    {(att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && att.url ? (
                       <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                     ) : (
                       <>

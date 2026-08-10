@@ -3,8 +3,12 @@
 
 
 ### Novidades
-- add image processing, server-side auth, and UI styling
+- Otimização no sistema de resiliência e circuit breakers para provedores de IA
+- Nova cadência inteligente de lançamentos com acumulador de 10 commits ou 7 dias
 
+### Correções
+- Correção da detecção e renderização de anexos de imagem e suporte a HEIC/data-url
+- Solução definitiva para o modal de novidades exibindo histórico correto por versão
 
 
 

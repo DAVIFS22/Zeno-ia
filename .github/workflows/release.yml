@@ -8,6 +8,12 @@ on:
     tags-ignore:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Forçar publicação imediata (ignorar contagem de 10 commits ou 7 dias)'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   automatic_release_review:
@@ -38,14 +44,16 @@ jobs:
           npx tsx scripts/githubReleaseAnalyzer.ts
           if git diff --quiet src/config/versionConfig.ts; then
             echo "new_release=false" >> $GITHUB_OUTPUT
-            echo "[INFO] No version bump detected."
+            echo "[INFO] Nenhuma release gerada nesta execução (condições de 10 commits ou 7 dias não atingidas, ou sem alterações relevantes)."
           else
             echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "[INFO] New version detected."
+            echo "[INFO] Nova versão gerada e qualificada para publicação."
           fi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FORCE_RELEASE: ${{ github.event.inputs.force }}
+          EVENT_NAME: ${{ github.event_name }}
 
       - name: Build Application
         if: steps.analyzer.outputs.new_release == 'true'

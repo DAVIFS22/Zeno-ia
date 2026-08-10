@@ -25,7 +25,7 @@ async function uploadToImgBB(fileBuffer: Buffer): Promise<string> {
     body: formData,
   });
 
-  const data = await response.json();
+  const data = (await response.json()) as any;
   if (data.success) {
     return data.data.url;
   } else {
@@ -38,12 +38,18 @@ async function uploadToFirebase(fileBuffer: Buffer, path: string): Promise<strin
     await file.save(fileBuffer, {
         metadata: { contentType: 'image/jpeg' }
     });
-    // For admin, making it public or getting signed URL might be complex. 
-    // Simplified: return the path as fallback for now if public access isn't configured,
-    // or return a signed URL if needed.
-    // The previous implementation used getDownloadURL on the client-side.
-    // This is a complex change. Given the time, I'll return the path.
-    return `firebase://${path}`;
+    
+    try {
+        await file.makePublic();
+        return `https://storage.googleapis.com/${bucket.name}/${path}`;
+    } catch (err) {
+        // Fallback to signed URL if makePublic fails (e.g. uniform bucket level access)
+        const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: '03-01-2500' // Far future
+        });
+        return url;
+    }
 }
 
 export async function uploadImageWithFallback(fileBuffer: Buffer, userId: string, filename: string): Promise<string> {

@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
-import { sanitizeResponseText } from "../utils/imageSecurity";
-import { generateTextWithResilience } from "./ai/fallbackManager";
+import { generateTextWithResilience, generateImageWithResilience } from "./ai/fallbackManager";
 import { routingConfig as baseRoutingConfig } from "./ai/modelRouter";
 import { startHealthCheckLoop as startHc } from "./ai/healthManager";
+import { AIRequestOptions } from "./ai/types";
 
 export interface AIProviderOptions {
   contents: any[];
@@ -11,7 +11,16 @@ export interface AIProviderOptions {
   maxOutputTokens?: number;
   tools?: any[];
   isSearchIntent?: boolean;
-  category?: 'general' | 'think' | 'code' | 'speed' | 'search' | 'image';
+  hasImages?: boolean;
+  category?: 'general' | 'think' | 'code' | 'speed' | 'search' | 'image' | 'vision' | 'image_generation';
+  imageOptions?: {
+    prompt: string;
+    aspectRatio?: string;
+    imageSize?: string;
+    style?: string;
+    negativePrompt?: string;
+    seed?: number;
+  };
   userGeminiApiKey?: string;
   userId?: string;
   userPlan?: string;
@@ -19,6 +28,7 @@ export interface AIProviderOptions {
 
 export interface AIProviderResult {
   text: string;
+  imageUrl?: string;
   provider: 'gemini' | 'openai' | 'groq' | 'openrouter' | 'replicate';
   modelUsed: string;
   isAlternative: boolean;
@@ -34,7 +44,9 @@ export const routingConfig: Record<string, Array<{ provider: string, model: stri
   code: baseRoutingConfig.code.map(m => ({ provider: m.provider, model: m.model })),
   speed: baseRoutingConfig.speed.map(m => ({ provider: m.provider, model: m.model })),
   search: baseRoutingConfig.search.map(m => ({ provider: m.provider, model: m.model })),
-  image: baseRoutingConfig.image.map(m => ({ provider: m.provider, model: m.model }))
+  image: baseRoutingConfig.image.map(m => ({ provider: m.provider, model: m.model })),
+  vision: baseRoutingConfig.vision.map(m => ({ provider: m.provider, model: m.model })),
+  image_generation: baseRoutingConfig.image_generation.map(m => ({ provider: m.provider, model: m.model }))
 };
 
 export function startHealthCheckLoop(aiClient: GoogleGenAI) {
@@ -45,7 +57,7 @@ export async function generateTextWithFallback(
   options: AIProviderOptions,
   aiClient: GoogleGenAI
 ): Promise<AIProviderResult> {
-  const result = await generateTextWithResilience(options, aiClient);
+  const result = await generateTextWithResilience(options as any, aiClient);
   return {
     text: result.text,
     provider: result.provider as any,
@@ -54,5 +66,19 @@ export async function generateTextWithFallback(
     sources: result.sources,
     groundingMetadata: result.groundingMetadata,
     functionCalls: result.functionCalls
+  };
+}
+
+export async function generateImageWithFallback(
+  options: AIProviderOptions,
+  aiClient: GoogleGenAI
+): Promise<AIProviderResult> {
+  const result = await generateImageWithResilience(options as any, aiClient);
+  return {
+    text: result.text,
+    imageUrl: result.imageUrl,
+    provider: result.provider as any,
+    modelUsed: result.modelUsed,
+    isAlternative: result.isAlternative
   };
 }

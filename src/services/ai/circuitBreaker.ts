@@ -11,8 +11,9 @@ interface CircuitRecord {
 const circuits: Record<string, CircuitRecord> = {};
 
 const FAILURE_THRESHOLD = 3;
-const COOLDOWN_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
-const HALF_OPEN_SUCCESS_THRESHOLD = 2;
+const COOLDOWN_PERIOD_MS = 30 * 1000; // 30 seconds fast recovery
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 1 minute fast recovery for 429
+const HALF_OPEN_SUCCESS_THRESHOLD = 1;
 
 export function getCircuitState(key: string): CircuitState {
   const record = circuits[key];
@@ -76,12 +77,18 @@ export function recordCircuitFailure(key: string, isRateLimit = false) {
 
   record.failures += 1;
 
-  if (record.state === 'HALF_OPEN' || record.failures >= FAILURE_THRESHOLD || isRateLimit) {
+  // Trip open if HALF_OPEN, or if failures >= threshold, or if 2+ consecutive rate limits
+  const rateLimitThreshold = 2;
+  const shouldTrip = record.state === 'HALF_OPEN' || 
+                    record.failures >= FAILURE_THRESHOLD || 
+                    (isRateLimit && record.failures >= rateLimitThreshold);
+
+  if (shouldTrip) {
     record.state = 'OPEN';
-    const duration = isRateLimit ? 20 * 60 * 1000 : COOLDOWN_PERIOD_MS;
+    const duration = isRateLimit ? RATE_LIMIT_COOLDOWN_MS : COOLDOWN_PERIOD_MS;
     record.cooldownUntil = Date.now() + duration;
     record.lastStateChange = Date.now();
-    console.warn(`[CIRCUIT BREAKER] ${key} disparado -> OPEN (Cooldown: ${duration / 60000}m, Motivo: ${isRateLimit ? 'Rate Limit 429' : 'Múltiplas falhas'})`);
+    console.warn(`[CIRCUIT BREAKER] ${key} disparado -> OPEN (Cooldown: ${duration / 1000}s, Motivo: ${isRateLimit ? 'Rate Limit 429' : 'Múltiplas falhas'})`);
   }
 }
 

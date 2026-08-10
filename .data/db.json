@@ -238,5 +238,152 @@
       "gemini-3.5-flash-lite": 47
     },
     "totalRevenue": 39.9
+  },
+  "tasks": {
+    "task-1786337094391-43198": {
+      "id": "task-1786337094391-43198",
+      "userId": "CVmnrUky7RMbfSQOfcr7TZ5DpNh1",
+      "userEmail": "davifernandes0024509@gmail.com",
+      "plan": "ZENO Pro",
+      "status": "completed",
+      "payload": {
+        "prompt": "Descreva esta imagem.",
+        "style": "photorealistic",
+        "aspectRatio": "1:1",
+        "enhance": true,
+        "engine": "flux",
+        "negativePrompt": ""
+      },
+      "createdAt": 1786337094391,
+      "retryCount": 0,
+      "startedAt": 1786337094694,
+      "finishedAt": 1786337095598,
+      "result": {
+        "imageUrl": "https://image.pollinations.ai/prompt/Descreva%20esta%20imagem.%2C%20highly%20detailed%2C%208k%20resolution%2C%20professional%20lighting%2C%20masterpiece?width=1024&height=1024&seed=856455&nologo=true&model=flux",
+        "prompt": "Descreva esta imagem., highly detailed, 8k resolution, professional lighting, masterpiece",
+        "originalPrompt": "Descreva esta imagem.",
+        "aspectRatio": "1:1",
+        "style": "photorealistic",
+        "seed": 856455,
+        "model": "ZENO Vision Studio",
+        "provider": "Flux AI"
+      }
+    },
+    "task-1786337272779-21825": {
+      "id": "task-1786337272779-21825",
+      "userId": "CVmnrUky7RMbfSQOfcr7TZ5DpNh1",
+      "userEmail": "davifernandes0024509@gmail.com",
+      "plan": "ZENO Pro",
+      "status": "completed",
+      "payload": {
+        "prompt": "de foto de perfil",
+        "style": "photorealistic",
+        "aspectRatio": "1:1",
+        "enhance": true,
+        "engine": "flux",
+        "negativePrompt": ""
+      },
+      "createdAt": 1786337272779,
+      "retryCount": 0,
+      "startedAt": 1786337273287,
+      "finishedAt": 1786337273731,
+      "result": {
+        "imageUrl": "https://image.pollinations.ai/prompt/de%20foto%20de%20perfil%2C%20highly%20detailed%2C%208k%20resolution%2C%20professional%20lighting%2C%20masterpiece?width=1024&height=1024&seed=885617&nologo=true&model=flux",
+        "prompt": "de foto de perfil, highly detailed, 8k resolution, professional lighting, masterpiece",
+        "originalPrompt": "de foto de perfil",
+        "aspectRatio": "1:1",
+        "style": "photorealistic",
+        "seed": 885617,
+        "model": "ZENO Vision Studio",
+        "provider": "Flux AI"
+      }
+    },
+    "task-1786337862861-93243": {
+      "id": "task-1786337862861-93243",
+      "userId": "CVmnrUky7RMbfSQOfcr7TZ5DpNh1",
+      "userEmail": "davifernandes0024509@gmail.com",
+      "plan": "ZENO Pro",
+      "status": "completed",
+      "payload": {
+        "prompt": "Gere uma imagem ",
+        "style": "photorealistic",
+        "aspectRatio": "1:1",
+        "enhance": true,
+        "engine": "flux",
+        "negativePrompt": ""
+      },
+      "createdAt": 1786337862861,
+      "retryCount": 0,
+      "startedAt": 1786337864084,
+      "finishedAt": 1786337864550,
+      "result": {
+        "imageUrl": "https://image.pollinations.ai/prompt/Gere%20uma%20imagem%20%2C%20highly%20detailed%2C%208k%20resolution%2C%20professional%20lighting%2C%20masterpiece?width=1024&height=1024&seed=872594&nologo=true&model=flux",
+        "prompt": "Gere uma imagem , highly detailed, 8k resolution, professional lighting, masterpiece",
+        "originalPrompt": "Gere uma imagem ",
+        "aspectRatio": "1:1",
+        "style": "photorealistic",
+        "seed": 872594,
+        "model": "ZENO Vision Studio",
+        "provider": "Flux AI"
+      }
+    },
+    "task-1786337901594-8984": {
+      "id": "task-1786337901594-8984",
+      "userId": "CVmnrUky7RMbfSQOfcr7TZ5DpNh1",
+      "userEmail": "davifernandes0024509@gmail.com",
+      "plan": "ZENO Pro",
+      "status": "completed",
+      "payload": {
+        "prompt": "uma camisa",
+        "style": "3d-render",
+        "aspectRatio": "1:1",
+        "enhance": true,
+        "engine": "flux",
+        "negativePrompt": ""
+      },
+      "createdAt": 1786337901594,
+      "retryCount": 0,
+      "startedAt": 1786337903114,
+      "finishedAt": 1786337903504,
+      "result": {
+        "imageUrl": "https://image.pollinations.ai/prompt/uma%20camisa%2C%20highly%20detailed%2C%208k%20resolution%2C%20professional%20lighting%2C%20masterpiece?width=1024&height=1024&seed=139597&nologo=true&model=flux",
+        "prompt": "uma camisa, highly detailed, 8k resolution, professional lighting, masterpiece",
+        "originalPrompt": "uma camisa",
+        "aspectRatio": "1:1",
+        "style": "3d-render",
+        "seed": 139597,
+        "model": "ZENO Vision Studio",
+        "provider": "Flux AI"
+      }
+    },
+    "task-1786338643884-27381": {
+      "id": "task-1786338643884-27381",
+      "userId": "anon-user",
+      "userEmail": "Anônimo",
+      "plan": "ZENO Free",
+      "status": "completed",
+      "payload": {
+        "prompt": "de um gato",
+        "style": "photorealistic",
+        "aspectRatio": "1:1",
+        "enhance": true,
+        "engine": "flux",
+        "negativePrompt": ""
+      },
+      "createdAt": 1786338643884,
+      "retryCount": 0,
+      "startedAt": 1786338645468,
+      "finishedAt": 1786338645743,
+      "result": {
+        "imageUrl": "https://image.pollinations.ai/prompt/de%20um%20gato%2C%20highly%20detailed%2C%208k%20resolution%2C%20professional%20lighting%2C%20masterpiece?width=1024&height=1024&seed=233433&nologo=true&model=flux",
+        "prompt": "de um gato, highly detailed, 8k resolution, professional lighting, masterpiece",
+        "originalPrompt": "de um gato",
+        "aspectRatio": "1:1",
+        "style": "photorealistic",
+        "seed": 0,
+        "model": "black-forest-labs/flux-schnell",
+        "provider": "replicate"
+      }
+    }
   }
 }

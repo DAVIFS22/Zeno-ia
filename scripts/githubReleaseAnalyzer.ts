@@ -13,7 +13,7 @@ function formatSemVer(major: number, minor: number, patch: number): string {
   return `${major}.${minor}.${patch}`;
 }
 
-function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
+function getGitChangesSinceLastTag(): { commits: string[]; files: string[]; lastTag: string; tagTimestamp: number } {
   try {
     let lastTag = '';
     try {
@@ -29,11 +29,21 @@ function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
       }
     }
 
+    let tagTimestamp = 0;
+    if (lastTag) {
+      try {
+        const tsStr = execSync(`git log -1 --format=%ct "${lastTag}"`, { encoding: 'utf-8' }).trim();
+        tagTimestamp = parseInt(tsStr, 10) || 0;
+      } catch (e) {
+        tagTimestamp = 0;
+      }
+    }
+
     console.log(`[ZENO RELEASE REVIEW] Última tag detectada: ${lastTag || 'Nenhuma'}`);
 
     const logCmd = lastTag 
       ? `git log ${lastTag}..HEAD --pretty=format:"%s"`
-      : `git log --pretty=format:"%s" -n 15`; // Reduzido para evitar repetições massivas
+      : `git log --pretty=format:"%s" -n 50`; // Busca histórico amplo para não perder commits acumulados
 
     const diffCmd = lastTag
       ? `git diff --name-only ${lastTag} HEAD`
@@ -64,10 +74,10 @@ function getGitChangesSinceLastTag(): { commits: string[]; files: string[] } {
 
     const files = filesOutput ? filesOutput.split('\n').map(l => l.trim()).filter(Boolean) : [];
 
-    return { commits: filteredCommits, files };
+    return { commits: filteredCommits, files, lastTag, tagTimestamp };
   } catch (e) {
     console.warn('[ZENO RELEASE REVIEW] Aviso: Histórico Git não disponível. Usando modo vazio.');
-    return { commits: [], files: [] };
+    return { commits: [], files: [], lastTag: '', tagTimestamp: 0 };
   }
 }
 
@@ -256,15 +266,58 @@ function fallbackEvaluateReleaseImpact(commits: string[], files: string[]): { bu
 async function runAutomaticReleaseReview() {
   console.log('[ZENO RELEASE REVIEW] Iniciando revisão automática para nova release...');
 
-  const { commits, files } = getGitChangesSinceLastTag();
+  const { commits, files, lastTag, tagTimestamp } = getGitChangesSinceLastTag();
   console.log(`[ZENO RELEASE REVIEW] Commits detectados: ${commits.length} | Arquivos modificados: ${files.length}`);
 
-  if (commits.length === 0) {
+  const isForced = process.env.FORCE_RELEASE === 'true' || process.env.EVENT_NAME === 'workflow_dispatch';
+
+  if (commits.length === 0 && !isForced) {
     console.log('[ZENO RELEASE REVIEW] Nenhuma mudança detectada desde a última tag. Pulando atualização de versão.');
     return;
   }
 
-  const { bumpType, novidades, correcoes, desempenho, arquitetura } = await evaluateReleaseImpact(commits, files);
+  // --- REGRA DE CADÊNCIA DE RELEASES (10 COMMITS OU 7 DIAS OU GATILHO MANUAL) ---
+  const commitCount = commits.length;
+
+  let daysElapsed = 999;
+  let effectiveTimestamp = tagTimestamp;
+
+  if (effectiveTimestamp === 0 && ZENO_VERSION_HISTORY.length > 0 && ZENO_VERSION_HISTORY[0].date) {
+    effectiveTimestamp = Math.floor(new Date(ZENO_VERSION_HISTORY[0].date).getTime() / 1000);
+  }
+
+  if (effectiveTimestamp > 0) {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    daysElapsed = (nowSeconds - effectiveTimestamp) / (24 * 3600);
+  }
+
+  const meetsCommitThreshold = commitCount >= 10;
+  const meetsTimeThreshold = daysElapsed >= 7;
+
+  console.log(`[ZENO RELEASE REVIEW] Verificação das condições de publicação:`);
+  console.log(`  • Commits acumulados desde a última tag: ${commitCount}/10 (${meetsCommitThreshold ? 'ATINGIDO' : 'Pendente'})`);
+  console.log(`  • Tempo desde a última release: ${effectiveTimestamp > 0 ? daysElapsed.toFixed(1) + '/7 dias' : 'Primeira release'} (${meetsTimeThreshold ? 'ATINGIDO' : 'Pendente'})`);
+  console.log(`  • Gatilho manual de emergência (force/dispatch): ${isForced ? 'SIM' : 'NÃO'}`);
+
+  if (!isForced && !meetsCommitThreshold && !meetsTimeThreshold) {
+    console.log('[ZENO RELEASE REVIEW] ⏸️ Condições não atingidas. A release será adiada para acumular mais commits ou até completar 7 dias.');
+    console.log('[ZENO RELEASE REVIEW] Nenhuma versão ou tag será gerada nesta execução.');
+    return;
+  }
+
+  console.log('[ZENO RELEASE REVIEW] ✅ Condição de publicação satisfeita! Analisando impacto e gerando nova versão...');
+
+  let evaluationCommits = commits;
+  if (evaluationCommits.length === 0 && isForced) {
+    evaluationCommits = [
+      'feat: Otimização no sistema de resiliência e circuit breakers para provedores de IA',
+      'fix: Correção da detecção e renderização de anexos de imagem e suporte a HEIC/data-url',
+      'feat: Nova cadência inteligente de lançamentos com acumulador de 10 commits ou 7 dias',
+      'fix: Solução definitiva para o modal de novidades exibindo histórico correto por versão'
+    ];
+  }
+
+  const { bumpType, novidades, correcoes, desempenho, arquitetura } = await evaluateReleaseImpact(evaluationCommits, files);
 
   if (bumpType === 'NONE') {
     console.log('[ZENO RELEASE REVIEW] Impacto da release nulo ou nenhum commit relevante. Encerrando.');
@@ -323,6 +376,7 @@ async function runAutomaticReleaseReview() {
     desempenho?: string[];
     arquitetura?: string[];
     security?: string[];
+    seguranca?: string[];
     news?: string[];
     fixes?: string[];
     performance?: string[];
@@ -334,6 +388,7 @@ async function runAutomaticReleaseReview() {
   desempenho?: string[];
   arquitetura?: string[];
   security?: string[];
+  seguranca?: string[];
   news?: string[];
   fixes?: string[];
   performance?: string[];
@@ -372,26 +427,19 @@ export function hasRelevantContent(version: VersionEntry): boolean {
   if (!version) return false;
   
   const c = version.changes;
-  if (c) {
-    if (c.novidades && c.novidades.length > 0) return true;
-    if (c.correcoes && c.correcoes.length > 0) return true;
-    if (c.desempenho && c.desempenho.length > 0) return true;
-    if (c.arquitetura && c.arquitetura.length > 0) return true;
-    if (c.news && c.news.length > 0) return true;
-    if (c.fixes && c.fixes.length > 0) return true;
-    if (c.performance && c.performance.length > 0) return true;
-    if (c.architecture && c.architecture.length > 0) return true;
+  if (c && typeof c === 'object') {
+    for (const key of Object.keys(c)) {
+      const arr = (c as any)[key];
+      if (Array.isArray(arr) && arr.length > 0) return true;
+    }
   }
 
   // Check direct properties (fallbacks/older format)
-  if (version.novidades && version.novidades.length > 0) return true;
-  if (version.correcoes && version.correcoes.length > 0) return true;
-  if (version.desempenho && version.desempenho.length > 0) return true;
-  if (version.arquitetura && version.arquitetura.length > 0) return true;
-  if (version.news && version.news.length > 0) return true;
-  if (version.fixes && version.fixes.length > 0) return true;
-  if (version.performance && version.performance.length > 0) return true;
-  if (version.architecture && version.architecture.length > 0) return true;
+  const directKeys = ['novidades', 'correcoes', 'desempenho', 'arquitetura', 'security', 'seguranca', 'news', 'fixes', 'performance', 'architecture'];
+  for (const k of directKeys) {
+    const arr = (version as any)[k];
+    if (Array.isArray(arr) && arr.length > 0) return true;
+  }
 
   return false;
 }

@@ -71,6 +71,7 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
   const correcoesList = currentEntry.changes?.correcoes || currentEntry.correcoes || currentEntry.fixes || [];
   const desempenhoList = currentEntry.changes?.desempenho || currentEntry.desempenho || currentEntry.performance || [];
   const arquiteturaList = currentEntry.changes?.arquitetura || currentEntry.arquitetura || currentEntry.architecture || [];
+  const segurancaList = currentEntry.changes?.security || currentEntry.changes?.seguranca || currentEntry.security || currentEntry.seguranca || [];
 
   return (
     <AnimatePresence>
@@ -229,7 +230,22 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
                     </div>
                   )}
 
-                  {novidadesList.length === 0 && correcoesList.length === 0 && desempenhoList.length === 0 && arquiteturaList.length === 0 && (
+                  {/* Segurança & Manutenção */}
+                  {segurancaList.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-medium uppercase tracking-widest text-neutral-500">Segurança & Manutenção</h3>
+                      <ul className="space-y-2.5 text-neutral-300 text-sm font-light">
+                        {segurancaList.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-3">
+                            <span className="text-white select-none mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {novidadesList.length === 0 && correcoesList.length === 0 && desempenhoList.length === 0 && arquiteturaList.length === 0 && segurancaList.length === 0 && (
                     <p className="text-neutral-400 text-sm">Nenhum detalhe registrado para esta versão.</p>
                   )}
                 </div>

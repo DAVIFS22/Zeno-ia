@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Image as ImageIcon, Sparkles, Download, Copy, Check, RefreshCw, Sliders, Layers, Maximize2, ExternalLink, Wand2, Palette, Heart, Trash2, Search, RotateCcw, Edit3, Filter, Users, Clock, XCircle, Camera, PenTool, Flower, Clapperboard, Box, Building2, Flame, Rocket, Image, Brush, Triangle, Tag, Diamond, Circle, Hexagon, Square, Monitor, Smartphone } from 'lucide-react';
+import { X, Image as ImageIcon, Sparkles, Download, Copy, Check, RefreshCw, Sliders, Layers, Maximize2, ExternalLink, Wand2, Palette, Heart, Trash2, Search, RotateCcw, Edit3, Filter, Users, Clock, XCircle, Camera, PenTool, Flower, Clapperboard, Box, Building2, Flame, Rocket, Image, Brush, Triangle, Tag, Diamond, Circle, Hexagon, Square, Monitor, Smartphone, Loader2 } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 import { GeneratedImage } from '../types';
 import { useTranslation } from '../i18n';
@@ -96,7 +96,6 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
-  const [genProgress, setGenProgress] = useState(10);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadDoneId, setDownloadDoneId] = useState<string | null>(null);
 
@@ -105,30 +104,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isGenerating) return;
-    setGenProgress(10);
-    let animId: number;
-    let lastTime = performance.now();
 
-    const tick = (now: number) => {
-      if (now - lastTime >= 150) {
-        lastTime = now;
-        setGenProgress((prev) => {
-          if (prev >= 92) return 92;
-          const step = Math.max(1, Math.round((95 - prev) * 0.1));
-          return Math.min(92, prev + step);
-        });
-      }
-      animId = requestAnimationFrame(tick);
-    };
-
-    animId = requestAnimationFrame(tick);
-
-    return () => {
-      if (animId) cancelAnimationFrame(animId);
-    };
-  }, [isGenerating]);
 
   if (!isOpen) return null;
 
@@ -490,44 +466,17 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                 </div>
               ) : isGenerating ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 space-y-5 w-full relative">
-                  {/* Subtle highlight */}
-                  <div className="absolute inset-0 bg-[#232326]/20 blur-2xl animate-pulse rounded-2xl" />
-
-                  {/* Animated Center Icon */}
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-2xl bg-[#232326] border border-[#2C2C2E] flex items-center justify-center text-neutral-200 shadow-xl">
-                      <Wand2 className="w-8 h-8 animate-pulse text-neutral-300" />
-                    </div>
-                    <Sparkles className="w-4 h-4 text-neutral-400 absolute -top-1.5 -right-1.5" />
-                  </div>
-
-                  <div className="space-y-1.5 z-10">
-                    <h3 className="text-base font-bold text-neutral-100 flex items-center justify-center gap-2">
-                      <Sparkles className="w-4 h-4 text-neutral-400 animate-pulse" />
-                      <span>{queuePosition !== null ? t.imageStudio.queueTitle : (genProgress < 40 ? t.imageStudio.generatingSteps.step1 : genProgress < 75 ? t.imageStudio.generatingSteps.step2 : t.imageStudio.generatingSteps.step3)}</span>
-                    </h3>
-                    <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
-                      {t.imageStudio.queueDesc}
-                    </p>
-                  </div>
-
-                  {/* Animated Progress Bar & Percentage */}
-                  <div className="w-64 space-y-2 z-10">
-                    <div className="flex justify-between items-center text-[11px] font-semibold text-neutral-300 px-0.5">
-                      <span className="text-neutral-400 font-mono flex items-center gap-1">
-                        <RefreshCw className="w-3 h-3 animate-spin text-neutral-400" />
+                  <div className="relative z-10 flex flex-col items-center text-center space-y-4">
+                    <Loader2 className="w-8 h-8 text-zeno animate-spin" />
+                    <div className="space-y-1.5">
+                      <h3 className="text-base font-bold text-neutral-100">
                         {queuePosition !== null ? t.imageStudio.queueTitle : t.imageStudio.generating}
-                      </span>
-                      <span className="font-mono text-neutral-300">{genProgress}%</span>
-                    </div>
-
-                    <div className="w-full h-1.5 bg-[#232326] rounded-full overflow-hidden relative border border-[#2C2C2E] contain-render">
-                      <div
-                        className="h-full w-full bg-neutral-200 rounded-full transition-transform duration-300 ease-out relative overflow-hidden will-change-transform origin-left"
-                        style={{ transform: `scaleX(${genProgress / 100})` }}
-                      >
-                        <div className="absolute inset-0 bg-white/20 animate-shimmer gpu-accelerated" />
-                      </div>
+                      </h3>
+                      {queuePosition === null && (
+                        <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
+                          {t.imageStudio.queueDesc}
+                        </p>
+                      )}
                     </div>
                   </div>
 

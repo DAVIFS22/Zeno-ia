@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check, Share2, Edit3, RotateCcw, Heart } from 'lucide-react';
+import { Download, Sparkles, Wand2, RefreshCw, AlertCircle, Eye, Check, Share2, Edit3, RotateCcw, Heart, Loader2 } from 'lucide-react';
 import { downloadImage } from '../lib/downloadHelper';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -28,7 +28,6 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   const containerRef = useRef<HTMLSpanElement | null>(null);
   const [isIntersecting, setIsIntersecting] = useState(isAlreadyLoaded);
   const [isLoading, setIsLoading] = useState(!isAlreadyLoaded);
-  const [progress, setProgress] = useState(isAlreadyLoaded ? 100 : 12);
   const [currentSrc, setCurrentSrc] = useState(src);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -134,10 +133,8 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
       setCurrentSrc(src);
       if (loadedImagesCache.has(src)) {
         setIsLoading(false);
-        setProgress(100);
       } else {
         setIsLoading(true);
-        setProgress(12);
       }
       setHasError(false);
     }
@@ -148,34 +145,10 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
       if (currentSrc) loadedImagesCache.add(currentSrc);
       setIsLoading(false);
-      setProgress(100);
     }
   }, [currentSrc]);
 
-  // Smooth simulated progress up to 93% using requestAnimationFrame (120Hz/60Hz optimized)
-  useEffect(() => {
-    if (!isLoading) return;
-    let animId: number;
-    let lastTime = performance.now();
 
-    const tick = (now: number) => {
-      if (now - lastTime >= 150) {
-        lastTime = now;
-        setProgress((prev) => {
-          if (prev >= 93) return 93;
-          const diff = (95 - prev) * 0.08;
-          return Math.min(93, Math.round(prev + Math.max(1, diff)));
-        });
-      }
-      animId = requestAnimationFrame(tick);
-    };
-
-    animId = requestAnimationFrame(tick);
-
-    return () => {
-      if (animId) cancelAnimationFrame(animId);
-    };
-  }, [isLoading]);
 
   const handleImageLoad = () => {
     if (currentSrc) {
@@ -199,7 +172,6 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         console.error('Failed to save to image library:', e);
       }
     }
-    setProgress(100);
     setIsLoading(false);
   };
 
@@ -211,23 +183,13 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   const handleManualRetry = () => {
     setIsLoading(true);
     setHasError(false);
-    setProgress(15);
     // Reload original src
     const targetSrc = src;
     setCurrentSrc('');
     setTimeout(() => setCurrentSrc(targetSrc), 50);
   };
 
-  // Determine message according to progress
-  const getProgressStage = (p: number) => {
-    if (p < 30) return { title: 'Interpretando Prompt', detail: 'Analisando conceitos e composição...' };
-    if (p < 60) return { title: 'Sintetizando Pixels', detail: 'Criando formas, cores e iluminação...' };
-    if (p < 85) return { title: 'Refinando Texturas', detail: 'Aplicando detalhes em alta definição...' };
-    if (p < 100) return { title: 'Finalizando Imagem', detail: 'Renderizando nitidez e iluminação final...' };
-    return { title: 'Concluído!', detail: 'Imagem gerada com sucesso.' };
-  };
 
-  const currentStage = getProgressStage(progress);
 
   if (!isIntersecting) {
     return (
@@ -242,51 +204,10 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     <span ref={containerRef} className="block my-4 relative group w-full rounded-2xl overflow-hidden border border-[#2C2C2E]/60 shadow-2xl bg-[#171717]">
       {/* Loading Container */}
       {isLoading && (
-        <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative overflow-hidden select-none">
-          {/* Subtle Ambient Highlight */}
-          <span className="absolute inset-0 bg-[#232326]/20 animate-pulse blur-2xl" />
-
-          {/* Central AI Orb */}
+        <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative select-none">
           <span className="relative z-10 flex flex-col items-center text-center space-y-4">
-            <span className="relative flex items-center justify-center">
-              {/* Neutral icon box */}
-              <span className="w-16 h-16 rounded-2xl bg-[#232326] border border-[#2C2C2E] flex items-center justify-center text-neutral-200 shadow-lg">
-                <Wand2 className="w-8 h-8 text-neutral-300 animate-pulse" />
-              </span>
-              <Sparkles className="w-4 h-4 text-neutral-400 absolute -top-1.5 -right-1.5" />
-            </span>
-
-            {/* Stage Info */}
-            <span className="space-y-1">
-              <span className="flex items-center justify-center gap-2 text-sm font-semibold text-neutral-200">
-                <Sparkles className="w-4 h-4 text-neutral-400" />
-                <span>{currentStage.title}</span>
-              </span>
-              <span className="text-xs text-neutral-400 block max-w-xs leading-relaxed">
-                {currentStage.detail}
-              </span>
-            </span>
-
-            {/* Progress Bar & Percentage */}
-            <span className="w-64 space-y-2 pt-1">
-              <span className="flex justify-between items-center text-[11px] font-semibold text-neutral-400 px-0.5">
-                <span className="text-neutral-400 font-mono flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin text-neutral-400" />
-                  Gerando Imagem
-                </span>
-                <span className="font-mono text-neutral-300">{progress}%</span>
-              </span>
-
-              {/* Progress Track (120fps GPU accelerated scaleX) */}
-              <span className="w-full h-1.5 bg-[#232326] rounded-full overflow-hidden relative border border-[#2C2C2E] block contain-render">
-                <span
-                  className="h-full w-full bg-neutral-200 rounded-full transition-transform duration-300 ease-out block relative overflow-hidden will-change-transform origin-left"
-                  style={{ transform: `scaleX(${progress / 100})` }}
-                >
-                  <span className="absolute inset-0 bg-white/20 animate-shimmer block gpu-accelerated" />
-                </span>
-              </span>
-            </span>
+            <Loader2 className="w-8 h-8 text-zeno animate-spin" />
+            <span className="text-sm font-medium text-neutral-400">Gerando imagem...</span>
           </span>
         </span>
       )}

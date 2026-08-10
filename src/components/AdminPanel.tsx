@@ -1644,6 +1644,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
               <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-zeno/10 text-zeno">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Reset de Circuit Breakers</h4>
+                  <p className="text-[10px] text-neutral-400">Reativa instantaneamente todos os provedores e limpa bloqueios por erro/rate-limit.</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/admin/reset-resilience', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json();
+                    alert(data.message || 'Circuit breakers e cotas resetados com sucesso!');
+                  } catch (err: any) {
+                    alert('Erro ao resetar: ' + err.message);
+                  }
+                }}
+                className="w-full py-2 rounded-xl bg-zeno hover:bg-zeno/90 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+              >
+                Resetar Circuit Breakers Agora
+              </button>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#202020] border border-[#2E2E2E] space-y-4">
+              <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-neutral-500/10 text-neutral-500">
                   <RefreshCw className="w-5 h-5" />
                 </div>

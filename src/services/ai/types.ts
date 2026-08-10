@@ -1,4 +1,4 @@
-export type AICategory = 'general' | 'think' | 'code' | 'speed' | 'search' | 'image';
+export type AICategory = 'general' | 'think' | 'code' | 'speed' | 'search' | 'image' | 'vision' | 'image_generation';
 
 export type ProviderName = 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'mistral' | 'llama' | 'groq' | 'openrouter' | 'replicate';
 
@@ -9,6 +9,7 @@ export interface AIProviderModelConfig {
   priority: number; // Higher number = higher priority
   maxRetries: number;
   timeoutMs: number;
+  supportsVision?: boolean;
 }
 
 export interface AIRequestOptions {
@@ -18,7 +19,16 @@ export interface AIRequestOptions {
   maxOutputTokens?: number;
   tools?: any[];
   isSearchIntent?: boolean;
+  hasImages?: boolean;
   category?: AICategory;
+  imageOptions?: {
+    prompt: string;
+    aspectRatio?: string;
+    imageSize?: string;
+    style?: string;
+    negativePrompt?: string;
+    seed?: number;
+  };
   userGeminiApiKey?: string;
   userId?: string;
   userPlan?: string;
@@ -26,6 +36,7 @@ export interface AIRequestOptions {
 
 export interface AIResponseResult {
   text: string;
+  imageUrl?: string;
   provider: ProviderName;
   modelUsed: string;
   isAlternative: boolean;

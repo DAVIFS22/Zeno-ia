@@ -35,7 +35,7 @@ import { useSessions } from './hooks/useSessions';
 import { useChat } from './hooks/useChat';
 import { detectIntent } from './utils/intent';
 import { LanguageProvider, useTranslation } from './i18n';
-import { VersionProvider } from './contexts/VersionContext';
+import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { hasPremiumAccess } from './config/admin';
 import { filterValidSources } from './utils/sourceValidation';
 import { isAuthorizedImageUrl } from './utils/imageSecurity';
@@ -89,16 +89,18 @@ function MainAppInner() {
   const [speed, setSpeed] = useState<ModelType>('smart');
   const [showUsageCard, setShowUsageCard] = useState(true);
 
+  const { checkNewVersion, markSeen, latestVersion } = useVersion();
+
   useEffect(() => {
-    const { isNew, version } = checkAndGetNewVersion();
+    const { isNew, version } = checkNewVersion();
     if (isNew) {
       if (hasRelevantContent(version)) {
         ui.openModal('versionNews');
       } else {
-        markVersionAsSeen(version.version);
+        markSeen(version.version);
       }
     }
-  }, []);
+  }, [latestVersion]);
 
   useEffect(() => {
     if (isPro || (profile && hasPremiumAccess(profile)) || hasPremiumAccess(userSettings) || hasPremiumAccess(profile?.email)) {

@@ -3,7 +3,7 @@ import { List } from 'react-window';
 import { 
   Plus, MessageSquare, Settings, Search, PanelLeftClose, 
   X, Pin, Edit2, Trash2, Sparkles, User, Lock, Check,
-  Image, Folder, Cpu, Sliders, Shield, ChevronDown
+  Image, Folder, Cpu, Sliders, Shield, ChevronDown, MoreHorizontal
 } from 'lucide-react';
 import { UserSettings, ChatSession } from '../types';
 import { ZenoLogo } from './ZenoLogo';
@@ -54,10 +54,25 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
   onSetEditingTitle,
   onSetDeletingSessionId
 }) => {
+  const [showMenu, setShowMenu] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
+
   return (
     <div
       onClick={() => onSelectSession(session.id)}
-      className={`group relative flex items-center gap-2.5 px-3 h-[36px] rounded-lg text-xs transition-colors duration-150 cursor-pointer ${
+      className={`group relative flex items-center gap-2 px-3 h-[36px] rounded-lg text-xs transition-colors duration-150 cursor-pointer ${
         isActive
           ? `${bgActiveItem} ${textMain} font-medium`
           : `bg-transparent ${textMuted} hover:${textMain} ${hoverItemBg}`
@@ -86,31 +101,54 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
       )}
 
       {!isEditing && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => onTogglePinSession(session.id, e)}
-            className={`p-1 rounded hover:${isDark ? 'bg-[#232326]' : 'bg-neutral-200'} ${session.isPinned ? textMain : textMuted}`}
-            title={session.isPinned ? "Desfixar" : "Fixar"}
-          >
-            <Pin className="w-3 h-3" />
-          </button>
-          <button
-            onClick={(e) => onStartRenameSession(session, e)}
-            className={`p-1 rounded hover:${isDark ? 'bg-[#232326]' : 'bg-neutral-200'} ${textMuted}`}
-            title="Renomear"
-          >
-            <Edit2 className="w-3 h-3" />
-          </button>
+        <div className="relative flex items-center" ref={menuRef}>
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onSetDeletingSessionId(session.id);
+              setShowMenu(!showMenu);
             }}
-            className={`p-1 rounded hover:${isDark ? 'bg-[#232326]' : 'bg-neutral-200'} ${textMuted}`}
-            title="Excluir"
+            className={`p-1 rounded-md transition-colors hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-200'} ${showMenu ? (isDark ? 'bg-[#2a2a2e] text-white' : 'bg-neutral-200 text-neutral-900') : textMuted} hover:${textMain}`}
+            title="Opções"
           >
-            <Trash2 className="w-3 h-3" />
+            <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
+
+          {showMenu && (
+            <div className={`absolute right-0 top-full mt-1 w-36 py-1 rounded-xl shadow-xl z-50 border text-xs animate-fadeIn ${
+              isDark ? 'bg-[#1e1e22] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+            }`} onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={(e) => {
+                  setShowMenu(false);
+                  onStartRenameSession(session, e);
+                }}
+                className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+              >
+                <Edit2 className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Renomear</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  setShowMenu(false);
+                  onTogglePinSession(session.id, e);
+                }}
+                className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+              >
+                <Pin className={`w-3.5 h-3.5 ${session.isPinned ? 'text-zeno' : 'text-neutral-400'}`} />
+                <span>{session.isPinned ? 'Desafixar' : 'Fixar'}</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  setShowMenu(false);
+                  onSetDeletingSessionId(session.id);
+                }}
+                className={`flex items-center gap-2 w-full px-3 py-2 text-left text-red-500 hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

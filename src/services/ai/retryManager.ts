@@ -44,7 +44,13 @@ function isRecoverableError(err: any): boolean {
     msg.includes('forbidden') ||
     msg.includes('invalid_api_key') ||
     msg.includes('api_key_invalid') ||
-    msg.includes('invalid_argument')
+    msg.includes('invalid_argument') ||
+    msg.includes('api key not valid') ||
+    msg.includes('insufficient_quota') ||
+    msg.includes('402') ||
+    msg.includes('credits') ||
+    msg.includes('exceeded your current quota') ||
+    msg.includes('resource_exhausted')
   ) {
     return false;
   }
@@ -53,14 +59,12 @@ function isRecoverableError(err: any): boolean {
   return (
     msg.includes('429') ||
     msg.includes('rate limit') ||
-    msg.includes('quota') ||
     msg.includes('500') ||
     msg.includes('502') ||
     msg.includes('503') ||
     msg.includes('504') ||
     msg.includes('timeout') ||
     msg.includes('temporarily_unavailable') ||
-    msg.includes('resource_exhausted') ||
     msg.includes('fetch failed') ||
     msg.includes('network')
   );

@@ -11,6 +11,7 @@ export interface VersionEntry {
     desempenho?: string[];
     arquitetura?: string[];
     security?: string[];
+    seguranca?: string[];
     news?: string[];
     fixes?: string[];
     performance?: string[];
@@ -22,6 +23,7 @@ export interface VersionEntry {
   desempenho?: string[];
   arquitetura?: string[];
   security?: string[];
+  seguranca?: string[];
   news?: string[];
   fixes?: string[];
   performance?: string[];
@@ -42,7 +44,12 @@ export const ZENO_VERSION_HISTORY: VersionEntry[] = [
     "type": "MINOR",
     "changes": {
       "novidades": [
-        "add image processing, server-side auth, and UI styling"
+        "Otimização no sistema de resiliência e circuit breakers para provedores de IA",
+        "Nova cadência inteligente de lançamentos com acumulador de 10 commits ou 7 dias"
+      ],
+      "correcoes": [
+        "Correção da detecção e renderização de anexos de imagem e suporte a HEIC/data-url",
+        "Solução definitiva para o modal de novidades exibindo histórico correto por versão"
       ],
       "security": [
         "Atualização de segurança e validação de tokens"
@@ -242,26 +249,19 @@ export function hasRelevantContent(version: VersionEntry): boolean {
   if (!version) return false;
   
   const c = version.changes;
-  if (c) {
-    if (c.novidades && c.novidades.length > 0) return true;
-    if (c.correcoes && c.correcoes.length > 0) return true;
-    if (c.desempenho && c.desempenho.length > 0) return true;
-    if (c.arquitetura && c.arquitetura.length > 0) return true;
-    if (c.news && c.news.length > 0) return true;
-    if (c.fixes && c.fixes.length > 0) return true;
-    if (c.performance && c.performance.length > 0) return true;
-    if (c.architecture && c.architecture.length > 0) return true;
+  if (c && typeof c === 'object') {
+    for (const key of Object.keys(c)) {
+      const arr = (c as any)[key];
+      if (Array.isArray(arr) && arr.length > 0) return true;
+    }
   }
 
   // Check direct properties (fallbacks/older format)
-  if (version.novidades && version.novidades.length > 0) return true;
-  if (version.correcoes && version.correcoes.length > 0) return true;
-  if (version.desempenho && version.desempenho.length > 0) return true;
-  if (version.arquitetura && version.arquitetura.length > 0) return true;
-  if (version.news && version.news.length > 0) return true;
-  if (version.fixes && version.fixes.length > 0) return true;
-  if (version.performance && version.performance.length > 0) return true;
-  if (version.architecture && version.architecture.length > 0) return true;
+  const directKeys = ['novidades', 'correcoes', 'desempenho', 'arquitetura', 'security', 'seguranca', 'news', 'fixes', 'performance', 'architecture'];
+  for (const k of directKeys) {
+    const arr = (version as any)[k];
+    if (Array.isArray(arr) && arr.length > 0) return true;
+  }
 
   return false;
 }
