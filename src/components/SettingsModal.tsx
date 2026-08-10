@@ -3,7 +3,7 @@ import {
   X, User, Moon, Sun, Brain, Shield,
   Download, Trash2, Check, Sparkles, Plus, RefreshCw,
   Lock, Zap, Wand2, Globe, ArrowLeft, ChevronRight, Laptop,
-  Volume2, Bell, Code, Fingerprint, ExternalLink, LogOut
+  Volume2, Bell, Code, Fingerprint, ExternalLink, LogOut, Edit2
 } from 'lucide-react';
 import { UserSettings } from '../types';
 import { SupportChatTab } from "./SupportChatTab";
@@ -27,6 +27,7 @@ interface SettingsModalProps {
   onExportAllData: () => void;
   onOpenSubscriptionModal?: () => void;
   onOpenAdaptiveModal?: () => void;
+  onOpenEditProfileModal?: () => void;
   backendLimits?: any;
   adminConfig?: any;
   user?: AuthProfile | null;
@@ -57,6 +58,7 @@ export function SettingsModal({
   onExportAllData,
   onOpenSubscriptionModal,
   onOpenAdaptiveModal,
+  onOpenEditProfileModal,
   backendLimits,
   adminConfig,
   user,
@@ -210,15 +212,26 @@ export function SettingsModal({
                                 <p className="text-xs text-neutral-400 truncate">{maskEmail(acc.email)}</p>
                               </div>
                             </div>
-                            {acc.uid !== session.activeUid && (
-                              <button
-                                onClick={() => onSwitchAccount?.(acc.uid)}
-                                className="px-3 py-1 rounded-lg text-xs font-medium bg-[#232326] hover:bg-neutral-700 text-neutral-200 transition-colors"
-                              >
-                                Alternar
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {acc.uid === session.activeUid && (
+                                <button 
+                                  onClick={onOpenEditProfileModal}
+                                  className="p-2 rounded-lg hover:bg-neutral-500/10 text-neutral-400 hover:text-white"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {acc.uid !== session.activeUid && (
+                                <button
+                                  onClick={() => onSwitchAccount?.(acc.uid)}
+                                  className="px-3 py-1 rounded-lg text-xs font-medium bg-[#232326] hover:bg-neutral-700 text-neutral-200 transition-colors"
+                                >
+                                  Alternar
+                                </button>
+                              )}
+                            </div>
                           </div>
+
                         ))}
 
                         {isAuthenticated && (
@@ -227,8 +240,8 @@ export function SettingsModal({
                             onClick={() => setShowLogoutConfirm(true)}
                             className={`w-full py-2.5 mt-2 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                               isDark 
-                                ? 'border-sky-500/30 bg-sky-500/5 text-sky-400 hover:bg-sky-500/10' 
-                                : 'border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100'
+                                ? 'border-zeno/30 bg-zeno/5 text-zeno hover:bg-zeno/10' 
+                                : 'border-zeno/30 bg-sky-50 text-zeno hover:bg-zeno/10'
                             }`}
                           >
                             <LogOut className="w-4 h-4" />
@@ -266,7 +279,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => onUpdateSettings({ rememberDevice: !settings.rememberDevice })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        settings.rememberDevice ? 'bg-sky-600' : 'bg-[#232326]'
+                        settings.rememberDevice ? 'bg-zeno' : 'bg-[#232326]'
                       }`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
@@ -380,16 +393,16 @@ export function SettingsModal({
                 <div className="space-y-6 animate-fadeIn">
                   {/* Adaptive Learning Highlight Banner */}
                   <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
-                    isDark ? 'bg-sky-500/10 border-sky-500/30' : 'bg-sky-50 border-sky-200'
+                    isDark ? 'bg-zeno/10 border-zeno/30' : 'bg-sky-50 border-zeno/30'
                   }`}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-sky-500/20 text-sky-400">
+                      <div className="p-2.5 rounded-lg bg-zeno/20 text-zeno">
                         <Brain className="w-5 h-5 animate-pulse" />
                       </div>
                       <div>
                         <div className="font-bold text-sm text-neutral-100 flex items-center gap-2">
                           <span>{t.settings.adaptiveLearning}</span>
-                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-zeno/20 text-zeno border border-zeno/30">
                             ATIVO
                           </span>
                         </div>
@@ -402,7 +415,7 @@ export function SettingsModal({
                       <button
                         type="button"
                         onClick={onOpenAdaptiveModal}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-sky-500 text-neutral-950 hover:bg-sky-400 transition-colors whitespace-nowrap shadow-md shadow-sky-500/10"
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-zeno text-neutral-950 hover:bg-zeno/10 transition-colors whitespace-nowrap shadow-md shadow-zeno/10"
                       >
                         Configurar Perfil
                       </button>
@@ -420,7 +433,7 @@ export function SettingsModal({
                         type="button"
                         onClick={() => onUpdateSettings({ isSmartMode: !safeSettings.isSmartMode })}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          safeSettings.isSmartMode ? 'bg-sky-600' : 'bg-[#232326]'
+                          safeSettings.isSmartMode ? 'bg-zeno' : 'bg-[#232326]'
                         }`}
                       >
                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
@@ -639,7 +652,7 @@ export function SettingsModal({
             isDark ? 'border-[#2C2C2E] bg-[#17171a] text-white' : 'border-neutral-200 bg-white text-neutral-900 shadow-2xl'
           } space-y-4`}>
             <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>
+              <div className={`p-2.5 rounded-xl ${isDark ? 'bg-zeno/10 text-zeno' : 'bg-sky-50 text-zeno'}`}>
                 <LogOut className="w-5 h-5" />
               </div>
               <h3 className="font-bold text-base">Tem certeza que deseja sair?</h3>

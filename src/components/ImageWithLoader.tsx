@@ -337,14 +337,14 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               onClick={handleDownload}
               disabled={isDownloading}
               className={`p-2 rounded-xl text-neutral-200 hover:bg-[#232326] hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold ${
-                downloadSuccess ? 'text-sky-400 font-bold' : ''
+                downloadSuccess ? 'text-zeno font-bold' : ''
               }`}
               title="Baixar imagem em alta resolução"
             >
               {isDownloading ? (
                 <RefreshCw className="w-3.5 h-3.5 text-neutral-300 animate-spin" />
               ) : downloadSuccess ? (
-                <Check className="w-3.5 h-3.5 text-sky-400" />
+                <Check className="w-3.5 h-3.5 text-zeno" />
               ) : (
                 <Download className="w-3.5 h-3.5 text-neutral-400" />
               )}
@@ -366,7 +366,7 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               title="Compartilhar imagem (copiar link)"
             >
               {shareSuccess ? (
-                <Check className="w-3.5 h-3.5 text-sky-400" />
+                <Check className="w-3.5 h-3.5 text-zeno" />
               ) : (
                 <Share2 className="w-3.5 h-3.5 text-neutral-400" />
               )}
@@ -405,10 +405,10 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
               <button
                 type="button"
                 onClick={onVary}
-                className="p-2 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 text-sky-400 transition-all flex items-center gap-1.5 text-xs font-semibold"
+                className="p-2 rounded-xl bg-zeno/10 hover:bg-zeno/20 border border-zeno/20 text-zeno transition-all flex items-center gap-1.5 text-xs font-semibold"
                 title="Criar uma variação desta imagem"
               >
-                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                <Sparkles className="w-3.5 h-3.5 text-zeno" />
                 <span className="hidden sm:inline">Variar</span>
               </button>
             )}

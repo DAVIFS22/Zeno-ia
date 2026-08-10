@@ -64,7 +64,18 @@ export function useSessions(userId: string | null) {
   useEffect(() => {
     if (userId) {
       try {
-        localStorage.setItem(`${STORAGE_KEY_SESSIONS}_${userId}`, JSON.stringify(sessions));
+        const lightweightSessions = sessions.map(s => ({
+          ...s,
+          messages: s.messages?.map(m => ({
+            ...m,
+            attachments: m.attachments?.map(att => ({
+              ...att,
+              url: att.url && att.url.startsWith('data:') && att.url.length > 50000 ? '[omitted_large_data]' : att.url,
+              content: att.content && att.content.length > 50000 ? '[omitted_large_content]' : att.content,
+            }))
+          }))
+        }));
+        localStorage.setItem(`${STORAGE_KEY_SESSIONS}_${userId}`, JSON.stringify(lightweightSessions));
       } catch (e: any) {
         console.error('Error saving sessions:', e);
         if (e.name === 'QuotaExceededError' || e.message?.includes('exceeded the quota')) {

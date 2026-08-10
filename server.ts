@@ -4,6 +4,8 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import fs from "fs";
+import multer from "multer";
+import { uploadImageWithFallback } from "./src/server/storage/imageUploadManager";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import Stripe from "stripe";
@@ -40,7 +42,11 @@ import { SubscriptionManager } from "./src/services/subscriptionManager";
 import { getYoutubeTranscript, getYoutubeMetadata, extractYoutubeId, downloadYoutubeAudio } from "./src/lib/youtube";
 import { buildAdaptiveSystemPrompt, updateProfileWithFeedback, DEFAULT_ADAPTIVE_PROFILE } from "./src/lib/adaptiveLearning";
 import { generateTextWithFallback, startHealthCheckLoop } from "./src/services/aiProvider";
+import { getAllProviderMetricsSummary } from "./src/services/ai/healthManager";
+import { getGlobalAiStats } from "./src/services/ai/metrics";
 import { sanitizeResponseText } from "./src/utils/imageSecurity";
+import { resetAllCircuits } from './src/services/ai/circuitBreaker';
+import { resetAllQuotas } from './src/services/ai/quotaManager';
 
 // Startup Firestore connection test removed to avoid listCollections dependency
 
@@ -155,6 +161,52 @@ async function startServer() {
     console.log(`[ZENO VISION ENGINE] Executando tarefa de imagem. Prompt: "${prompt}", Estilo: ${style}, Proporção: ${aspectRatio}`);
     
     const enhancedPrompt = enhance ? `${prompt}, highly detailed, 8k resolution, professional lighting, masterpiece` : prompt;
+    
+    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 10) {
+      try {
+        console.log(`[ZENO VISION ENGINE] Utilizando OpenAI DALL-E 3 API para geração de imagem...`);
+        const size = aspectRatio === '16:9' ? '1792x1024' : aspectRatio === '9:16' ? '1024x1792' : '1024x1024';
+        const openAiRes = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY.trim()}`
+          },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: enhancedPrompt,
+            n: 1,
+            size,
+            quality: 'standard'
+          })
+        });
+        if (openAiRes.ok) {
+          const data = await openAiRes.json();
+          const imageUrl = data.data?.[0]?.url;
+          if (imageUrl) {
+            try {
+              await incrementStatCounter('totalImagesGenerated');
+            } catch (e) {}
+            return {
+              imageUrl,
+              prompt: enhancedPrompt,
+              originalPrompt: prompt,
+              aspectRatio: aspectRatio || '1:1',
+              style: style || 'photorealistic',
+              seed: seed || 0,
+              model: 'DALL-E 3',
+              provider: 'OpenAI'
+            };
+          }
+        } else {
+          const errText = await openAiRes.text();
+          console.warn('[ZENO VISION ENGINE] OpenAI DALL-E 3 falhou, caindo para fallback:', errText);
+        }
+      } catch (err) {
+        console.warn('[ZENO VISION ENGINE] Erro ao chamar OpenAI DALL-E 3:', err);
+      }
+    }
+
     const width = aspectRatio === '16:9' ? 1280 : aspectRatio === '9:16' ? 720 : 1024;
     const height = aspectRatio === '16:9' ? 720 : aspectRatio === '9:16' ? 1280 : 1024;
     const randomSeed = seed || Math.floor(Math.random() * 1000000);
@@ -277,12 +329,32 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
   return email;
 }
 
-  app.get("/api/debug-grounding", (req, res) => {
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post("/api/upload-image", upload.single("image"), async (req: any, res: any) => {
+  try {
+    const file = req.file;
+    const userId = req.body.userId;
+    const filename = req.body.filename || 'upload.jpg';
+    
+    if (!file) return res.status(400).json({ error: "Nenhuma imagem fornecida." });
+    if (!userId) return res.status(400).json({ error: "userId é obrigatório." });
+
+    const imageUrl = await uploadImageWithFallback(file.buffer, userId, filename);
+    res.json({ imageUrl });
+  } catch (err: any) {
+    console.error("[UPLOAD IMAGE ERROR]:", err);
+    res.status(500).json({ error: err.message || "Erro no upload." });
+  }
+});
+
+  app.post("/api/admin/reset-resilience", async (req, res) => {
     try {
-      const data = fs.readFileSync(path.join(process.cwd(), 'grounding_last.json'), 'utf8');
-      res.json(JSON.parse(data));
-    } catch (e) {
-      res.status(404).json({ error: "Nenhum log de grounding encontrado ainda. Faça uma busca primeiro." });
+      resetAllCircuits();
+      resetAllQuotas();
+      res.json({ status: 'ok', message: 'Circuits and Quotas reset' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -1236,6 +1308,20 @@ async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
       res.status(500).json({ error: e.message });
     }
   });
+
+  // GET Admin AI Providers monitoring
+  app.get("/api/admin/ai-providers", async (req, res) => {
+    try {
+      const adminEmail = await secureVerifyAdmin(req, res);
+      if (!adminEmail) return;
+      const summary = getAllProviderMetricsSummary();
+      const globalStats = getGlobalAiStats();
+      res.json({ providers: summary, stats: globalStats });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
 
   // Admin Support Tickets API
   app.get("/api/admin/support-tickets", async (req, res) => {

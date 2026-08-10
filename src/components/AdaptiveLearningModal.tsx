@@ -56,7 +56,7 @@ const SegmentedControl = ({
             {isActive && (
               <motion.div
                 layoutId="active-pill"
-                className="absolute inset-0 bg-sky-500 rounded-lg -z-10 shadow-sm"
+                className="absolute inset-0 bg-zeno rounded-lg -z-10 shadow-sm"
                 transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
               />
             )}
@@ -149,12 +149,12 @@ export function AdaptiveLearningModal({
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
               isDark ? 'bg-neutral-900 border border-neutral-800' : 'bg-neutral-50 border border-neutral-200'
             }`}>
-              <Brain className="w-6 h-6 text-sky-500" />
+              <Brain className="w-6 h-6 text-zeno" />
             </div>
             <div className="pt-0.5">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-xl font-bold tracking-tight">{t.adaptiveLearning.title}</h2>
-                <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-md bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-md bg-zeno/10 text-zeno border border-zeno/20">
                   ZENO Core
                 </span>
               </div>
@@ -189,7 +189,7 @@ export function AdaptiveLearningModal({
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`relative py-4 text-[13px] font-bold transition-all whitespace-nowrap ${
                   isActive 
-                    ? 'text-sky-500' 
+                    ? 'text-zeno' 
                     : isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-400 hover:text-neutral-800'
                 }`}
               >
@@ -197,7 +197,7 @@ export function AdaptiveLearningModal({
                 {isActive && (
                   <motion.div 
                     layoutId="active-tab-border"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-500 rounded-full" 
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-zeno rounded-full" 
                   />
                 )}
               </button>
@@ -219,7 +219,7 @@ export function AdaptiveLearningModal({
                   <div key={i} className={`p-4 rounded-2xl border transition-all hover:scale-[1.02] ${
                     isDark ? 'bg-neutral-900/40 border-neutral-800/50' : 'bg-neutral-50/50 border-neutral-200'
                   }`}>
-                    <stat.icon className="w-4 h-4 text-sky-500 mb-3" />
+                    <stat.icon className="w-4 h-4 text-zeno mb-3" />
                     <div className="text-[10px] font-black uppercase tracking-wider text-neutral-500 mb-0.5">{stat.label}</div>
                     <div className="text-sm font-bold text-neutral-100">{stat.val}</div>
                     <div className="text-[10px] text-neutral-600 mt-0.5">{stat.sub}</div>
@@ -242,15 +242,15 @@ export function AdaptiveLearningModal({
                         onClick={() => handleLevelChange('global', level)}
                         className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden group ${
                           isSelected 
-                            ? 'bg-sky-500/5 border-sky-500/40' 
+                            ? 'bg-zeno/5 border-zeno/40' 
                             : isDark ? 'bg-neutral-900/20 border-neutral-800/50 hover:border-neutral-700' : 'bg-white border-neutral-200 hover:border-neutral-300'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className={`text-xs font-bold transition-colors ${isSelected ? 'text-sky-500' : 'text-neutral-300'}`}>
+                          <span className={`text-xs font-bold transition-colors ${isSelected ? 'text-zeno' : 'text-neutral-300'}`}>
                             {LEVEL_LABELS[level]}
                           </span>
-                          {isSelected && <Check className="w-3 h-3 text-sky-500" />}
+                          {isSelected && <Check className="w-3 h-3 text-zeno" />}
                         </div>
                         <p className="text-[10px] text-neutral-500 leading-relaxed group-hover:text-neutral-400 transition-colors">
                           {KNOWLEDGE_LEVEL_DESCRIPTIONS[level]}
@@ -265,7 +265,7 @@ export function AdaptiveLearningModal({
                 isDark ? 'bg-neutral-900/30 border-neutral-800/50' : 'bg-neutral-50/50 border-neutral-200'
               }`}>
                 <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-500">
+                  <div className="p-2.5 rounded-xl bg-zeno/10 text-zeno">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
@@ -277,7 +277,7 @@ export function AdaptiveLearningModal({
                 <button
                   onClick={() => onUpdateProfile({ ...currentProfile, autoAdapt: !currentProfile.autoAdapt, lastUpdated: Date.now() })}
                   className={`w-11 h-6 rounded-full transition-all relative flex items-center p-1 ${
-                    currentProfile.autoAdapt ? 'bg-sky-500' : 'bg-neutral-800'
+                    currentProfile.autoAdapt ? 'bg-zeno' : 'bg-neutral-800'
                   }`}
                 >
                   <motion.div 
@@ -308,7 +308,7 @@ export function AdaptiveLearningModal({
                     className="flex items-center justify-between py-3 group border-b border-neutral-800/20 last:border-0"
                   >
                     <div className="flex items-center gap-3">
-                      <domain.icon className="w-4 h-4 text-neutral-600 group-hover:text-sky-500 transition-colors" />
+                      <domain.icon className="w-4 h-4 text-neutral-600 group-hover:text-zeno transition-colors" />
                       <span className="text-xs font-bold text-neutral-300 group-hover:text-neutral-100 transition-colors">{domain.title}</span>
                     </div>
 
@@ -401,7 +401,7 @@ export function AdaptiveLearningModal({
 
                 <button
                   onClick={() => setShowAddInsight(true)}
-                  className="w-8 h-8 rounded-full bg-sky-500 text-neutral-950 flex items-center justify-center hover:scale-110 transition-transform active:scale-95 shadow-lg shadow-sky-500/20"
+                  className="w-8 h-8 rounded-full bg-zeno text-neutral-950 flex items-center justify-center hover:scale-110 transition-transform active:scale-95 shadow-lg shadow-zeno/20"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -429,7 +429,7 @@ export function AdaptiveLearningModal({
                       />
                       <div className="flex justify-end gap-3 mt-3">
                         <button onClick={() => setShowAddInsight(false)} className="text-[10px] font-bold text-neutral-500 hover:text-neutral-300 uppercase tracking-wider">{t.adaptiveLearning.cancel}</button>
-                        <button onClick={handleAddInsight} className="text-[10px] font-black text-sky-500 uppercase tracking-widest">{t.adaptiveLearning.save}</button>
+                        <button onClick={handleAddInsight} className="text-[10px] font-black text-zeno uppercase tracking-widest">{t.adaptiveLearning.save}</button>
                       </div>
                     </div>
                   </motion.div>
@@ -454,7 +454,7 @@ export function AdaptiveLearningModal({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-sky-500/50" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-zeno/50" />
                         <span className="text-[11px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors">{insight}</span>
                       </div>
                       <button
@@ -482,7 +482,7 @@ export function AdaptiveLearningModal({
 
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-sky-500 text-neutral-950 hover:bg-sky-400 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-sky-500/10"
+            className="px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-zeno text-neutral-950 hover:bg-zeno/10 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-zeno/10"
           >
             Concluir
           </button>

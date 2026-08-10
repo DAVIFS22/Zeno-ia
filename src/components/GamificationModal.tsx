@@ -49,7 +49,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
       case 'Épico':
         return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
       case 'Raro':
-        return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+        return 'bg-zeno/10 text-zeno border-zeno/30';
       default:
         return 'bg-neutral-500/10 text-neutral-400 border-neutral-500/30';
     }
@@ -66,7 +66,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
           isDark ? 'border-[#2C2C2E] bg-[#1A1A1E]' : 'border-neutral-200 bg-neutral-50'
         }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-10 h-10 rounded-xl bg-zeno/10 border border-zeno/20 flex items-center justify-center text-zeno">
               <Zap className="w-5 h-5" />
             </div>
             <div>
@@ -102,7 +102,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all ${
                   isActive
-                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                    ? 'bg-zeno text-white font-semibold shadow-sm'
                     : isDark ? 'text-neutral-400 hover:bg-neutral-800 hover:text-white' : 'text-neutral-600 hover:bg-neutral-200 hover:text-black'
                 }`}
               >
@@ -127,13 +127,13 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                     isDark ? 'bg-neutral-900/60 border-neutral-800' : 'bg-neutral-50 border-neutral-200'
                   }`}>
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xl font-bold">
+                      <div className="w-14 h-14 rounded-2xl bg-zeno/10 border border-zeno/20 flex items-center justify-center text-zeno text-xl font-bold">
                         ZP
                       </div>
                       <div>
                         <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">Pontuação Total</span>
                         <div className="text-2xl font-bold text-white flex items-center gap-2">
-                          {profile.totalPoints} <span className="text-xs font-normal text-blue-400">ZP</span>
+                          {profile.totalPoints} <span className="text-xs font-normal text-zeno">ZP</span>
                         </div>
                       </div>
                     </div>
@@ -141,7 +141,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                     <div className="flex items-center gap-6 border-t md:border-t-0 md:border-l border-neutral-800 pt-4 md:pt-0 md:pl-6 w-full md:w-auto justify-around">
                       <div className="text-center">
                         <span className="text-[10px] text-neutral-400 uppercase block">Nível Atual</span>
-                        <span className="text-xs font-bold text-blue-400">{profile.currentLevel}</span>
+                        <span className="text-xs font-bold text-zeno">{profile.currentLevel}</span>
                       </div>
                       <div className="text-center">
                         <span className="text-[10px] text-neutral-400 uppercase block">Sequência</span>
@@ -162,7 +162,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                     </div>
                     <div className="w-full h-2.5 rounded-full bg-neutral-800 overflow-hidden">
                       <div 
-                        className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                        className="h-full bg-zeno rounded-full transition-all duration-500" 
                         style={{ width: `${levelInfo.progressPercent}%` }}
                       />
                     </div>
@@ -214,7 +214,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                           }`}
                         >
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                            earned ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-neutral-800 border-neutral-700 text-neutral-500'
+                            earned ? 'bg-zeno/10 border-zeno/30 text-zeno' : 'bg-neutral-800 border-neutral-700 text-neutral-500'
                           }`}>
                             <Award className="w-5 h-5" />
                           </div>
@@ -227,7 +227,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                             </div>
                             <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">{badge.description}</p>
                             {earned && (
-                              <span className="text-[9px] text-blue-400 font-mono mt-2 block flex items-center gap-1">
+                              <span className="text-[9px] text-zeno font-mono mt-2 block flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" /> Conquistado
                               </span>
                             )}
@@ -256,14 +256,14 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                         >
                           <div className="flex items-center gap-3.5">
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-                              isCompleted ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                              isCompleted ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-zeno/10 border-zeno/30 text-zeno'
                             }`}>
                               <Target className="w-4 h-4" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
                                 <h4 className="text-xs font-bold text-white">{quest.title}</h4>
-                                <span className="text-[9px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">
+                                <span className="text-[9px] px-2 py-0.5 rounded bg-zeno/10 text-zeno font-mono">
                                   +{quest.rewardPoints} ZP
                                 </span>
                               </div>
@@ -323,7 +323,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
             </>
           ) : (
             <div className="py-16 text-center space-y-4 max-w-sm mx-auto">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-zeno/10 border border-zeno/20 flex items-center justify-center text-zeno mx-auto">
                 <Zap className="w-6 h-6" />
               </div>
               <div>

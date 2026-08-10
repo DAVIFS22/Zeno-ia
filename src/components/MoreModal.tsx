@@ -112,7 +112,7 @@ export const MoreModal: React.FC<MoreModalProps> = ({
             className="w-full flex items-center justify-between p-3 rounded-xl bg-[#171717] hover:bg-[#242424] border border-[#303030] text-xs font-normal text-white transition-colors text-left"
           >
             <div className="flex items-center gap-3">
-              <Zap className="w-4 h-4 text-blue-400" />
+              <Zap className="w-4 h-4 text-zeno" />
               <div>
                 <span className="font-medium block text-white">ZENO Points & Gamificação (ZP)</span>
                 <span className="text-[10px] text-[#A8A8A8]">Níveis, missões, distintivos e estatísticas</span>

@@ -70,7 +70,7 @@ service cloud.firestore {
     }
 
     // Internal collections: strictly backend only
-    match /config/{docId} { allow read, write: if false; }
+    match /config/{docId} { allow read: if true; allow write: if false; }
     match /stripe_webhook_logs/{docId} { allow read, write: if false; }
     match /failed_webhooks/{docId} { allow read, write: if false; }
 

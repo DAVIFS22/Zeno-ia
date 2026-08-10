@@ -385,7 +385,7 @@ export const MusicStudioModal: React.FC<MusicStudioModalProps> = ({
               {/* Progress Bar Track (120fps GPU accelerated scaleX) */}
               <div className="w-full h-2.5 bg-[#2C2C2E] rounded-full overflow-hidden p-0.5 border border-[#3A3A3C] contain-render">
                 <div 
-                  className="h-full w-full bg-gradient-to-r from-neutral-500 via-sky-500 to-neutral-400 rounded-full shadow-[0_0_12px_rgba(245,158,11,0.5)] transition-transform duration-300 ease-out will-change-transform origin-left"
+                  className="h-full w-full bg-gradient-to-r from-neutral-500 via-zeno to-neutral-400 rounded-full shadow-[0_0_12px_rgba(245,158,11,0.5)] transition-transform duration-300 ease-out will-change-transform origin-left"
                   style={{ transform: `scaleX(${progressPercent / 100})` }}
                 />
               </div>

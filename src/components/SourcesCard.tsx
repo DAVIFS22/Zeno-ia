@@ -63,7 +63,7 @@ export function SourcesCard({ sources, theme, onClick }: SourcesCardProps) {
                   </span>
                 </div>
                 <h4 className={`text-[17px] font-bold leading-tight transition-colors ${
-                  theme === 'dark' ? 'text-neutral-100 group-hover:text-blue-400' : 'text-neutral-900 group-hover:text-blue-600'
+                  theme === 'dark' ? 'text-neutral-100 group-hover:text-zeno' : 'text-neutral-900 group-hover:text-zeno'
                 }`}>
                   {source.title}
                 </h4>

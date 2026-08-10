@@ -331,11 +331,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         {/* Novo Chat Button */}
         <button 
           onClick={onNewChat}
-          className="flex items-center gap-2.5 px-4 h-[42px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-150 w-full text-left text-xs sm:text-sm shadow-md shadow-blue-600/20 group cursor-pointer"
+          className="flex items-center gap-2.5 px-4 h-[42px] rounded-xl bg-zeno hover:bg-zeno/90 text-white font-medium transition-all duration-150 w-full text-left text-xs sm:text-sm shadow-md shadow-zeno/20 group cursor-pointer"
         >
           <MessageSquare className="w-4 h-4 flex-shrink-0 text-white" />
           <span className="flex-1 truncate">Novo chat</span>
-          <Plus className="w-3.5 h-3.5 flex-shrink-0 text-blue-200 group-hover:text-white" />
+          <Plus className="w-3.5 h-3.5 flex-shrink-0 text-zeno group-hover:text-white" />
         </button>
 
         {/* Streamlined Menu Options */}
@@ -437,7 +437,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             isDark ? 'bg-[#151518] border-[#2C2C2E]' : 'bg-white border-neutral-200 shadow-2xs'
           }`}>
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-blue-500" />
+              <Sparkles className="w-4 h-4 text-zeno" />
               <span className={`text-xs font-semibold ${textMain}`}>ZENO Pro</span>
             </div>
             <p className="text-[11px] text-neutral-400 leading-relaxed mb-2.5">
@@ -445,7 +445,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             </p>
             <button
               onClick={() => onOpenSubscriptionModal()}
-              className="w-full py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors shadow-xs shadow-blue-600/20 cursor-pointer"
+              className="w-full py-1.5 px-3 rounded-lg bg-zeno hover:bg-zeno/90 text-white text-xs font-medium transition-colors shadow-xs shadow-zeno/20 cursor-pointer"
             >
               Ver planos
             </button>
@@ -458,12 +458,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             onClick={onOpenVersionNews}
             className={`text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors flex items-center gap-1.5 w-full justify-center cursor-pointer ${
               isDark 
-                ? 'bg-[#151518] text-neutral-400 border-[#2c2c2e] hover:text-white hover:border-indigo-500/50' 
-                : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-indigo-500/50'
+                ? 'bg-[#151518] text-neutral-400 border-[#2c2c2e] hover:text-white hover:border-zeno/50' 
+                : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-zeno/50'
             }`}
             title="Ver novidades da versão"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-zeno animate-pulse"></span>
             <span>Zeno IA v{currentVersion} (Semantic)</span>
           </button>
         </div>
@@ -518,7 +518,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                     <p className={`text-xs font-semibold truncate ${textMain}`}>
                       Visitante
                     </p>
-                    <p className="text-[10px] text-blue-500 font-medium truncate">
+                    <p className="text-[10px] text-zeno font-medium truncate">
                       Faça login
                     </p>
                   </div>
@@ -550,7 +550,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                   >
                     <img src={acc.photoURL} className="w-5 h-5 rounded-full object-cover" referrerPolicy="no-referrer" />
                     <span className="flex-1 truncate">{acc.displayName}</span>
-                    {acc.uid === session.activeUid && <Check className="w-3 h-3 text-sky-500" />}
+                    {acc.uid === session.activeUid && <Check className="w-3 h-3 text-zeno" />}
                   </button>
                 ))}
               </div>

@@ -23,11 +23,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
 
+  const validateEmail = (email: string) => {
+    return email.includes('@') && email.includes('.');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     setErrorCode(null);
+
+    if (!validateEmail(email)) {
+      setError(t.auth.invalidEmail || "Esse e-mail não parece válido. Confira e tente novamente.");
+      setErrorCode('auth/invalid-email');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         await signInWithEmail(email, password);

@@ -10,7 +10,7 @@ function getCollectionsKey(userId?: string) {
 }
 
 export const DEFAULT_COLLECTIONS: ImageCollection[] = [
-  { id: 'geral', name: 'Geral', icon: 'Folder', color: '#3B82F6' },
+  { id: 'geral', name: 'Geral', icon: 'Folder', color: '#0084DF' },
   { id: 'logos', name: 'Logos & Marcas', icon: 'Tag', color: '#EC4899' },
   { id: 'anime', name: 'Anime & Ilustração', icon: 'Palette', color: '#8B5CF6' },
   { id: 'wallpapers', name: 'Wallpapers & Telas', icon: 'Image', color: '#10B981' },
@@ -147,7 +147,7 @@ export function getStoredCollections(userId?: string): ImageCollection[] {
   return DEFAULT_COLLECTIONS;
 }
 
-export function addStoredCollection(name: string, icon = 'Folder', color = '#3B82F6', userId?: string): ImageCollection[] {
+export function addStoredCollection(name: string, icon = 'Folder', color = '#0084DF', userId?: string): ImageCollection[] {
   const collections = getStoredCollections(userId);
   const newCol: ImageCollection = {
     id: 'col-' + Date.now(),

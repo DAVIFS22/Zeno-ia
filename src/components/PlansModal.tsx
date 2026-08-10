@@ -118,7 +118,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
             <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/80">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
                 <span>{t.plans.freeTrial}</span>
-                <span className="text-sky-400 font-medium">{t.plans.noCommitment}</span>
+                <span className="text-zeno font-medium">{t.plans.noCommitment}</span>
               </div>
               <button
                 onClick={() => handleSubscribe('monthly')}
@@ -147,7 +147,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
             <div>
               <div className="flex justify-between items-center mb-4 mt-2">
                 <h3 className="text-lg font-semibold">{t.plans.annual}</h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-sky-400 font-medium border border-sky-500/30">{t.plans.savePercent}</span>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-zeno font-medium border border-zeno/30">{t.plans.savePercent}</span>
               </div>
               <div className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight">
                 {t.plans.annualPrice} <span className="text-sm font-normal text-neutral-400">{t.plans.annualPeriod}</span>
@@ -163,7 +163,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                   t.plans.features.economy
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start text-neutral-200 text-sm">
-                    <Check className="w-4 h-4 text-sky-400 mr-3 flex-shrink-0 mt-0.5" />
+                    <Check className="w-4 h-4 text-zeno mr-3 flex-shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -173,7 +173,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
             <div className="space-y-3 pt-4 border-t border-[#2C2C2E]">
               <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
                 <span>{t.plans.freeTrial}</span>
-                <span className="text-sky-400 font-medium">{t.plans.guarantee}</span>
+                <span className="text-zeno font-medium">{t.plans.guarantee}</span>
               </div>
               <button
                 onClick={() => handleSubscribe('annual')}
@@ -195,7 +195,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
         <div className="mt-8 pt-6 border-t border-[#2C2C2E]/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-400 text-xs">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-sky-400 flex-shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-zeno flex-shrink-0" />
             <span>{t.plans.securePayment}</span>
           </div>
           <span>{t.plans.cancelAnytime}</span>

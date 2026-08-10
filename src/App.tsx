@@ -185,54 +185,26 @@ function MainAppInner() {
         return;
       }
 
-      // 1. Initialize account on frontend directly
-      const initAccountLocally = async () => {
+      // 1. Initialize account via backend API (Admin SDK) to bypass client permission issues
+      const initAccountOnServer = async () => {
         try {
-          const userRef = doc(db, 'users', userId);
-          const userSnap = await getDoc(userRef);
-          
-          if (!userSnap.exists()) {
-            console.log('[ACCOUNT ISOLATION] Initializing new user document for:', userId);
-            await setDoc(userRef, {
+          await fetch('/api/account/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
               userId,
               email: profile?.email || '',
               name: profile?.displayName || 'Usuário ZENO',
-              photoURL: profile?.photoURL || '',
-              createdAt: Date.now(),
-              role: 'user',
-              plan: 'ZENO Free',
-              isPro: false,
-              unlimited: false
-            }, { merge: true });
-            
-            const subRef = doc(db, 'subscriptions', userId);
-            await setDoc(subRef, {
-              userId,
-              plan: 'ZENO Free',
-              status: 'active',
-              trialUsed: false,
-              history: []
-            }, { merge: true });
-            console.log('[ACCOUNT ISOLATION] User initialization successful.');
-          }
+              photoURL: profile?.photoURL || ''
+            })
+          });
+          console.log('[ACCOUNT ISOLATION] Account initialized on server successfully.');
         } catch(e) {
-          console.error("Failed to initialize user in Firestore:", e);
+          console.error("Failed to initialize user on server:", e);
         }
       };
       
-      initAccountLocally().then(() => {
-        // optionally still call backend to track usage etc
-        fetch('/api/account/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            email: profile?.email || '',
-            name: profile?.displayName || 'Usuário ZENO',
-            photoURL: profile?.photoURL || ''
-          })
-        }).catch(() => {});
-      });
+      initAccountOnServer();
 
       // 2. Load user settings for new UID
       try {

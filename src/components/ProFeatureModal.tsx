@@ -51,23 +51,23 @@ export const ProFeatureModal: React.FC<ProFeatureModalProps> = ({ onClose, onUpg
               </p>
               <ul className="space-y-2.5">
                 <li className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-zeno flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureModels}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Zap className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  <Zap className="w-4 h-4 text-zeno flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureSpeed}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Image className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  <Image className="w-4 h-4 text-zeno flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureImages}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Search className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  <Search className="w-4 h-4 text-zeno flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureAnalysis}</span>
                 </li>
                 <li className="flex items-center gap-2.5">
-                  <Shield className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                  <Shield className="w-4 h-4 text-zeno flex-shrink-0" />
                   <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{t.proFeature.featureEarlyAccess}</span>
                 </li>
               </ul>

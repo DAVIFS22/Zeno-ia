@@ -120,8 +120,8 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ isOpen, onCl
       >
         <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-900/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-              <Bot className="w-5 h-5 text-blue-400" />
+            <div className="w-10 h-10 rounded-full bg-zeno/20 flex items-center justify-center border border-zeno/30">
+              <Bot className="w-5 h-5 text-zeno" />
             </div>
             <div>
               <h2 className="text-white font-semibold">Suporte ZENO AI</h2>
@@ -143,14 +143,14 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ isOpen, onCl
                 className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
               >
                 {msg.role !== 'system' && (
-                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-neutral-800' : 'bg-blue-600/20 text-blue-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-neutral-800' : 'bg-zeno/20 text-zeno'}`}>
                     {msg.role === 'user' ? <User className="w-4 h-4 text-neutral-400" /> : <Bot className="w-4 h-4" />}
                   </div>
                 )}
                 <div className={`p-3 rounded-2xl text-sm ${
                   msg.role === 'user' ? 'bg-neutral-800 text-white rounded-tr-sm' : 
                   msg.role === 'system' ? 'bg-neutral-900/80 border border-neutral-800 text-neutral-400 w-full text-center italic' :
-                  'bg-blue-900/20 border border-blue-500/20 text-neutral-200 rounded-tl-sm'
+                  'bg-zeno/20/20 border border-zeno/20 text-neutral-200 rounded-tl-sm'
                 }`}>
                   {msg.role === 'system' && (
                      <div className="flex items-center justify-center gap-2 mb-1">
@@ -164,18 +164,18 @@ export const SupportChatModal: React.FC<SupportChatModalProps> = ({ isOpen, onCl
           </AnimatePresence>
           {isTyping && (
             <div className="flex gap-3 max-w-[85%]">
-              <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400">
+              <div className="w-8 h-8 rounded-full bg-zeno/20 flex items-center justify-center text-zeno">
                 <Bot className="w-4 h-4" />
               </div>
               <div className="space-y-1">
-                <div className="p-3 rounded-2xl bg-blue-900/20 border border-blue-500/20 rounded-tl-sm flex items-center gap-1.5">
+                <div className="p-3 rounded-2xl bg-zeno/20/20 border border-zeno/20 rounded-tl-sm flex items-center gap-1.5">
                   {activeTool ? (
-                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    <Loader2 className="w-4 h-4 text-zeno animate-spin" />
                   ) : (
                     <>
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      <div className="w-1.5 h-1.5 bg-zeno rounded-full animate-bounce"></div>
+                      <div className="w-1.5 h-1.5 bg-zeno rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-1.5 h-1.5 bg-zeno rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                     </>
                   )}
                 </div>

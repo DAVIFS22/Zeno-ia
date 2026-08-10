@@ -385,14 +385,14 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
       {feedback && (
         <div className={`p-4 rounded-2xl border text-xs sm:text-sm flex items-start gap-3 animate-fadeIn ${
           feedback.type === 'success' 
-            ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
+            ? 'bg-zeno/10 border-zeno/30 text-zeno'
             : feedback.type === 'error'
             ? 'bg-neutral-500/10 border-neutral-500/30 text-neutral-200'
-            : 'bg-sky-500/10 border-sky-500/30 text-sky-200'
+            : 'bg-zeno/10 border-zeno/30 text-zeno'
         }`}>
-          {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />}
+          {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-zeno flex-shrink-0 mt-0.5" />}
           {feedback.type === 'error' && <XCircle className="w-5 h-5 text-neutral-400 flex-shrink-0 mt-0.5" />}
-          {feedback.type === 'info' && <AlertTriangle className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />}
+          {feedback.type === 'info' && <AlertTriangle className="w-5 h-5 text-zeno flex-shrink-0 mt-0.5" />}
           <div className="leading-relaxed font-medium">{feedback.message}</div>
         </div>
       )}
@@ -449,7 +449,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                   : isCancelled 
                   ? 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' 
                   : isPro 
-                  ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                  ? 'bg-zeno/10 text-zeno border-zeno/20'
                   : 'bg-[#232326] text-neutral-400 border-[#2C2C2E]'
               }`}>
                 {isExpired ? t.subscriptionManager.expired : getStatusBadgeLabel()}
@@ -478,8 +478,8 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <p className="text-sm font-semibold flex items-center gap-1.5">
               {isTrialing ? (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="text-sky-400 font-bold">{t.subscriptionManager.trial30}</span>
+                  <Sparkles className="w-3.5 h-3.5 text-zeno" />
+                  <span className="text-zeno font-bold">{t.subscriptionManager.trial30}</span>
                 </>
               ) : isCancelled && isPro ? (
                 <>
@@ -488,8 +488,8 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 </>
               ) : isPro ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="text-sky-400 font-bold">{t.subscriptionManager.activeSub}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno" />
+                  <span className="text-zeno font-bold">{t.subscriptionManager.activeSub}</span>
                 </>
               ) : isExpired ? (
                 <>
@@ -532,7 +532,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl bg-[#1c1c20] border border-[#2d2d32] gap-3">
               {paymentMethod && paymentMethod.last4 ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-zeno/10 border border-zeno/20 flex items-center justify-center text-zeno flex-shrink-0">
                     <CreditCard className="w-5 h-5" />
                   </div>
                   <div>
@@ -585,7 +585,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleReactivateAutoRenew}
                 disabled={actionType === 'reactivate'}
-                className="w-full py-3 px-5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 px-5 rounded-xl bg-zeno hover:bg-zeno text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {actionType === 'reactivate' ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -663,7 +663,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                       <p className="font-bold text-white text-sm">{invAmountStr}</p>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                         inv.status === 'succeeded' || inv.status === 'paid' 
-                          ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' 
+                          ? 'bg-zeno/10 text-zeno border border-zeno/20' 
                           : 'bg-neutral-500/10 text-neutral-400'
                       }`}>
                         {inv.status === 'succeeded' || inv.status === 'paid' ? t.subscriptionManager.paid : t.subscriptionManager.pending}
@@ -719,7 +719,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#1c1c20] border border-[#2d2d32] shadow-2xl space-y-4 text-left">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-sky-400" />
+              <CreditCard className="w-5 h-5 text-zeno" />
               <span>{t.subscriptionManager.updateCardTitle}</span>
             </h3>
             <p className="text-xs text-neutral-400">
@@ -791,7 +791,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 type="button"
                 onClick={handleSaveCardMethod}
                 disabled={actionType === 'update_card'}
-                className="flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-zeno hover:bg-zeno text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 {actionType === 'update_card' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

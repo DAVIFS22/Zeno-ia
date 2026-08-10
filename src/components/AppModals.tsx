@@ -2,6 +2,7 @@ import React from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { useUIState, useModal } from '../hooks/useUIState';
 import { UserSettings, ChatSession } from '../types';
+import { EditProfileModal } from './EditProfileModal';
 import { SubscriptionManager } from './SubscriptionManager';
 import { PlansModal } from './PlansModal';
 import { SettingsModal } from './SettingsModal';
@@ -77,6 +78,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const plansModal = useModal('plans');
   const proFeatureModal = useModal('proFeature');
   const settingsModal = useModal('settings');
+  const editProfileModal = useModal('editProfile');
   const adaptiveModal = useModal('adaptive');
   const imageStudioModal = useModal('imageStudio');
   const imageLibraryModal = useModal('imageLibrary');
@@ -294,6 +296,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onExportAllData={onExportAllData}
         onOpenSubscriptionModal={() => ui.openModal('subscription')}
         onOpenAdaptiveModal={() => ui.openModal('adaptive')}
+        onOpenEditProfileModal={() => ui.openModal('editProfile')}
         user={profile}
         userId={userId}
         session={session}
@@ -302,6 +305,16 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         onSwitchAccount={switchAccount}
         authLoading={authLoading}
       />
+
+      {editProfileModal.isOpen && (
+        <EditProfileModal
+          isOpen={editProfileModal.isOpen}
+          onClose={editProfileModal.close}
+          user={profile}
+          onUpdate={() => {}}
+          isDark={theme === 'dark'}
+        />
+      )}
 
       {/* Adaptive Learning Profile Modal */}
       {adaptiveProfile && (
@@ -425,7 +438,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           <div className="w-full max-w-md p-6 rounded-2xl bg-[#222222] border border-[#333333] shadow-2xl space-y-5 text-left">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                <div className="w-10 h-10 rounded-xl bg-zeno/10 border border-zeno/20 flex items-center justify-center text-zeno">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
@@ -449,7 +462,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                         renewalNotificationModal.close();
                         ui.openModal('settings');
                       }}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm transition-colors text-center"
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-zeno hover:bg-zeno text-white font-medium text-sm transition-colors text-center"
                     >
                       {btn}
                     </button>
@@ -471,7 +484,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
                           alert('Erro ao atualizar pagamento.');
                         }
                       }}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm transition-colors text-center"
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-zeno hover:bg-zeno text-white font-medium text-sm transition-colors text-center"
                     >
                       {btn}
                     </button>

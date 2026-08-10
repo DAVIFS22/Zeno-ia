@@ -1,18 +1,5 @@
 [
   {
-    "version": "2.24.4",
-    "major": 2,
-    "minor": 24,
-    "patch": 4,
-    "date": "2026-08-09",
-    "type": "PATCH",
-    "changes": {
-      "security": [
-        "Atualização de segurança e validação de tokens"
-      ]
-    }
-  },
-  {
     "version": "2.24.3",
     "major": 2,
     "minor": 24,

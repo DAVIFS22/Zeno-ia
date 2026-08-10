@@ -21,7 +21,7 @@ export const UserGamificationSkeleton = ({ isDark }: { isDark: boolean }) => (
         <div className="w-24 h-3 rounded bg-neutral-300/40 dark:bg-neutral-700/50" />
       </div>
       <div className={`w-full h-1.5 rounded-full ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}>
-        <div className="w-1/3 h-full rounded-full bg-blue-500/30 dark:bg-blue-400/30" />
+        <div className="w-1/3 h-full rounded-full bg-zeno/30 dark:bg-zeno/30" />
       </div>
     </div>
 
@@ -70,11 +70,11 @@ export const UserGamificationSnippet = ({ userId, isDark }: { userId: string, is
     <div className={`mt-6 p-4 rounded-xl border ${isDark ? 'bg-[#17171a] border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-blue-500" />
+          <Zap className="w-4 h-4 text-zeno" />
           <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Progresso ZENO</h4>
         </div>
         <div className={`text-xs font-bold ${isDark ? 'text-white' : 'text-neutral-800'}`}>
-          Nível: <span className="text-blue-500 dark:text-blue-400">{profile.currentLevel}</span>
+          Nível: <span className="text-zeno dark:text-zeno">{profile.currentLevel}</span>
         </div>
       </div>
 
@@ -85,7 +85,7 @@ export const UserGamificationSnippet = ({ userId, isDark }: { userId: string, is
         </div>
         <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}>
           <div 
-            className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+            className="h-full bg-zeno rounded-full transition-all duration-500" 
             style={{ width: `${levelInfo.progressPercent}%` }}
           />
         </div>

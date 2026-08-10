@@ -216,9 +216,9 @@ export const SupportChatTab: React.FC = () => {
                   {!isSystem && (
                     <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center border shadow-sm ${
                       m.role === 'user' 
-                        ? 'bg-sky-500 border-sky-400' 
+                        ? 'bg-zeno border-zeno' 
                         : isAdmin 
-                          ? 'bg-indigo-600 border-indigo-500' 
+                          ? 'bg-zeno border-zeno' 
                           : 'bg-neutral-800 border-neutral-700'
                     }`}>
                       {m.role === 'user' ? (
@@ -226,18 +226,18 @@ export const SupportChatTab: React.FC = () => {
                       ) : isAdmin ? (
                         <LifeBuoy className="w-4 h-4 text-white" />
                       ) : (
-                        <Bot className="w-4 h-4 text-sky-400" />
+                        <Bot className="w-4 h-4 text-zeno" />
                       )}
                     </div>
                   )}
                   <div className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} gap-1`}>
                     <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-xs ${
                       m.role === 'user' 
-                        ? 'bg-sky-600 text-white rounded-tr-none' 
+                        ? 'bg-zeno text-white rounded-tr-none' 
                         : isSystem
                           ? 'bg-neutral-800/50 text-neutral-400 border border-neutral-700/30 w-full text-center italic'
                           : isAdmin
-                            ? 'bg-indigo-600/10 text-indigo-200 border border-indigo-500/20 rounded-tl-none'
+                            ? 'bg-zeno/10 text-zeno border border-zeno/20 rounded-tl-none'
                             : 'bg-neutral-800 text-neutral-300 rounded-tl-none border border-neutral-700/50'
                     }`}>
                       {!isSystem && (

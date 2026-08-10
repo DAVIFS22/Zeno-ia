@@ -53,8 +53,8 @@ export function PlanUsageCard({ plan, limits, usage, onClose, onUpgrade }: PlanU
         
         <div className="flex-1 pr-6">
           <div className="flex items-center space-x-2 mb-1.5">
-            <ShieldAlert className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-sky-400">Aviso de Limite Diário</span>
+            <ShieldAlert className="w-4 h-4 text-zeno" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-zeno">Aviso de Limite Diário</span>
           </div>
           <p className="text-sm text-neutral-300">
             Restam apenas <strong>{messagesLeft} mensage{messagesLeft === 1 ? 'm' : 'ns'}</strong> hoje. 
@@ -64,7 +64,7 @@ export function PlanUsageCard({ plan, limits, usage, onClose, onUpgrade }: PlanU
         
         <button
           onClick={onUpgrade}
-          className="shrink-0 flex items-center space-x-1.5 bg-sky-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-sky-500 transition-colors w-full sm:w-auto justify-center"
+          className="shrink-0 flex items-center space-x-1.5 bg-zeno text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-zeno transition-colors w-full sm:w-auto justify-center"
         >
           <Sparkles className="w-4 h-4" />
           <span>Upgrade para o ZENO Pro</span>

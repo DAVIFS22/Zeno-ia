@@ -323,7 +323,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
               onClick={handleCopy}
               className={`p-1 rounded-md transition-colors ${
                 copied
-                  ? 'text-sky-400'
+                  ? 'text-zeno'
                   : 'text-neutral-400 hover:text-white'
               }`}
               title="Copiar código"
@@ -343,7 +343,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 onClick={() => setIsViewingPreview(!isViewingPreview)}
                 className={`p-1 rounded-md transition-colors ${
                   isViewingPreview 
-                    ? 'text-sky-400' 
+                    ? 'text-zeno' 
                     : 'text-neutral-400 hover:text-white'
                 }`}
                 title={isViewingPreview ? 'Ver Código' : 'Visualizar Resultado'}
@@ -375,7 +375,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                     <WrapText className="w-4 h-4" />
                     <span>Quebrar linha</span>
                   </span>
-                  {wordWrap && <Check className="w-3.5 h-3.5 text-sky-400" />}
+                  {wordWrap && <Check className="w-3.5 h-3.5 text-zeno" />}
                 </button>
                 <button
                   type="button"
@@ -529,12 +529,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                   onClick={handleCopy}
                   className={`p-1.5 rounded-md transition-colors ${
                     copied
-                      ? 'text-sky-400'
+                      ? 'text-zeno'
                       : 'text-neutral-400 hover:text-white hover:bg-[#232326]'
                   }`}
                   title="Copiar código"
                 >
-                  {copied ? <CheckCircle2 className="w-[18px] h-[18px] text-sky-400" /> : <Copy className="w-[18px] h-[18px]" />}
+                  {copied ? <CheckCircle2 className="w-[18px] h-[18px] text-zeno" /> : <Copy className="w-[18px] h-[18px]" />}
                 </button>
 
                 {/* Close Fullscreen Modal */}

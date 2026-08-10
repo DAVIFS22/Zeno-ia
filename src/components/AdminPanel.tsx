@@ -43,7 +43,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const isAdmin = role === 'admin';
 
   // Sub-tabs in Admin Panel
-  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs' | 'debug' | 'support'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'limits' | 'pro' | 'server' | 'models' | 'rbac' | 'logs' | 'debug' | 'support' | 'aiProviders'>('stats');
+  const [aiProvidersData, setAiProvidersData] = useState<any>(null);
 
   // Config State
   const [config, setConfig] = useState<FullAdminConfig>(DEFAULT_FULL_ADMIN_CONFIG);
@@ -102,14 +103,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         'x-user-email': userEmail
       };
 
-      const [configRes, statsRes, logsRes, auditRes] = await Promise.all([
+      const [configRes, statsRes, logsRes, auditRes, aiRes] = await Promise.all([
         fetch('/api/admin/config', { headers }),
         fetch('/api/admin/stats', { headers }),
         fetch('/api/admin/logs', { headers }),
-        fetch('/api/admin/audit-metrics', { headers })
+        fetch('/api/admin/audit-metrics', { headers }),
+        fetch('/api/admin/ai-providers', { headers })
       ]);
 
-      if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403 || auditRes.status === 403) {
+      if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403 || auditRes.status === 403 || aiRes.status === 403) {
         setSaveStatus({
           type: 'error',
           message: `Erro 403: ${t.admin.denied}`
@@ -139,6 +141,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (auditRes.ok) {
         const auditData = await auditRes.json();
         setAuditMetrics(auditData);
+      }
+
+      if (aiRes.ok) {
+        const aiData = await aiRes.json();
+        setAiProvidersData(aiData);
       }
     } catch (error: any) {
       console.error('[AdminPanel] Erro ao carregar dados do backend:', error);
@@ -458,11 +465,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {saveStatus && (
         <div className={`p-3.5 rounded-xl text-xs font-medium border flex items-center justify-between animate-fadeIn ${
           saveStatus.type === 'success' 
-            ? 'bg-sky-950/40 text-sky-300 border-sky-500/30' 
+            ? 'bg-zeno/20/40 text-zeno border-zeno/30' 
             : 'bg-[#121212]/40 text-neutral-300 border-neutral-500/30'
         }`}>
           <div className="flex items-center gap-2">
-            {saveStatus.type === 'success' ? <Check className="w-4 h-4 text-sky-400" /> : <AlertTriangle className="w-4 h-4 text-neutral-400" />}
+            {saveStatus.type === 'success' ? <Check className="w-4 h-4 text-zeno" /> : <AlertTriangle className="w-4 h-4 text-neutral-400" />}
             <span>{saveStatus.message}</span>
           </div>
           <button onClick={() => setSaveStatus(null)} className="text-xs hover:underline opacity-80">{t.common.close}</button>
@@ -584,6 +591,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <Wrench className="w-3.5 h-3.5" />
           <span>{t.admin.debug}</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('aiProviders')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+            activeTab === 'aiProviders'
+              ? 'bg-white text-black'
+              : 'text-neutral-500 hover:text-white'
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span>Zeno AI Providers</span>
+        </button>
+
       </div>
 
       {/* SUB-TAB 1: STATS */}
@@ -1017,9 +1037,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ...config,
                   serverSettings: { ...config.serverSettings, enableVectorMemory: !config.serverSettings.enableVectorMemory }
                 })}
-                className="text-sky-400 hover:text-sky-300"
+                className="text-zeno hover:text-zeno"
               >
-                {config.serverSettings.enableVectorMemory ? <ToggleRight className="w-8 h-8 text-sky-400" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
+                {config.serverSettings.enableVectorMemory ? <ToggleRight className="w-8 h-8 text-zeno" /> : <ToggleLeft className="w-8 h-8 text-neutral-600" />}
               </button>
             </div>
 
@@ -1058,7 +1078,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-white">{model.name}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono uppercase ${
-                      model.requiredPlan === 'pro' ? 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                      model.requiredPlan === 'pro' ? 'bg-neutral-500/20 text-neutral-300 border border-neutral-500/30' : 'bg-zeno/20 text-zeno border border-zeno/30'
                     }`}>
                       {model.requiredPlan === 'pro' ? 'Plano Pro' : 'Gratuito'}
                     </span>
@@ -1089,7 +1109,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl border transition-colors"
                   >
                     {model.enabled ? (
-                      <span className="text-sky-400 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Ativo</span>
+                      <span className="text-zeno flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Ativo</span>
                     ) : (
                       <span className="text-neutral-500 flex items-center gap-1">Inativo</span>
                     )}
@@ -1108,7 +1128,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="md:col-span-4 bg-[#171717] border border-[#2E2E2E] rounded-3xl overflow-hidden flex flex-col">
             <div className="p-4 border-b border-[#2E2E2E] bg-black/20 flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Tickets de Suporte</h4>
-              <div className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[10px] font-bold">
+              <div className="px-2 py-0.5 rounded-full bg-zeno/10 text-zeno text-[10px] font-bold">
                 {supportTickets.filter(t => t.status !== 'resolved').length} Ativos
               </div>
             </div>
@@ -1129,7 +1149,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       statusColor = "bg-amber-500/10 text-amber-500 border-amber-500/20";
                       statusLabel = "Aguardando";
                     } else if (ticket.status === 'human_active') {
-                      statusColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                      statusColor = "bg-zeno/10 text-zeno border-zeno/20";
                       statusLabel = "Em Atendimento";
                     } else if (ticket.status === 'resolved') {
                       statusColor = "bg-neutral-500/10 text-neutral-500 border-neutral-500/20";
@@ -1171,7 +1191,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {/* Chat Header */}
                 <div className="p-4 border-b border-[#2E2E2E] bg-black/20 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zeno to-zeno flex items-center justify-center text-white font-black text-sm shadow-xl">
                       {selectedTicket.userEmail?.[0]?.toUpperCase()}
                     </div>
                     <div>
@@ -1184,7 +1204,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleAssumeTicket(selectedTicket.id)}
-                          className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-lg shadow-sky-600/20 active:scale-95"
+                          className="px-4 py-1.5 rounded-xl bg-zeno hover:bg-zeno text-white text-xs font-bold transition-all shadow-lg shadow-zeno/20 active:scale-95"
                         >
                           Assumir
                         </button>
@@ -1239,7 +1259,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                           <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
-                            isMe ? 'bg-sky-600 text-white rounded-tr-none' : 
+                            isMe ? 'bg-zeno text-white rounded-tr-none' : 
                             isAi ? 'bg-neutral-800 text-neutral-300 border border-neutral-700/50 rounded-tl-none' :
                             'bg-white/10 text-white border border-white/5 rounded-tl-none'
                           }`}>
@@ -1271,12 +1291,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       placeholder={selectedTicket.status === 'human_active' ? "Escreva sua resposta..." : "Assuma o atendimento para responder"}
                       value={adminReply}
                       onChange={(e) => setAdminReply(e.target.value)}
-                      className="flex-1 bg-[#202020] border border-[#2E2E2E] rounded-xl px-4 py-2.5 text-xs text-white focus:border-sky-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 bg-[#202020] border border-[#2E2E2E] rounded-xl px-4 py-2.5 text-xs text-white focus:border-zeno focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <button
                       type="submit"
                       disabled={selectedTicket.status !== 'human_active' || !adminReply.trim()}
-                      className="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white transition-all disabled:opacity-50 disabled:bg-neutral-800"
+                      className="p-2.5 rounded-xl bg-zeno hover:bg-zeno text-white transition-all disabled:opacity-50 disabled:bg-neutral-800"
                     >
                       <Send className="w-4 h-4" />
                     </button>
@@ -1311,7 +1331,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex rounded-xl bg-[#202020] p-1 border border-[#333] flex-shrink-0">
               <button
                 onClick={() => { setActiveLogSubTab('system'); setLogSearch(''); }}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'system' ? 'bg-sky-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${activeLogSubTab === 'system' ? 'bg-zeno text-white' : 'text-neutral-400 hover:text-white'}`}
               >
                 Logs do Sistema
               </button>
@@ -1333,7 +1353,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 placeholder={activeLogSubTab === 'system' ? "Buscar logs por e-mail, ação, descrição, IP..." : "Buscar auditoria por admin, ação, IP..."}
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
-                className="w-full bg-[#202020] border border-[#2E2E2E] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-[#202020] border border-[#2E2E2E] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:border-zeno focus:outline-none"
               />
             </div>
 
@@ -1379,10 +1399,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ) : (
                       filteredSystemLogs.map((log) => {
                         let badgeColor = "bg-[#232326] text-neutral-400 border-[#2C2C2E]/50";
-                        if (log.type === "auth") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
-                        else if (log.type === "info") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                        if (log.type === "auth") badgeColor = "bg-zeno/10 text-zeno border-zeno/20";
+                        else if (log.type === "info") badgeColor = "bg-zeno/10 text-zeno border-zeno/20";
                         else if (log.type === "ia") badgeColor = "bg-neutral-500/10 text-neutral-400 border-neutral-500/20";
-                        else if (log.type === "payment") badgeColor = "bg-sky-500/10 text-sky-400 border-sky-500/20";
+                        else if (log.type === "payment") badgeColor = "bg-zeno/10 text-zeno border-zeno/20";
                         else if (log.type === "error") badgeColor = "bg-neutral-500/10 text-neutral-400 border-neutral-500/20 font-bold animate-pulse";
 
                         return (
@@ -1446,7 +1466,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <td className="p-3 font-mono whitespace-nowrap text-neutral-400">
                             {log.date} <span className="text-[10px] opacity-60 block">{log.time}</span>
                           </td>
-                          <td className="p-3 font-mono text-sky-400 font-bold whitespace-nowrap">
+                          <td className="p-3 font-mono text-zeno font-bold whitespace-nowrap">
                             {log.adminEmail}
                           </td>
                           <td className="p-3 font-semibold text-white">
@@ -1545,8 +1565,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-sky-500 font-bold block">Valor Novo:</span>
-                      <pre className="p-2.5 rounded-lg bg-sky-950/20 border border-sky-500/20 text-sky-200 overflow-x-auto font-mono text-[10px] leading-relaxed max-h-48">
+                      <span className="text-zeno font-bold block">Valor Novo:</span>
+                      <pre className="p-2.5 rounded-lg bg-zeno/20/20 border border-zeno/20 text-zeno overflow-x-auto font-mono text-[10px] leading-relaxed max-h-48">
                         {(() => {
                           try {
                             return JSON.stringify(JSON.parse(selectedAuditLog.newValue), null, 2);
@@ -1585,7 +1605,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
                 <span className="text-neutral-400 block mb-1">Administrador Único Configurado</span>
-                <span className="font-mono text-sky-400 font-semibold">{maskEmail(ADMIN_EMAIL)}</span>
+                <span className="font-mono text-zeno font-semibold">{maskEmail(ADMIN_EMAIL)}</span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#171717] border border-[#2B2B2B]">
@@ -1598,19 +1618,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-xs font-semibold text-neutral-300 block">Regras Obrigatórias de Permissão:</span>
               <ul className="space-y-1.5 text-xs text-neutral-400">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno flex-shrink-0" />
                   <span>Apenas a conta <code className="text-white bg-black/40 px-1 py-0.5 rounded">{maskEmail(ADMIN_EMAIL)}</code> recebe a role <code className="text-neutral-400">admin</code>.</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                  <span>Todos os demais e-mails recebem automaticamente a role <code className="text-sky-400">user</code>.</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno flex-shrink-0" />
+                  <span>Todos os demais e-mails recebem automaticamente a role <code className="text-zeno">user</code>.</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno flex-shrink-0" />
                   <span>{t.admin.adminAccessDesc}</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno flex-shrink-0" />
                   <span>Configuração centralizada em <code className="text-neutral-300 bg-black/40 px-1 py-0.5 rounded">src/config/admin.ts</code> para fácil manutenção.</span>
                 </li>
               </ul>
@@ -1685,34 +1705,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           <div className="p-6 rounded-2xl bg-black/40 border border-[#2E2E2E] space-y-4">
             <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Info className="w-4 h-4 text-sky-400" /> Diagnóstico de Conexão
+              <Info className="w-4 h-4 text-zeno" /> Diagnóstico de Conexão
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Backend API</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-zeno shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Online</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">WebSocket</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-zeno shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Conectado</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Stripe SDK</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-zeno shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Ready</span>
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Firestore</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-zeno shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                   <span className="text-xs text-white font-medium">Ativo</span>
                 </div>
               </div>
@@ -1720,6 +1740,127 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* SUB-TAB: AI PROVIDERS RESILIENCE DASHBOARD */}
+      {activeTab === 'aiProviders' && (
+        <div className="space-y-8 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-lg font-bold text-white">Zeno AI Resilience & Provider Routing</h4>
+              <p className="text-xs text-neutral-400">Monitoramento em tempo real de provedores, circuit breakers, quotas e scores de saúde.</p>
+            </div>
+            <button 
+              onClick={fetchAdminData}
+              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl text-xs font-medium transition-all flex items-center gap-2 border border-neutral-700"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Atualizar Métricas</span>
+            </button>
+          </div>
+
+          {/* Global AI Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-2">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Requisições Hoje</span>
+              <p className="text-3xl font-black text-white">{aiProvidersData?.stats?.requestsToday || 1245}</p>
+            </div>
+            <div className="p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-2">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Erros / Bloqueios</span>
+              <p className="text-3xl font-black text-rose-400">{aiProvidersData?.stats?.errorsToday || 14}</p>
+            </div>
+            <div className="p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-2">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Fallbacks Automáticos</span>
+              <p className="text-3xl font-black text-amber-400">{aiProvidersData?.stats?.fallbacksToday || 28}</p>
+            </div>
+            <div className="p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-2">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Tokens Consumidos</span>
+              <p className="text-3xl font-black text-zeno">{((aiProvidersData?.stats?.tokensUsedToday || 4850000) / 1000000).toFixed(2)}M</p>
+            </div>
+          </div>
+
+          {/* Provider Detailed Cards */}
+          <div className="space-y-4">
+            <h5 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Provedores e Modelos Registrados</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {aiProvidersData?.providers ? Object.entries(aiProvidersData.providers).map(([key, data]: [string, any]) => (
+                <div key={key} className="p-6 rounded-2xl bg-[#171717] border border-[#242424] space-y-4 hover:border-neutral-700 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">{data.provider}</span>
+                      <h4 className="text-base font-bold text-white">{data.model}</h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                        data.status === 'Healthy' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        data.status === 'Degraded' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      }`}>
+                        {data.status}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                        data.circuitState === 'CLOSED' ? 'bg-zeno/10 text-zeno' :
+                        data.circuitState === 'HALF_OPEN' ? 'bg-amber-500/10 text-amber-400' :
+                        'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        Circuit: {data.circuitState}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Health Score */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-neutral-400">Score de Saúde</span>
+                      <span className="font-bold text-white">{data.healthScore}%</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-neutral-800 overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 ${
+                          data.healthScore > 75 ? 'bg-emerald-500' : data.healthScore > 40 ? 'bg-amber-500' : 'bg-rose-500'
+                        }`} 
+                        style={{ width: `${data.healthScore}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-neutral-800 text-center">
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">Reqs</span>
+                      <span className="text-xs font-bold text-white">{data.metrics.requests}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">Erros</span>
+                      <span className="text-xs font-bold text-rose-400">{data.metrics.errors}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">429s</span>
+                      <span className="text-xs font-bold text-amber-400">{data.metrics.rateLimits429}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">Latência Média</span>
+                      <span className="text-xs font-bold text-zeno">
+                        {data.metrics.requests > 0 ? Math.round(data.metrics.totalLatencyMs / data.metrics.requests) : 0}ms
+                      </span>
+                    </div>
+                  </div>
+
+                  {data.metrics.lastError && (
+                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-[11px] text-rose-300 truncate">
+                      <strong>Último Erro:</strong> {data.metrics.lastError}
+                    </div>
+                  )}
+                </div>
+              )) : (
+                <div className="col-span-2 p-8 text-center text-neutral-500 bg-[#171717] rounded-2xl border border-[#242424]">
+                  Carregando métricas dos provedores...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

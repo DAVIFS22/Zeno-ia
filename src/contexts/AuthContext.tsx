@@ -3,6 +3,7 @@ import {
   getAuth, 
   onAuthStateChanged, 
   signInWithPopup,
+  signInWithRedirect,
   GoogleAuthProvider, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -136,13 +137,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPersistence(auth, browserSessionPersistence);
       }
       addLog('AuthContext: Opening Google Sign-In popup');
-      await signInWithPopup(auth, googleProvider);
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: any) {
+        if (popupErr?.code === 'auth/network-request-failed' || popupErr?.code === 'auth/popup-blocked') {
+          addLog('AuthContext: Popup failed, attempting signInWithRedirect');
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupErr;
+      }
       addLog('AuthContext: Google Sign-In successful');
     } catch (error: any) {
       addLog(`AuthContext: Google Sign-In ERROR: [${error.code}] ${error.message}`);
       if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-closed-by-user') {
         console.warn('Google sign-in popup was closed by user.');
         return;
+      }
+      if (error?.code === 'auth/network-request-failed') {
+        throw new Error('Falha de rede no Firebase Auth. Abra o aplicativo em uma nova aba ou cadastre-se com E-mail e Senha.');
       }
       console.error('Firebase sign-in error:', error);
       throw error;

@@ -69,7 +69,7 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
               disabled={reportSent}
               className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all ${
                 reportSent
-                  ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
+                  ? 'bg-zeno/20 border-zeno/40 text-zeno'
                   : isDark
                     ? 'border-[#2C2C2E] hover:bg-[#232326] text-neutral-300'
                     : 'border-neutral-300 hover:bg-neutral-100 text-neutral-700'
@@ -77,7 +77,7 @@ export function ErrorBanner({ errorMessage, rawDetails, onRetry, theme }: ErrorB
             >
               {reportSent ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-zeno" />
                   <span>Relatório enviado à Zeno Inc.</span>
                 </>
               ) : (

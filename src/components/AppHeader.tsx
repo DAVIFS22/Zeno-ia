@@ -114,7 +114,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
           title={t.common.settings}
         >
           {user?.photoURL ? (
-            <div className="w-6 h-6 rounded-full overflow-hidden border border-sky-500/40 relative">
+            <div className="w-6 h-6 rounded-full overflow-hidden border border-zeno/40 relative">
               <img 
                 src={user.photoURL} 
                 alt={user.displayName || 'User'} 
@@ -126,7 +126,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
             <Settings className="w-4 h-4" />
           )}
           {isAdminUser(user?.email) && (
-            <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[8px] shadow" title="Admin">
+            <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-zeno text-white flex items-center justify-center text-[8px] shadow" title="Admin">
               <Shield className="w-2.5 h-2.5 text-white" />
             </span>
           )}

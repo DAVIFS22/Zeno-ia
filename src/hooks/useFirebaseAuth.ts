@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect, 
   onAuthStateChanged, 
   signOut, 
   User,
@@ -139,11 +140,22 @@ export function useFirebaseAuth() {
         googleProvider.setCustomParameters({});
       }
 
-      await signInWithPopup(auth, googleProvider);
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: any) {
+        if (popupErr?.code === 'auth/network-request-failed' || popupErr?.code === 'auth/popup-blocked') {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupErr;
+      }
     } catch (error: any) {
       if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-closed-by-user') {
         console.warn('Google sign-in popup was closed by user.');
         return;
+      }
+      if (error?.code === 'auth/network-request-failed') {
+        throw new Error('Falha de rede no Firebase Auth. Abra o aplicativo em uma nova aba ou use E-mail e Senha.');
       }
       console.error('Firebase login error:', error);
       throw error;

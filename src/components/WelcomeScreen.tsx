@@ -97,14 +97,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
       }`}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-blue-400" />
+            <Sparkles className="w-4 h-4 text-zeno" />
             <span className="text-sm font-semibold tracking-tight">{currentModelDef.name}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
               isDark 
-                ? 'bg-blue-500/15 text-blue-400 border-blue-500/20' 
-                : 'bg-blue-50 text-blue-600 border-blue-200'
+                ? 'bg-zeno/15 text-zeno border-zeno/20' 
+                : 'bg-blue-50 text-zeno border-zeno/30'
             }`}>
               Padrão
             </span>

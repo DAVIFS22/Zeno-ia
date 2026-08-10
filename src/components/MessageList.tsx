@@ -18,6 +18,45 @@ import { copyToClipboard } from '../utils/clipboard';
 const INITIAL_PAGE_SIZE = 25;
 const BATCH_SIZE = 25;
 
+const StreamingProgress = ({ theme }: { theme: 'dark' | 'light' }) => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    // faux progress simulation over ~10 seconds
+    const interval = setInterval(() => {
+      setProgress(p => {
+        if (p < 40) return p + 3;
+        if (p < 75) return p + 1.5;
+        if (p < 95) return p + 0.5;
+        return p;
+      });
+    }, 150);
+    return () => clearInterval(interval);
+  }, []);
+
+  const estimatedTotal = 15; // 15 seconds estimated baseline
+  const elapsed = (progress / 100) * estimatedTotal;
+  const timeLeft = Math.max(1, Math.ceil(estimatedTotal - elapsed));
+
+  return (
+    <div className="mt-4 flex flex-col gap-1.5 animate-in fade-in duration-300 select-none">
+       <div className="flex justify-between items-center text-[10px] uppercase tracking-widest font-semibold text-zeno/80">
+         <span className="flex items-center gap-1.5">
+           <BrainCircuit className="w-3 h-3 animate-pulse" /> 
+           Processando resposta
+         </span>
+         <span>~ {timeLeft}s restantes</span>
+       </div>
+       <div className={`w-full h-1 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-[#2C2C2E]' : 'bg-neutral-200'}`}>
+         <div 
+           className="h-full bg-zeno rounded-full transition-all duration-300 ease-out" 
+           style={{ width: `${progress}%` }} 
+         />
+       </div>
+    </div>
+  );
+};
+
 interface MessageItemProps {
   msg: Message;
   isLastMessage: boolean;
@@ -187,7 +226,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   }`}
                   title="Copiar mensagem"
                 >
-                  {isCopied ? <Check className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </>
@@ -220,8 +259,8 @@ export const MessageItem = React.memo<MessageItemProps>(({
           {isLoadingLast && (
             <div className="absolute -top-1 -right-1">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zeno opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-zeno"></span>
               </span>
             </div>
           )}
@@ -255,7 +294,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
           {/* Error Banner or Streamed Text */}
           {msg.isLimitWarning ? (
             <div className={`mt-3 p-6 rounded-2xl border ${theme === 'dark' ? 'bg-[#1C1C1E] border-[#2C2C2E]' : 'bg-neutral-50 border-neutral-200'} shadow-sm`}>
-              <div className="flex items-center gap-2 mb-3 text-sky-400">
+              <div className="flex items-center gap-2 mb-3 text-zeno">
                 <ShieldAlert className="w-4 h-4" />
                 <span className="font-semibold text-xs uppercase tracking-wider text-neutral-400">Limite Diário Atingido</span>
               </div>
@@ -264,18 +303,18 @@ export const MessageItem = React.memo<MessageItemProps>(({
               </p>
               <div className="space-y-2 mb-5 text-xs text-neutral-400">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-zeno" />
                   <span>Mensagens e buscas ilimitadas</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-zeno" />
                   <span>Geração avançada de imagens e áudio</span>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-3 border-t border-neutral-800/50">
                 <button
                   onClick={onOpenSubscriptionModal}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-medium bg-sky-600 text-white hover:bg-sky-500 transition-colors flex items-center justify-center gap-2 text-sm"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-medium bg-zeno text-white hover:bg-zeno transition-colors flex items-center justify-center gap-2 text-sm"
                 >
                   <Sparkles className="w-4 h-4" />
                   Upgrade para o ZENO Pro
@@ -301,14 +340,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 <div className="py-2">
                    {msg.isToolCalling ? (
                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2 text-sky-500 text-sm font-semibold animate-pulse">
+                        <div className="flex items-center gap-2 text-zeno text-sm font-semibold animate-pulse">
                           <RefreshCw className="w-4 h-4 animate-spin" />
                           <span>{msg.toolName === 'createSupportTicket' ? 'Abrindo ticket de suporte...' : 'Executando ferramenta...'}</span>
                         </div>
                      </div>
                    ) : (msg.isSearching || msg.isSearch || msg.modelSpeed === 'search') ? (
                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2 text-sky-500 text-sm font-semibold animate-pulse">
+                        <div className="flex items-center gap-2 text-zeno text-sm font-semibold animate-pulse">
                           <Globe className="w-4 h-4 animate-spin" />
                           <span>{msg.isSearching ? t.composer.speedSearch : t.composer.speedSearch}</span>
                         </div>
@@ -331,7 +370,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                      </div>
                    ) : (
                      <div className="flex items-center gap-2.5 text-neutral-400 text-sm animate-pulse">
-                        <Sparkles className="w-4 h-4 text-sky-400" />
+                        <Sparkles className="w-4 h-4 text-zeno" />
                         <span className="font-medium">{t.common.loading}</span>
                      </div>
                    )}
@@ -406,6 +445,11 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 </div>
               )}
 
+              {/* Streaming Progress Bar */}
+              {isLoadingLast && msg.role === 'model' && msg.text && (
+                <StreamingProgress theme={theme} />
+              )}
+
               {/* Discrete Source Citation Bar */}
               {msg.text && msg.isSearch && uniqueSources.length > 0 && (
                 <SourcesCard 
@@ -427,7 +471,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 }`}
                 title="Copiar resposta"
               >
-                {isCopied ? <Check className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {isCopied ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
 
               <button
@@ -445,7 +489,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
               <button
                 onClick={() => handleFeedbackClick('up')}
                 className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  itemFeedback === 'up' ? 'text-sky-400 bg-sky-500/15' : (
+                  itemFeedback === 'up' ? 'text-zeno bg-zeno/15' : (
                     theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
                   )
                 }`}
@@ -473,7 +517,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 }`}
                 title="Compartilhar"
               >
-                {sharedSuccess ? <Check className="w-3.5 h-3.5 text-sky-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                {sharedSuccess ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Share2 className="w-3.5 h-3.5" />}
               </button>
 
               {/* More options dropdown */}
@@ -522,12 +566,12 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   onClick={() => setShowSourcesSheet(!showSourcesSheet)}
                   className={`ml-auto sm:ml-1 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
                     showSourcesSheet
-                      ? (theme === 'dark' ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-200')
+                      ? (theme === 'dark' ? 'bg-zeno/20 text-zeno border-zeno/40' : 'bg-sky-50 text-zeno border-zeno/30')
                       : (theme === 'dark' ? 'bg-[#232326]/60 hover:bg-[#232326] text-neutral-300 border-[#2C2C2E]/50' : 'bg-neutral-100 hover:bg-neutral-200/80 text-neutral-700 border-neutral-300/60')
                   }`}
                   title="Ver fontes de pesquisa"
                 >
-                  <Globe className="w-3.5 h-3.5 text-sky-400" />
+                  <Globe className="w-3.5 h-3.5 text-zeno" />
                   <span>Fontes ({uniqueSources.length})</span>
                   <ChevronDown className={`w-3 h-3 transition-transform ${showSourcesSheet ? 'rotate-180' : ''}`} />
                 </button>
@@ -561,15 +605,15 @@ export const MessageItem = React.memo<MessageItemProps>(({
               theme === 'dark' ? 'bg-[#1C1C1E]/90 border-[#2C2C2E]/80 text-neutral-200' : 'bg-neutral-100 border-neutral-200 text-neutral-800'
             }`}>
               {feedbackSubmitted ? (
-                <div className="flex items-center gap-2 text-xs font-bold text-sky-400 py-1">
-                  <Sparkles className="w-4 h-4 text-sky-400 animate-pulse" />
+                <div className="flex items-center gap-2 text-xs font-bold text-zeno py-1">
+                  <Sparkles className="w-4 h-4 text-zeno animate-pulse" />
                   <span>Feedback registrado! ZENO atualizou seu perfil de aprendizado adaptativo.</span>
                 </div>
               ) : (
                 <div>
                   <div className="text-[11px] font-bold text-neutral-400 mb-2 flex items-center justify-between">
                     <span className={`flex items-center gap-1.5 ${theme === 'dark' ? 'text-[#F5F5F5]' : 'text-neutral-800'}`}>
-                      <Sparkles className="w-3.5 h-3.5 text-[#4A9EFF]" />
+                      <Sparkles className="w-3.5 h-3.5 text-zeno" />
                       Como o ZENO pode adaptar esta resposta?
                     </span>
                     <button 
@@ -601,7 +645,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                           onClick={() => handleToggleTag(tag.id)}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                             isSel 
-                              ? 'bg-sky-500/10 border-[#4A9EFF] text-sky-400 font-bold' 
+                              ? 'bg-zeno/10 border-zeno text-zeno font-bold' 
                               : `${theme === 'dark' ? 'bg-[#232326] border-[#2C2C2E] text-neutral-300 hover:bg-[#232326]' : 'bg-white border-neutral-300 text-neutral-700'}`
                           }`}
                         >
@@ -615,7 +659,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   <div className="flex justify-end">
                     <button
                       onClick={handleConfirmFeedback}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4A9EFF] text-[#F5F5F5] hover:bg-sky-400 transition-colors flex items-center gap-1.5 shadow-md shadow-sky-500/10"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-zeno text-[#F5F5F5] hover:bg-zeno/10 transition-colors flex items-center gap-1.5 shadow-md shadow-zeno/10"
                     >
                       <Check className="w-3.5 h-3.5 text-[#F5F5F5]" />
                       <span>Enviar & Adaptar ZENO</span>

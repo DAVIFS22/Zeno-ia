@@ -56,7 +56,7 @@ export function ContextualPrompts({ onSelectPrompt, recentSessions, attachments 
   return (
     <div className="w-full px-4 mb-6 flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-medium px-1">
-        <Sparkles className="w-4 h-4 text-sky-500" />
+        <Sparkles className="w-4 h-4 text-zeno" />
         <span>Sugestões para começar</span>
       </div>
       
@@ -73,9 +73,9 @@ export function ContextualPrompts({ onSelectPrompt, recentSessions, attachments 
             <button
               key={idx}
               onClick={() => onSelectPrompt(suggestion)}
-              className="text-left px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-sky-500 dark:hover:border-sky-500 transition-colors group flex items-start gap-3 shadow-sm"
+              className="text-left px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-zeno dark:hover:border-zeno transition-colors group flex items-start gap-3 shadow-sm"
             >
-              <div className="mt-0.5 bg-sky-50 dark:bg-sky-500/10 p-1.5 rounded-lg text-sky-600 dark:text-sky-400">
+              <div className="mt-0.5 bg-sky-50 dark:bg-zeno/10 p-1.5 rounded-lg text-zeno dark:text-zeno">
                 {attachments.length > 0 ? (
                    <FileText className="w-4 h-4" />
                 ) : (

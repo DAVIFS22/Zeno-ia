@@ -548,7 +548,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                           <Clock className="w-4 h-4 text-neutral-500" />
                           {t.imageStudio.estimatedTime}
                         </span>
-                        <span className="font-extrabold text-sky-400 font-mono bg-sky-950/30 px-2 py-0.5 rounded-md">
+                        <span className="font-extrabold text-zeno font-mono bg-zeno/20/30 px-2 py-0.5 rounded-md">
                           ~{estimatedTime}s
                         </span>
                       </div>
@@ -605,7 +605,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       className="p-2 rounded-lg text-neutral-200 hover:bg-[#232326] transition-colors"
                       title={t.imageStudio.copyLink}
                     >
-                      {copiedId === currentImage.id ? <Check className="w-4 h-4 text-sky-400" /> : <Copy className="w-4 h-4" />}
+                      {copiedId === currentImage.id ? <Check className="w-4 h-4 text-zeno" /> : <Copy className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => handleDownload(currentImage.imageUrl, `zeno-${Date.now()}.jpg`, currentImage.id)}
@@ -616,7 +616,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                       {isDownloading ? (
                         <RefreshCw className="w-4 h-4 text-neutral-300 animate-spin" />
                       ) : downloadDoneId === currentImage.id ? (
-                        <Check className="w-4 h-4 text-sky-400" />
+                        <Check className="w-4 h-4 text-zeno" />
                       ) : (
                         <Download className="w-4 h-4 text-neutral-300" />
                       )}

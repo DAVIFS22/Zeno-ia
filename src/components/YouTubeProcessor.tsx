@@ -309,8 +309,8 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1 text-[11px] font-medium text-sky-400 bg-sky-950/40 border border-sky-900/50 px-2 py-0.5 rounded-full shrink-0">
-              <CheckCircle2 className="w-3 h-3 text-sky-400" />
+            <div className="flex items-center gap-1 text-[11px] font-medium text-zeno bg-zeno/20/40 border border-zeno/30/50 px-2 py-0.5 rounded-full shrink-0">
+              <CheckCircle2 className="w-3 h-3 text-zeno" />
               <span className="hidden sm:inline">{t.common.finish}</span>
             </div>
           </div>
@@ -483,7 +483,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                     </>
                   ) : downloadSuccess ? (
                     <>
-                      <Check className="w-4 h-4 text-sky-600" />
+                      <Check className="w-4 h-4 text-zeno" />
                       <span>{t.common.finish}!</span>
                     </>
                   ) : (
@@ -534,7 +534,7 @@ export const YouTubeProcessor: React.FC<YouTubeProcessorProps> = ({
                   onClick={handleCopyTranscript}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#232326] hover:bg-neutral-700 text-neutral-200 rounded-lg transition-colors cursor-pointer"
                 >
-                  {copiedTranscript ? <Check className="w-3.5 h-3.5 text-sky-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-400" />}
+                  {copiedTranscript ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Copy className="w-3.5 h-3.5 text-neutral-400" />}
                   <span>{copiedTranscript ? t.common.copied : t.common.copy}</span>
                 </button>
 

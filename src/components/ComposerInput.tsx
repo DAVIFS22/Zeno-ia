@@ -8,7 +8,6 @@ import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { useTranslation } from '../i18n';
 import { auth } from '../lib/firebase';
-import { signInAnonymously } from 'firebase/auth';
 import { getOrCreateUserId } from '../lib/userId';
 import { startAudioLevelMeter, stopAudioLevelMeter } from '../hooks/useAudioLevel';
 
@@ -16,8 +15,8 @@ const VoiceBlob = ({ className = "" }: { className?: string }) => {
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
       <span className="relative flex h-2.5 w-2.5">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zeno opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-zeno"></span>
       </span>
     </div>
   );
@@ -162,15 +161,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             console.log(`[Groq Whisper Stage 2] Disparando requisição POST para /api/transcribe. Tamanho do Base64: ${audioBase64.length}`);
 
             let currentUser = auth.currentUser;
-            if (!currentUser) {
-              try {
-                const cred = await signInAnonymously(auth);
-                currentUser = cred.user;
-              } catch (anonErr) {
-                console.error('[Groq Whisper Auth Error] Anonymous sign in failed:', anonErr);
-              }
-            }
-
+            
             let idToken = '';
             if (currentUser) {
               try {
@@ -494,7 +485,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                       }}
                       className={`px-1.5 py-0.5 rounded transition-colors ${
                         speed === 'smart' 
-                          ? 'bg-sky-600 text-white' 
+                          ? 'bg-zeno text-white' 
                           : isDark ? 'bg-[#232326] text-neutral-400' : 'bg-neutral-100 text-neutral-500'
                       }`}
                     >
@@ -665,15 +656,15 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           {/* Text Area or Inline Voice Recording Indicator */}
           {isListening ? (
             <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-              <VoiceBlob className="w-4 h-4 text-blue-500 shrink-0" />
-              <span className="text-sm font-medium text-blue-500 animate-pulse truncate">
+              <VoiceBlob className="w-4 h-4 text-zeno shrink-0" />
+              <span className="text-sm font-medium text-zeno animate-pulse truncate">
                 Ouvindo... fale agora
               </span>
             </div>
           ) : isTranscribing ? (
             <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
-              <span className="text-sm font-medium text-blue-500 truncate">
+              <div className="w-4 h-4 border-2 border-zeno border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-sm font-medium text-zeno truncate">
                 Transcrevendo áudio...
               </span>
             </div>
@@ -708,7 +699,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             <button
               type="button"
               onClick={onToggleListening}
-              className="px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs shadow-blue-600/20"
+              className="px-3 py-1.5 rounded-full bg-zeno hover:bg-zeno/90 text-white font-medium text-xs transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
             >
               <span>Finalizar</span>
             </button>
@@ -735,7 +726,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 type="button"
                 onClick={onStopGeneration}
                 title={t.common.stop}
-                className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-blue-600/20"
+                className="w-9 h-9 rounded-full bg-zeno hover:bg-zeno/90 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
               >
                 <Square className="w-3.5 h-3.5 fill-current" />
               </button>
@@ -746,7 +737,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 title={t.common.send}
                 className={`w-9 h-9 rounded-full transition-all flex items-center justify-center flex-shrink-0 ${
                   hasContent
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs shadow-blue-600/20'
+                    ? 'bg-zeno hover:bg-zeno/90 text-white cursor-pointer shadow-xs shadow-zeno/20'
                     : isDark
                       ? 'bg-[#232326] text-neutral-600 cursor-not-allowed'
                       : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'

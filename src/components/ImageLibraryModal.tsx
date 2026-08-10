@@ -212,7 +212,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
   const handleCreateCollection = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
-    const updated = addStoredCollection(newCollectionName.trim(), newCollectionIcon, '#3B82F6', userId);
+    const updated = addStoredCollection(newCollectionName.trim(), newCollectionIcon, '#0084DF', userId);
     setCollections(updated);
     setSelectedCategory(newCollectionName.trim());
     setNewCollectionName('');
@@ -504,7 +504,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                       onOpenStudioWithPrompt('');
                     }
                   }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs border border-blue-500 transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                  className="px-4 py-2 rounded-xl bg-zeno hover:bg-zeno text-white font-medium text-xs border border-zeno transition-colors flex items-center gap-2 shadow-lg shadow-zeno/20"
                 >
                   <MessageSquare className="w-4 h-4 text-white" />
                   Ir para o Chat
@@ -729,7 +729,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                       setSelectedImage(null);
                       onClose();
                     }}
-                    className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-blue-500/20"
+                    className="py-2 px-3 rounded-xl bg-zeno hover:bg-zeno text-white border border-zeno text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-zeno/20"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-white" />
                     Reusar Prompt
