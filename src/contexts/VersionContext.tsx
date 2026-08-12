@@ -37,7 +37,7 @@ export const VersionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setRemoteHistory(data);
         }
       })
-      .catch(err => console.error('Failed to fetch remote changelog:', err));
+      .catch(err => console.warn('Falha silenciosa ao carregar changelog remoto:', err));
   }, []);
 
   const value = useMemo(() => {
@@ -45,13 +45,23 @@ export const VersionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const latestVersion = remoteHistory ? remoteHistory[0] : getLatestVersion();
 
     const checkNewVersion = () => {
+      const forceCheckVersion = "2.26.0";
       const lastSeen = localStorage.getItem('zeno_last_seen_version');
-      const isNew = lastSeen !== latestVersion.version;
-      
-      // If version is new but has no relevant content, we should consider it "not new" for UI purposes
+      const latestVer = latestVersion.version;
+      const isNewCheck = lastSeen !== forceCheckVersion && lastSeen !== latestVer;
       const relevant = hasRelevantContent(latestVersion);
-      
-      return { isNew: isNew && relevant, version: latestVersion };
+      const finalIsNew = (isNewCheck || lastSeen !== latestVer) && relevant;
+
+      console.group('[Zeno Version Comparison Log]');
+      console.log('localStorage ("zeno_last_seen_version"):', lastSeen);
+      console.log('Latest Version in Config/Remote:', latestVer);
+      console.log('Force Check Version:', forceCheckVersion);
+      console.log('isNewCheck (lastSeen !== forceCheckVersion && lastSeen !== latestVer):', isNewCheck);
+      console.log('hasRelevantContent(latestVersion):', relevant);
+      console.log('Final isNew Result:', finalIsNew);
+      console.groupEnd();
+
+      return { isNew: finalIsNew, version: latestVersion };
     };
 
     return {

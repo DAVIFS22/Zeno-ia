@@ -33,26 +33,18 @@ export function LanguageProvider({
   userLanguage?: Language;
 }) {
   const resolvedLanguage = useMemo(() => {
-    if (userLanguage === 'auto') {
-      const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'pt-BR';
-      if (browserLang.startsWith('pt')) return 'pt-BR';
-      if (browserLang.startsWith('en')) return 'en-US';
-      if (browserLang.startsWith('es')) return 'es-ES';
-      if (browserLang.startsWith('fr')) return 'fr-FR';
-      if (browserLang.startsWith('zh')) return 'zh-CN';
-      return 'pt-BR';
-    }
-    return userLanguage;
+    // STRICT OVERRIDE: Forcing pt-BR to prevent language leaking (e.g. Chinese characters)
+    return 'pt-BR';
   }, [userLanguage]);
 
   const t = useMemo(() => {
-    return translations[resolvedLanguage as keyof typeof translations] || pt;
+    return pt; // STRICTLY bind to Portuguese translations
   }, [resolvedLanguage]);
 
   const value = {
-    language: userLanguage,
+    language: 'pt-BR' as Language,
     t,
-    resolvedLanguage
+    resolvedLanguage: 'pt-BR'
   };
 
   return (
@@ -62,10 +54,15 @@ export function LanguageProvider({
   );
 }
 
-export function useTranslation() {
+export function useTranslation(componentName?: string) {
   const context = useContext(LanguageContext);
   if (!context) {
     throw new Error('useTranslation must be used within a LanguageProvider');
   }
+  
+  if (componentName) {
+    console.log(`[Diagnostic] ${componentName} is using language context: pt-BR`);
+  }
+  
   return context;
 }

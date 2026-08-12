@@ -63,7 +63,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   onAcceptCloudDraft,
   onDismissCloudDraft,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('ComposerInput');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -248,42 +248,6 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 
   const currentModel = getModelDef(speed);
 
-  // Close model menu smoothly on outside clicks without conflicting with toggle button
-  useEffect(() => {
-    if (!isSpeedMenuOpen) return;
-
-    const handleClickOutside = (event: Event) => {
-      const target = event.target as Node;
-      if (menuRef.current && !menuRef.current.contains(target)) {
-        console.log('[ComposerInput] Outside click detected. Closing model selector dropdown.');
-        setIsSpeedMenuOpen(false);
-      }
-    };
-
-    // Use setTimeout to ensure the click/touch event that opened the dropdown finishes before outside listener is active
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('pointerdown', handleClickOutside);
-      document.addEventListener('click', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('pointerdown', handleClickOutside);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [isSpeedMenuOpen]);
-
-  const handleModelClick = (modelId: ModelType, isModelPro: boolean) => {
-    setIsSpeedMenuOpen(false);
-    if (isModelPro && !isPro) {
-      if (onOpenProFeatureModal) {
-        onOpenProFeatureModal();
-      }
-    } else {
-      onSelectSpeed(modelId);
-    }
-  };
-
   const messagesCount = dailyUsage?.messagesCount || 0;
   const isNearLimit = !isPro && messagesCount >= FREE_LIMITS.MESSAGES_PER_DAY - 3 && messagesCount < FREE_LIMITS.MESSAGES_PER_DAY;
   const isAtLimit = !isPro && messagesCount >= FREE_LIMITS.MESSAGES_PER_DAY;
@@ -451,147 +415,64 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           </div>
         )}
         
-        {/* Model Indicator & Image Studio Action */}
-        <div className="flex items-center justify-between mb-1.5 px-2">
-          <div ref={menuRef} className="model-selector relative">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSpeedMenuOpen(prev => !prev);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              onTouchEnd={(e) => e.stopPropagation()}
-              className={`text-xs flex items-center gap-1.5 font-medium cursor-pointer px-2 py-1 -mx-2 rounded-lg transition-all duration-150 ease-out active:scale-95 focus:outline-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#4A4A4E] ${
-                isDark 
-                  ? 'text-neutral-400 hover:text-neutral-200 hover:bg-[#232326] active:bg-[#2C2C2E]' 
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200'
-              }`}
+        {/* Daily Limit Warning and Errors using AnimatePresence */}
+        <AnimatePresence>
+          {!isPro && (isAtLimit || isNearLimit) && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="overflow-hidden"
             >
-              <span>Modelo:</span>
-              <span className={`font-semibold flex items-center gap-1 ${
-                isDark ? 'text-neutral-200' : 'text-neutral-900'
+              <div className={`px-3.5 py-1.5 rounded-xl text-xs flex items-center justify-between border ${
+                isAtLimit 
+                  ? isDark ? 'bg-[#1C1C1E] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
+                  : isDark ? 'bg-[#1C1C1E]/60 border-[#2C2C2E] text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-700'
               }`}>
-                {currentModel.name}
-                {currentModel.isPro && !isPro && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#232326] text-neutral-300 border border-[#2C2C2E]">
-                    <Lock className="w-2.5 h-2.5" /> PRO
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                  <span>
+                    {isAtLimit 
+                      ? `Limite de ${FREE_LIMITS.MESSAGES_PER_DAY} mensagens diárias atingido.` 
+                      : `${messagesCount}/${FREE_LIMITS.MESSAGES_PER_DAY} mensagens grátis utilizadas.`}
                   </span>
-                )}
-              </span>
-              <ChevronDown className={`w-3 h-3 text-neutral-400 transition-transform duration-200 ease-in-out transform ${isSpeedMenuOpen ? 'rotate-180' : 'rotate-0'}`} />
-            </button>
-
-            {/* Model Selection Menu */}
-            {isSpeedMenuOpen && (
-              <div 
-                className={`absolute bottom-full left-0 mb-2 w-72 p-2 rounded-xl border shadow-2xl z-50 animate-fadeIn ${
-                  isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
-                }`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className={`px-2 py-1 mb-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b ${
-                    isDark ? 'text-neutral-400 border-[#2C2C2E]' : 'text-neutral-500 border-neutral-100'
-                  }`}>
-                    <span>{t.composer.speedSmart}</span>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectSpeed('smart');
-                      }}
-                      className={`px-1.5 py-0.5 rounded transition-colors ${
-                        speed === 'smart' 
-                          ? 'bg-zeno text-white' 
-                          : isDark ? 'bg-[#232326] text-neutral-400' : 'bg-neutral-100 text-neutral-500'
-                      }`}
-                    >
-                      {speed === 'smart' ? 'Ativo' : 'Ativar'}
-                    </button>
-                  </div>
-
-                  {ZENO_MODELS.map(m => {
-                    const isSelected = getModelDef(speed).id === m.id;
-                    const isLocked = m.isPro && !isPro;
-
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleModelClick(m.id, m.isPro)}
-                        className={`w-full text-left p-2 rounded-lg transition-all flex items-center justify-between group ${
-                          isSelected
-                            ? isDark ? 'bg-[#232326] text-white font-medium' : 'bg-neutral-100 text-neutral-900 font-medium'
-                            : isDark ? 'hover:bg-[#232326]/50 text-neutral-300' : 'hover:bg-neutral-50 text-neutral-700'
-                        }`}
-                      >
-                        <div className="flex-1 pr-2">
-                          <div className="text-xs font-medium flex items-center gap-1.5">
-                            <span>{m.name}</span>
-                          </div>
-                          <div className="text-[10px] text-neutral-400 mt-0.5 leading-tight">{m.description}</div>
-                        </div>
-
-                        {isLocked ? (
-                          <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                            isDark ? 'bg-[#232326] border-[#2C2C2E] text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
-                          }`}>
-                            <Lock className="w-2.5 h-2.5" /> PRO
-                          </div>
-                        ) : isSelected ? (
-                          <div className={`w-1.5 h-1.5 rounded-full ${
-                            isDark ? 'bg-white' : 'bg-[#1C1C1E]'
-                          }`} />
-                        ) : null}
-                      </button>
-                    );
-                  })}
                 </div>
-            )}
-          </div>
-        </div>
+                {onOpenProFeatureModal && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenProFeatureModal()}
+                    className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-200 hover:bg-white text-neutral-950 transition-all ml-2"
+                  >
+                    Upgrade Pro
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
 
-        {/* Daily Limit Warning */}
-        {!isPro && (isAtLimit || isNearLimit) && (
-          <div className={`mb-2 px-3.5 py-1.5 rounded-xl text-xs flex items-center justify-between border ${
-            isAtLimit 
-              ? isDark ? 'bg-[#1C1C1E] border-[#2C2C2E] text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-900'
-              : isDark ? 'bg-[#1C1C1E]/60 border-[#2C2C2E] text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-700'
-          }`}>
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
-              <span>
-                {isAtLimit 
-                  ? `Limite de ${FREE_LIMITS.MESSAGES_PER_DAY} mensagens diárias atingido.` 
-                  : `${messagesCount}/${FREE_LIMITS.MESSAGES_PER_DAY} mensagens grátis utilizadas.`}
-              </span>
-            </div>
-            {onOpenProFeatureModal && (
-              <button
-                type="button"
-                onClick={() => onOpenProFeatureModal()}
-                className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-200 hover:bg-white text-neutral-950 transition-all ml-2"
-              >
-                Upgrade Pro
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Speech Error Banner */}
-        {speechError && (
-          <div className="mb-2 px-3 py-1.5 rounded-lg bg-[#232326] border border-[#2C2C2E] text-neutral-300 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
-              <span>{speechError}</span>
-            </div>
-            <button
-              onClick={() => setSpeechError(null)}
-              className="text-neutral-500 hover:text-neutral-300 p-0.5"
+          {/* Speech Error Banner */}
+          {speechError && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="overflow-hidden"
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+              <div className="px-3 py-1.5 rounded-lg bg-[#232326] border border-[#2C2C2E] text-neutral-300 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>{speechError}</span>
+                </div>
+                <button
+                  onClick={() => setSpeechError(null)}
+                  className="text-neutral-500 hover:text-neutral-300 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Input Bar */}
         <form
@@ -614,33 +495,39 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           {/* Attached Files Preview */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 pt-2 pb-2 px-4">
-              {attachments.map(att => (
-                <div
-                  key={att.id}
-                  className="relative group shrink-0"
-                  title={att.name}
-                >
-                  <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
-                    isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
-                  }`}>
-                    {(att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && att.url ? (
-                      <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        {att.type === 'code' ? <Code className="w-5 h-5 text-neutral-400 mb-0.5" /> : <FileText className="w-5 h-5 text-neutral-400 mb-0.5" />}
-                        <span className="truncate w-full text-center px-1 text-[9px] font-medium text-neutral-500">{att.name.split('.').pop()?.toUpperCase()}</span>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveAttachment(att.id)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-black text-white rounded-full backdrop-blur-md shadow-sm transition-colors border border-white/10"
+              <AnimatePresence>
+                {attachments.map(att => (
+                  <motion.div
+                    key={att.id}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.5, width: 0, margin: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                    className="relative group shrink-0"
+                    title={att.name}
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
+                    <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
+                      isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
+                    }`}>
+                      {(att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && att.url ? (
+                        <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          {att.type === 'code' ? <Code className="w-5 h-5 text-neutral-400 mb-0.5" /> : <FileText className="w-5 h-5 text-neutral-400 mb-0.5" />}
+                          <span className="truncate w-full text-center px-1 text-[9px] font-medium text-neutral-500">{att.name.split('.').pop()?.toUpperCase()}</span>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(att.id)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-black text-white rounded-full backdrop-blur-md shadow-sm transition-colors border border-white/10"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           )}
 
@@ -698,7 +585,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 }
               }}
               placeholder={
-                isDragging ? t.composer.uploadDoc : t.composer.placeholder
+                isDragging ? (t.composer.uploadDoc || "Solte o documento aqui") : "Pergunte ao ZENO"
               }
               disabled={isLoading}
               rows={1}

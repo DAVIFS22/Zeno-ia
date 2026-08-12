@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from "motion/react";
 import { List } from 'react-window';
 import { 
   Plus, MessageSquare, Settings, Search, PanelLeftClose, 
   X, Pin, Edit2, Trash2, Sparkles, User, Lock, Check,
-  Image, Folder, Cpu, Sliders, Shield, ChevronDown, MoreHorizontal
+  Image, Folder, Cpu, Sliders, Shield, ChevronDown, MoreHorizontal,
+  HelpCircle, LogOut
 } from 'lucide-react';
 import { UserSettings, ChatSession } from '../types';
 import { ZenoLogo } from './ZenoLogo';
@@ -12,6 +15,9 @@ import { isAdminUser } from '../config/admin';
 import { useTranslation } from '../i18n';
 import { useVersion } from '../contexts/VersionContext';
 import { GoogleLogo } from './GoogleLogo';
+import { HighlightText } from './HighlightText';
+
+
 
 type FlatSessionListItem =
   | { type: 'header'; id: string; label: string }
@@ -34,6 +40,7 @@ interface SidebarSessionItemProps {
   onSetEditingSessionId: (id: string | null) => void;
   onSetEditingTitle: (title: string) => void;
   onSetDeletingSessionId: (id: string | null) => void;
+  searchQuery?: string;
 }
 
 const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
@@ -41,6 +48,7 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
   isActive,
   isEditing,
   editingTitle,
+  searchQuery,
   isDark,
   textMain,
   textMuted,
@@ -55,100 +63,152 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
   onSetDeletingSessionId
 }) => {
   const [showMenu, setShowMenu] = React.useState(false);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = React.useState<{ top: number; right: number } | null>(null);
+
+  const handleToggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!showMenu && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right
+      });
+    }
+    setShowMenu(!showMenu);
+  };
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (
+        menuRef.current && 
+        !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
         setShowMenu(false);
       }
     };
     if (showMenu) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('resize', () => setShowMenu(false));
+      window.addEventListener('scroll', () => setShowMenu(false), true);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', () => setShowMenu(false));
+      window.removeEventListener('scroll', () => setShowMenu(false), true);
+    };
   }, [showMenu]);
+
+  const matchingMsg = React.useMemo(() => {
+    if (!searchQuery || !searchQuery.trim()) return null;
+    const q = searchQuery.toLowerCase();
+    return session.messages?.find(m => m.text.toLowerCase().includes(q));
+  }, [session, searchQuery]);
 
   return (
     <div
       onClick={() => onSelectSession(session.id)}
-      className={`group relative flex items-center gap-2 px-3 h-[36px] rounded-lg text-xs transition-colors duration-150 cursor-pointer ${
+      className={`group relative flex flex-col justify-center px-3 rounded-lg text-xs transition-colors duration-150 cursor-pointer ${
+        matchingMsg ? 'py-1.5' : 'h-[36px]'
+      } ${
         isActive
           ? `${bgActiveItem} ${textMain} font-medium`
           : `bg-transparent ${textMuted} hover:${textMain} ${hoverItemBg}`
       }`}
     >
-      <MessageSquare className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? textMain : textMuted}`} />
-      
-      {isEditing ? (
-        <input
-          type="text"
-          value={editingTitle}
-          onChange={(e) => onSetEditingTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSaveRenameSession(session.id);
-            if (e.key === 'Escape') onSetEditingSessionId(null);
-          }}
-          onBlur={() => onSaveRenameSession(session.id)}
-          autoFocus
-          onClick={(e) => e.stopPropagation()}
-          className={`w-full bg-transparent border-b ${textMuted} focus:outline-none text-xs ${textMain} px-1`}
-        />
-      ) : (
-        <span className="truncate flex-1 font-normal">
-          {session.title}
-        </span>
-      )}
-
-      {!isEditing && (
-        <div className="relative flex items-center" ref={menuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
+      <div className="flex items-center gap-2 w-full">
+        {isEditing ? (
+          <input
+            type="text"
+            value={editingTitle}
+            onChange={(e) => onSetEditingTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveRenameSession(session.id);
+              if (e.key === 'Escape') onSetEditingSessionId(null);
             }}
-            className={`p-1 rounded-md transition-colors hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-200'} ${showMenu ? (isDark ? 'bg-[#2a2a2e] text-white' : 'bg-neutral-200 text-neutral-900') : textMuted} hover:${textMain}`}
-            title="Opções"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
+            onBlur={() => onSaveRenameSession(session.id)}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full bg-transparent border-b ${textMuted} focus:outline-none text-xs ${textMain} px-1`}
+          />
+        ) : (
+          <span className="truncate flex-1 font-normal">
+            <HighlightText text={session.title} query={searchQuery} isDark={isDark} />
+          </span>
+        )}
 
-          {showMenu && (
-            <div className={`absolute right-0 top-full mt-1 w-36 py-1 rounded-xl shadow-xl z-50 border text-xs animate-fadeIn ${
-              isDark ? 'bg-[#1e1e22] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
-            }`} onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={(e) => {
-                  setShowMenu(false);
-                  onStartRenameSession(session, e);
+        {!isEditing && (
+          <div className="relative flex items-center">
+            <button
+              ref={buttonRef}
+              onClick={handleToggleMenu}
+              className={`p-1 rounded-md transition-colors hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-200'} ${showMenu ? (isDark ? 'bg-[#2a2a2e] text-white' : 'bg-neutral-200 text-neutral-900') : textMuted} hover:${textMain}`}
+              title="Opções"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+
+            <AnimatePresence>{showMenu && coords && createPortal(
+              <motion.div 
+                ref={menuRef}
+                initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                style={{
+                  position: 'fixed',
+                  top: `${coords.top}px`,
+                  right: `${coords.right}px`,
+                  zIndex: 999999
                 }}
-                className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+                className={`w-36 py-1 rounded-xl shadow-2xl border text-xs   ${
+                  isDark ? 'bg-[#1e1e22] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+                }`} 
+                onClick={(e) => e.stopPropagation()}
               >
-                <Edit2 className="w-3.5 h-3.5 text-neutral-400" />
-                <span>Renomear</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  setShowMenu(false);
-                  onTogglePinSession(session.id, e);
-                }}
-                className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
-              >
-                <Pin className={`w-3.5 h-3.5 ${session.isPinned ? 'text-zeno' : 'text-neutral-400'}`} />
-                <span>{session.isPinned ? 'Desafixar' : 'Fixar'}</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  setShowMenu(false);
-                  onSetDeletingSessionId(session.id);
-                }}
-                className={`flex items-center gap-2 w-full px-3 py-2 text-left text-red-500 hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Excluir</span>
-              </button>
-            </div>
-          )}
+                <button
+                  onClick={(e) => {
+                    setShowMenu(false);
+                    onStartRenameSession(session, e);
+                  }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Renomear</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    setShowMenu(false);
+                    onTogglePinSession(session.id, e);
+                  }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-left hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+                >
+                  <Pin className={`w-3.5 h-3.5 ${session.isPinned ? 'text-zeno' : 'text-neutral-400'}`} />
+                  <span>{session.isPinned ? 'Desafixar' : 'Fixar'}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    setShowMenu(false);
+                    onSetDeletingSessionId(session.id);
+                  }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-left text-red-500 hover:${isDark ? 'bg-[#2a2a2e]' : 'bg-neutral-100'} transition-colors`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir</span>
+                </button>
+              </motion.div>,
+              document.body
+            )}</AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      {matchingMsg && (
+        <div className={`text-[10px] truncate mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+          <HighlightText text={matchingMsg.text} query={searchQuery} isDark={isDark} snippetMode={true} />
         </div>
       )}
     </div>
@@ -188,6 +248,9 @@ interface SidebarNavProps {
   onOpenSubscriptionModal: (reason?: string) => void;
   onOpenVersionNews?: () => void;
   onOpenAuthModal: () => void;
+  onOpenEditProfile?: () => void;
+  onLogout?: () => void;
+  onOpenSupport?: () => void;
   user?: any;
   session?: any;
   onSwitchAccount?: (uid: string) => void;
@@ -223,6 +286,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   onOpenSubscriptionModal,
   onOpenVersionNews,
   onOpenAuthModal,
+  onOpenEditProfile,
+  onLogout,
+  onOpenSupport,
   user,
   session,
   onSwitchAccount
@@ -232,6 +298,18 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
   const [showAccountSwitcher, setShowAccountSwitcher] = React.useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
+  const profileMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   const textMain = isDark ? 'text-white' : 'text-neutral-900';
   const textMuted = isDark ? 'text-neutral-400' : 'text-neutral-500';
@@ -281,8 +359,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   const getItemSize = React.useCallback((index: number) => {
     const item = flatItems[index];
     if (!item) return 38;
-    return item.type === 'header' ? 28 : 38;
-  }, [flatItems]);
+    if (item.type === 'header') return 28;
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchingMsg = item.session.messages?.find(m => m.text.toLowerCase().includes(q));
+      if (matchingMsg) return 54;
+    }
+    return 38;
+  }, [flatItems, searchQuery]);
 
   const Row = React.useCallback(({ index, style, items }: { index: number; style: React.CSSProperties; items: FlatSessionListItem[] }) => {
     const item = items[index];
@@ -303,6 +387,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
           isActive={item.session.id === currentSessionId}
           isEditing={editingSessionId === item.session.id}
           editingTitle={editingSessionId === item.session.id ? editingTitle : ''}
+          searchQuery={searchQuery}
           isDark={isDark}
           textMain={textMain}
           textMuted={textMuted}
@@ -319,7 +404,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
       </div>
     );
   }, [
-    currentSessionId, editingSessionId, editingTitle, isDark, textMain, textMuted, 
+    currentSessionId, editingSessionId, editingTitle, searchQuery, isDark, textMain, textMuted, 
     hoverItemBg, bgActiveItem, onSelectSession, onTogglePinSession, onStartRenameSession, 
     onSaveRenameSession, onSetEditingSessionId, onSetEditingTitle, onSetDeletingSessionId
   ]);
@@ -507,15 +592,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         </div>
 
         {/* User Card */}
-        <div className="relative pt-0.5">
+        <div className="relative pt-0.5" ref={profileMenuRef}>
           <div 
             onClick={() => {
               if (!user || user.isAnonymous) {
                 onOpenAuthModal();
-              } else if (session?.accounts?.length > 1) {
-                setShowAccountSwitcher(!showAccountSwitcher);
               } else {
-                onOpenSettings();
+                setIsProfileMenuOpen(!isProfileMenuOpen);
               }
             }}
             className={`flex items-center justify-between p-2 rounded-xl ${hoverItemBg} transition-all cursor-pointer group`}
@@ -537,7 +620,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                   )}
                   <div className="flex-1 min-w-0">
                     <p className={`text-xs font-semibold truncate ${textMain}`}>
-                      {user.displayName?.split(' ')[0] || 'Usuário ZENO'}
+                      {user.displayName || 'Usuário ZENO'}
                     </p>
                     <p className="text-[10px] text-neutral-400 truncate">
                       {isPro ? 'Plano Pro' : 'Conta gratuita'}
@@ -566,9 +649,102 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
             )}
           </div>
 
+          {/* Profile Dropdown Menu */}
+          <AnimatePresence>{isProfileMenuOpen && user && !user.isAnonymous && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 5 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 5 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className={`absolute bottom-full left-0 w-full mb-2 p-2 rounded-2xl border shadow-2xl z-50 ${
+                isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+              }`}
+            >
+              {/* User Info Header */}
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-neutral-50 dark:bg-[#232326]/50 border border-neutral-200/60 dark:border-[#2C2C2E]/60 mb-2">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Avatar" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-zeno/20 text-zeno flex items-center justify-center font-bold text-sm flex-shrink-0">
+                    {(user.displayName || user.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold truncate">{user.displayName || user.email || 'Usuário Zeno'}</p>
+                  <p className="text-[11px] text-zeno font-medium mt-0.5">
+                    {isPro ? 'Plano Pro' : 'Plano Gratuito'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onOpenEditProfile?.();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-[#232326] text-neutral-200' : 'hover:bg-neutral-100 text-neutral-800'
+                  }`}
+                >
+                  <User className="w-4 h-4 text-neutral-400" />
+                  <span>Perfil</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onOpenSettings();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-[#232326] text-neutral-200' : 'hover:bg-neutral-100 text-neutral-800'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 text-neutral-400" />
+                  <span>Configurações & Aparência</span>
+                </button>
+              </div>
+
+              <div className="my-1.5 border-t border-neutral-200 dark:border-[#2C2C2E]" />
+
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onOpenSupport?.();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'hover:bg-[#232326] text-neutral-200' : 'hover:bg-neutral-100 text-neutral-800'
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4 text-neutral-400" />
+                  <span>Ajuda & Suporte</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onLogout?.();
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-red-500 transition-colors ${
+                    isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'
+                  }`}
+                >
+                  <LogOut className="w-4 h-4 text-red-500" />
+                  <span>Sair</span>
+                </button>
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+
           {/* Account switcher if multi accounts exist */}
-          {showAccountSwitcher && session?.accounts?.length > 1 && (
-            <div className={`absolute bottom-full left-0 w-full mb-2 p-2 rounded-xl border shadow-xl z-50 animate-fadeIn ${
+          <AnimatePresence>{showAccountSwitcher && session?.accounts?.length > 1 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 5 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 5 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className={`absolute bottom-full left-0 w-full mb-2 p-2 rounded-xl border shadow-xl z-50   ${
               isDark ? 'bg-[#1e1e22] border-[#2C2C2E]' : 'bg-white border-neutral-200'
             }`}>
               <p className="text-[10px] font-bold text-neutral-400 px-2 py-1 uppercase">Mudar Conta</p>
@@ -592,8 +768,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            </motion.div>
+          )}</AnimatePresence>
         </div>
       </div>
     </aside>

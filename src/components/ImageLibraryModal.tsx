@@ -1,3 +1,4 @@
+import { HighlightText } from './HighlightText';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Search, Heart, Star, Download, Share2, Copy, Trash2, 
@@ -545,7 +546,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                       {/* Bottom Details */}
                       <div>
                         <p className="text-[11px] font-normal text-white line-clamp-2 leading-tight">
-                          {img.prompt}
+                          <HighlightText text={img.prompt || ''} query={searchQuery} isDark={true} />
                         </p>
                         <div className="flex items-center justify-between mt-2 pt-1 border-t border-[#303030] text-[10px] text-[#A8A8A8]">
                           <span>{img.model || 'ZENO Vision'}</span>

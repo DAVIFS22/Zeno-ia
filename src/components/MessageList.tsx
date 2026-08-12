@@ -1,4 +1,6 @@
+import { motion } from "motion/react";
 import React, { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Copy, Check, Edit3, Volume2, VolumeX, ThumbsUp, ThumbsDown, RefreshCw, Sparkles, AlertCircle, ChevronUp, Layers,
@@ -111,13 +113,77 @@ export const MessageItem = React.memo<MessageItemProps>(({
   onYouTubeAction,
   onSendAdaptiveFeedback
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('MessageList');
   const [showFeedbackTags, setShowFeedbackTags] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [showSourcesSheet, setShowSourcesSheet] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFeedbackMenu, setShowFeedbackMenu] = useState(false);
   const [sharedSuccess, setSharedSuccess] = useState(false);
+
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [moreCoords, setMoreCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const feedbackButtonRef = useRef<HTMLButtonElement>(null);
+  const feedbackMenuRef = useRef<HTMLDivElement>(null);
+  const [feedbackCoords, setFeedbackCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const handleToggleMoreMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!showMoreMenu && moreButtonRef.current) {
+      const rect = moreButtonRef.current.getBoundingClientRect();
+      setMoreCoords({
+        top: rect.top - 4,
+        left: rect.left
+      });
+    }
+    setShowMoreMenu(!showMoreMenu);
+  };
+
+  const handleToggleFeedbackMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!showFeedbackMenu && feedbackButtonRef.current) {
+      const rect = feedbackButtonRef.current.getBoundingClientRect();
+      setFeedbackCoords({
+        top: rect.top - 4,
+        left: rect.left
+      });
+    }
+    setShowFeedbackMenu(!showFeedbackMenu);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        moreMenuRef.current && 
+        !moreMenuRef.current.contains(e.target as Node) &&
+        moreButtonRef.current &&
+        !moreButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowMoreMenu(false);
+      }
+      if (
+        feedbackMenuRef.current && 
+        !feedbackMenuRef.current.contains(e.target as Node) &&
+        feedbackButtonRef.current &&
+        !feedbackButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowFeedbackMenu(false);
+      }
+    };
+    if (showMoreMenu || showFeedbackMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('resize', () => { setShowMoreMenu(false); setShowFeedbackMenu(false); });
+      window.addEventListener('scroll', () => { setShowMoreMenu(false); setShowFeedbackMenu(false); }, true);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', () => { setShowMoreMenu(false); setShowFeedbackMenu(false); });
+      window.removeEventListener('scroll', () => { setShowMoreMenu(false); setShowFeedbackMenu(false); }, true);
+    };
+  }, [showMoreMenu, showFeedbackMenu]);
 
   const uniqueSources = useMemo(() => 
     msg.searchSources ? getUniqueSources(msg.searchSources) : [], 
@@ -165,7 +231,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
   };
   if (msg.role === 'user') {
     return (
-      <div className="group flex w-full justify-end px-3 sm:px-4 py-2" style={{ contain: 'content' }}>
+      <motion.div initial={{ opacity: 0, scale: 0.95, originX: 1 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="group flex w-full justify-end px-3 sm:px-4 py-2" style={{ contain: 'content' }}>
         <div className="flex flex-col items-end max-w-[90%] sm:max-w-[85%]">
           {isEditing ? (
             <div className={`w-full p-3 rounded-2xl border flex flex-col gap-2.5 ${
@@ -274,7 +340,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
             </>
           )}
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -293,11 +359,11 @@ export const MessageItem = React.memo<MessageItemProps>(({
                     'ZENO Flash';
 
   return (
-    <div className="group flex flex-col w-full px-3 sm:px-4 py-6 border-b border-neutral-100/5 dark:border-white/5 last:border-b-0 animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ contain: 'content' }}>
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="group flex flex-col w-full px-3 sm:px-4 py-6 border-b border-neutral-100/5 dark:border-white/5 last:border-b-0" style={{ contain: 'content' }}>
       {/* Avatar and Name Header */}
-      <div className="flex items-center gap-3 mb-3.5">
+      <div className="flex items-center gap-2.5 mb-3">
         <div className="relative">
-          <ZenoLogo size={28} variant={logoVariant} theme={theme} />
+          <ZenoLogo size={20} variant={logoVariant} theme={theme} />
           {isLoadingLast && (
             <div className="absolute -top-1 -right-1">
               <span className="relative flex h-2 w-2">
@@ -505,7 +571,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
           {/* Message Actions Footer */}
           {msg.role === 'model' && msg.text && !msg.hasError && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+            <div className="mt-3 flex flex-wrap items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={() => onCopy(msg.id, msg.text)}
                 className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
@@ -513,44 +579,66 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 }`}
                 title="Copiar resposta"
               >
-                {isCopied ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Copy className="w-3.5 h-3.5" />}
+                {isCopied ? <Check className="w-4 h-4 text-zeno" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.5} />}
               </button>
 
-              <button
-                onClick={() => onToggleSpeech(msg.id, msg.text)}
-                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  isSpeaking ? 'text-neutral-100 animate-pulse bg-[#232326]' : (
-                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                  )
-                }`}
-                title={isSpeaking ? "Parar áudio" : "Ouvir em Voz Alta"}
-              >
-                {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-              </button>
+              <div className="relative">
+                <button
+                  ref={feedbackButtonRef}
+                  onClick={handleToggleFeedbackMenu}
+                  className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
+                    itemFeedback === 'up' ? 'text-zeno bg-zeno/15' : 
+                    itemFeedback === 'down' ? 'text-rose-500 bg-rose-500/15' : (
+                      theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                    )
+                  }`}
+                  title="Avaliar resposta"
+                >
+                  <div className="flex items-center -space-x-1">
+                    <ThumbsUp className={`w-3.5 h-3.5 ${itemFeedback === 'up' ? 'text-zeno' : 'text-neutral-400'}`} strokeWidth={1.5} />
+                    <ThumbsDown className={`w-3.5 h-3.5 ${itemFeedback === 'down' ? 'text-rose-500' : 'text-neutral-400'}`} strokeWidth={1.5} />
+                  </div>
+                </button>
 
-              <button
-                onClick={() => handleFeedbackClick('up')}
-                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  itemFeedback === 'up' ? 'text-zeno bg-zeno/15' : (
-                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                  )
-                }`}
-                title="Gostei"
-              >
-                <ThumbsUp className="w-3.5 h-3.5" />
-              </button>
-
-              <button
-                onClick={() => handleFeedbackClick('down')}
-                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  itemFeedback === 'down' ? 'text-neutral-400 bg-neutral-500/10' : (
-                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                  )
-                }`}
-                title="Não gostei"
-              >
-                <ThumbsDown className="w-3.5 h-3.5" />
-              </button>
+                {showFeedbackMenu && feedbackCoords && createPortal(
+                  <div 
+                    ref={feedbackMenuRef}
+                    style={{
+                      position: 'fixed',
+                      top: `${feedbackCoords.top}px`,
+                      left: `${feedbackCoords.left}px`,
+                      transform: 'translateY(-100%)',
+                      zIndex: 999999
+                    }}
+                    className={`w-40 rounded-xl border shadow-2xl py-1 animate-fadeIn ${
+                      theme === 'dark' ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => {
+                        setShowFeedbackMenu(false);
+                        handleFeedbackClick('up');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
+                    >
+                      <ThumbsUp className={`w-3.5 h-3.5 ${itemFeedback === 'up' ? 'text-zeno' : 'text-neutral-400'}`} strokeWidth={1.5} />
+                      <span>Boa resposta</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowFeedbackMenu(false);
+                        handleFeedbackClick('down');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
+                    >
+                      <ThumbsDown className={`w-3.5 h-3.5 ${itemFeedback === 'down' ? 'text-rose-500' : 'text-neutral-400'}`} strokeWidth={1.5} />
+                      <span>Resposta ruim</span>
+                    </button>
+                  </div>,
+                  document.body
+                )}
+              </div>
 
               <button
                 onClick={handleShare}
@@ -559,35 +647,49 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 }`}
                 title="Compartilhar"
               >
-                {sharedSuccess ? <Check className="w-3.5 h-3.5 text-zeno" /> : <Share2 className="w-3.5 h-3.5" />}
+                {sharedSuccess ? <Check className="w-4 h-4 text-zeno" strokeWidth={1.5} /> : <Share2 className="w-4 h-4" strokeWidth={1.5} />}
               </button>
+
+              {isLastMessage && !isLoadingLast && (
+                <button
+                  onClick={onRegenerate}
+                  className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
+                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                  }`}
+                  title="Regenerar resposta"
+                >
+                  <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+              )}
 
               {/* More options dropdown */}
               <div className="relative">
                 <button
-                  onClick={() => setShowMoreMenu(!showMoreMenu)}
+                  ref={moreButtonRef}
+                  onClick={handleToggleMoreMenu}
                   className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
                     theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
                   }`}
                   title="Mais opções"
                 >
-                  <MoreHorizontal className="w-3.5 h-3.5" />
+                  <MoreHorizontal className="w-4 h-4" strokeWidth={1.5} />
                 </button>
 
-                {showMoreMenu && (
-                  <div className={`absolute left-0 bottom-full mb-1 w-36 rounded-xl border shadow-lg py-1 z-30 ${
-                    theme === 'dark' ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
-                  }`}>
-                    <button
-                      onClick={() => {
-                        setShowMoreMenu(false);
-                        onRegenerate();
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Regenerar
-                    </button>
+                {showMoreMenu && moreCoords && createPortal(
+                  <div 
+                    ref={moreMenuRef}
+                    style={{
+                      position: 'fixed',
+                      top: `${moreCoords.top}px`,
+                      left: `${moreCoords.left}px`,
+                      transform: 'translateY(-100%)',
+                      zIndex: 999999
+                    }}
+                    className={`w-36 rounded-xl border shadow-2xl py-1 animate-fadeIn ${
+                      theme === 'dark' ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-200' : 'bg-white border-neutral-200 text-neutral-800'
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       onClick={() => {
                         setShowMoreMenu(false);
@@ -595,10 +697,11 @@ export const MessageItem = React.memo<MessageItemProps>(({
                       }}
                       className="w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
                     >
-                      <Copy className="w-3 h-3" />
+                      <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />
                       Copiar texto
                     </button>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
 
@@ -613,24 +716,23 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   }`}
                   title="Ver fontes de pesquisa"
                 >
-                  <Globe className="w-3.5 h-3.5 text-zeno" />
+                  <Globe className="w-3.5 h-3.5 text-zeno" strokeWidth={1.5} />
                   <span>Fontes ({uniqueSources.length})</span>
-                  <ChevronDown className={`w-3 h-3 transition-transform ${showSourcesSheet ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showSourcesSheet ? 'rotate-180' : ''}`} strokeWidth={1.5} />
                 </button>
               )}
 
-              {isLastMessage && !isLoadingLast && (!msg.searchSources || msg.searchSources.length === 0) && (
-                <button
-                  onClick={onRegenerate}
-                  className={`ml-1 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+              <button
+                onClick={() => onToggleSpeech(msg.id, msg.text)}
+                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
+                  isSpeaking ? 'text-neutral-100 animate-pulse bg-[#232326]' : (
                     theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
-                  }`}
-                  title="Regenerar resposta"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Regenerar</span>
-                </button>
-              )}
+                  )
+                }`}
+                title={isSpeaking ? "Parar áudio" : "Ouvir em Voz Alta"}
+              >
+                {isSpeaking ? <VolumeX className="w-4 h-4" strokeWidth={1.5} /> : <Volume2 className="w-4 h-4" strokeWidth={1.5} />}
+              </button>
             </div>
           )}
 
@@ -712,7 +814,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
             </div>
           )}
         </div>
-    </div>
+    </motion.div>
   );
 }, (prevProps, nextProps) => {
   return (

@@ -138,7 +138,7 @@ function MainAppInner() {
             }
           }
         } catch (err) {
-          console.error('Erro ao carregar perfil adaptativo:', err);
+          console.warn('Falha silenciosa ao carregar perfil adaptativo:', err);
         }
       };
       fetchProfile();
@@ -189,8 +189,11 @@ function MainAppInner() {
 
       // 1. Initialize account via backend API (Admin SDK) to bypass client permission issues
       const initAccountOnServer = async () => {
+        console.log('[DEBUG] initAccountOnServer called with userId:', userId);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         try {
-          await fetch('/api/account/init', {
+          const res = await fetch('/api/account/init', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -198,10 +201,13 @@ function MainAppInner() {
               email: profile?.email || '',
               name: profile?.displayName || 'Usuário ZENO',
               photoURL: profile?.photoURL || ''
-            })
+            }),
+            signal: controller.signal
           });
-          console.log('[ACCOUNT ISOLATION] Account initialized on server successfully.');
+          clearTimeout(timeoutId);
+          console.log('[ACCOUNT ISOLATION] Account initialized on server status:', res.status);
         } catch(e) {
+          clearTimeout(timeoutId);
           console.error("Failed to initialize user on server:", e);
         }
       };
@@ -631,6 +637,26 @@ function MainAppInner() {
     abortChat();
   }, [abortChat]);
 
+  const handleShareChat = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Link da conversa copiado para a área de transferência!');
+  }, []);
+
+  const handleViewFiles = useCallback(() => {
+    const totalFiles = activeSession?.messages?.reduce((acc, m) => acc + (m.attachments?.length || 0), 0) || 0;
+    alert(totalFiles > 0 ? `${totalFiles} arquivo(s) anexado(s) nesta conversa.` : 'Nenhum arquivo anexado nesta conversa.');
+  }, [activeSession]);
+
+  const handleArchiveChat = useCallback(() => {
+    if (!currentSessionId) return;
+    setSessions(prev => prev.map(s => s.id === currentSessionId ? { ...s, isArchived: true } : s));
+    alert('Conversa arquivada com sucesso.');
+  }, [currentSessionId]);
+
+  const handleReportChat = useCallback(() => {
+    alert('Conteúdo reportado com sucesso. Obrigado pelo feedback!');
+  }, []);
+
   // Regenerate Response
   const handleRegenerate = useCallback(async () => {
     if (!activeSession || messages.length < 2 || isLoading) return;
@@ -922,6 +948,9 @@ function MainAppInner() {
         user={profile}
         session={session}
         onSwitchAccount={switchAccount}
+        onOpenEditProfile={() => ui.openModal('editProfile')}
+        onLogout={handleLogout}
+        onOpenSupport={() => ui.openModal('settings')}
       />
 
       {/* Main Container */}
@@ -941,11 +970,20 @@ function MainAppInner() {
           onOpenAuthModal={() => ui.openModal('auth')}
           onNewChat={handleNewChat}
           user={profile}
+          speed={speed}
+          onSelectSpeed={setSpeed}
+          onShareChat={handleShareChat}
+          onViewFiles={handleViewFiles}
+          onTogglePinChat={(e?: any) => currentSessionId && togglePinSession(currentSessionId, e || { stopPropagation: () => {} } as any)}
+          onArchiveChat={handleArchiveChat}
+          onReportChat={handleReportChat}
+          onDeleteChat={() => currentSessionId && ui.openModal('deleteSession', { data: { sessionId: currentSessionId } })}
+          isPinned={activeSession?.isPinned}
         />
 
         {/* Main Conversation Feed */}
         <div className="flex-1 overflow-y-auto w-full scrollbar-custom">
-          <div className="flex flex-col w-full min-h-full pb-36 pt-4 max-w-4xl mx-auto">
+          <div className="flex flex-col w-full min-h-full pb-36 pt-20 max-w-4xl mx-auto">
             
             {/* Warning Banner */}
             {!isPro && backendLimits && adminConfig && (

@@ -70,27 +70,43 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
   
   const modelDescription = (t.welcome as any).modelDescriptions?.[speed] || currentModelDef.description;
 
+  const containerVariants: any = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+    exit: { opacity: 0, y: -6, transition: { duration: 0.2, ease: 'easeOut' } }
+  };
+
+  const itemVariants: any = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
+
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       className="flex flex-col items-center justify-center w-full max-w-xl px-4 py-8 mx-auto my-auto text-center"
     >
       {/* Small Clean Logo & Simple Greeting */}
-      <div className="flex flex-col items-center gap-3 mb-6">
-        <ZenoLogo size={36} variant={logoVariant} theme={theme} />
+      <motion.div variants={itemVariants} className="flex flex-col items-center gap-3 mb-6">
+        <ZenoLogo size={32} variant={logoVariant} theme={theme} />
         <h1 className={`text-xl sm:text-2xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-neutral-900'}`}>
           {displayName ? `${t.welcome.title.split(',')[0]}, ${displayName}` : t.welcome.subtitle}
         </h1>
         <p className={`text-xs sm:text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
           Como posso te ajudar hoje?
         </p>
-      </div>
+      </motion.div>
 
       {/* Model Selector Card (ZENO Smart) */}
-      <div className={`w-full p-4 sm:p-5 rounded-2xl border transition-all mb-4 text-left ${
+      <motion.div variants={itemVariants} className={`w-full p-4 sm:p-5 rounded-2xl border transition-all mb-4 text-left ${
         isDark 
           ? 'bg-[#151518] border-[#2C2C2E]/80 text-white' 
           : 'bg-white border-neutral-200/90 text-neutral-900 shadow-xs'
@@ -118,15 +134,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
         <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
           {modelDescription}
         </p>
-      </div>
+      </motion.div>
 
       {/* Discrete Prompt Suggestions with Outline Icons */}
-      <div className="w-full space-y-2.5">
+      <motion.div variants={itemVariants} className="w-full space-y-2.5">
         <div className="flex flex-col gap-2.5 w-full">
           {suggestions.map((s, idx) => {
             const IconComp = s.icon;
             return (
-              <button
+              <motion.button
+                variants={itemVariants}
                 key={idx}
                 onClick={() => onSelectPrompt(s.prompt)}
                 className={`group flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs sm:text-sm font-normal cursor-pointer ${
@@ -140,12 +157,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
                   <span className="truncate font-medium">{s.title}</span>
                 </div>
                 <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
-              </button>
+              </motion.button>
             );
           })}
 
           {onOpenMusicStudio && (
-            <button
+            <motion.button
+              variants={itemVariants}
               onClick={onOpenMusicStudio}
               className={`group flex items-center justify-between p-3.5 rounded-xl border text-left transition-all text-xs sm:text-sm font-normal cursor-pointer ${
                 isDark
@@ -158,13 +176,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
                 <span className="truncate font-medium">{t.composer.musicStudio || 'Estúdio de Música'}</span>
               </div>
               <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-200 transition-transform group-hover:translate-x-0.5 flex-shrink-0" />
-            </button>
+            </motion.button>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {( !user || isAnonymous ) && (
-        <div className="mt-6">
+        <motion.div variants={itemVariants} className="mt-6">
           <button
             onClick={() => onLogin?.(true)}
             disabled={authLoading}
@@ -177,7 +195,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
             <GoogleLogo className="w-4 h-4 flex-shrink-0" />
             {authLoading ? t.common.loading : t.welcome.getStarted}
           </button>
-        </div>
+        </motion.div>
       )}
     </motion.div>
   );

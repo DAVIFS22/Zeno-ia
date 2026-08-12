@@ -38,7 +38,7 @@ export function ContextualPrompts({ onSelectPrompt, recentSessions, attachments 
           }
         }
       } catch (err) {
-        console.error("Failed to fetch suggestions:", err);
+        console.warn("Falha silenciosa ao buscar sugestões:", err);
       } finally {
         if (isMounted) setIsLoading(false);
       }

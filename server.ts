@@ -731,7 +731,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 
       // Multi-language support instructions
       const uiLanguage = req.body.language || 'pt-BR';
-      modelSystemPrompt += `\n\n[IDIOMA E LOCALIDADE]: O idioma da interface do usuário é ${uiLanguage}. No entanto, você deve ser poliglota. REGRA CRUCIAL: Sempre responda no MESMO IDIOMA da última mensagem do usuário (mesmo que a interface esteja em outro idioma). Se o usuário escrever em Espanhol, responda em Espanhol. Se escrever em Francês, responda em Francês. Se escrever em Mandarim, responda em Mandarim. Mantenha o tom e a localidade apropriados para cada cultura.`;
+      modelSystemPrompt += `\n\n[IDIOMA OBRIGATÓRIO]: O idioma da interface é ${uiLanguage}. A REGRA MAIS IMPORTANTE E ESTRITA: VOCÊ DEVE RESPONDER ÚNICA E EXCLUSIVAMENTE NO IDIOMA DA INTERFACE (${uiLanguage}). Sob NENHUMA circunstância você deve gerar textos em chinês, mandarim, caracteres asiáticos, ou qualquer outro idioma que não seja o solicitado pela interface. Se não entender o idioma do usuário, responda em ${uiLanguage} pedindo para ele reformular.`;
 
       let modelTemperature = modelCfg.temperature;
 
@@ -2494,14 +2494,18 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 
   // Account Initialization Endpoint for New / Switched Accounts
   app.post("/api/account/init", async (req, res) => {
+    console.log('[API ACCOUNT INIT] Request received, body:', req.body);
     try {
       const { userId, email, name, photoURL } = req.body;
       if (!userId) return res.status(400).json({ error: "userId is required" });
+      console.log('[API ACCOUNT INIT] User ID:', userId);
 
       try {
         const now = Date.now();
+        console.log('[API ACCOUNT INIT] Getting user doc ref');
         const userDocRef = adminDb.collection('users').doc(userId);
         const userDoc = await userDocRef.get();
+        console.log('[API ACCOUNT INIT] Got user doc');
 
         if (!userDoc.exists) {
           // Initialize user settings & profile

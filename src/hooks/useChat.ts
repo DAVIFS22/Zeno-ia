@@ -252,7 +252,13 @@ export function useChat(
                   const data = JSON.parse(dataStr);
                   
                   if (data.text) accumulatedText = data.text;
-                  else if (data.delta?.content) accumulatedText += data.delta.content;
+                  else if (data.delta?.content) {
+                    accumulatedText += data.delta.content;
+                    // Diagnostic log for stream content:
+                    if (data.delta.content.match(/[\u4e00-\u9fa5]/)) {
+                       console.warn('[Diagnostic - Stream] Non-Portuguese (Chinese) character detected in stream:', data.delta.content);
+                    }
+                  }
 
                   setSessions(prev => {
                     const exists = prev.some(s => s.id === sessionId);

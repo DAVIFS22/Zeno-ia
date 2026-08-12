@@ -118,7 +118,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
             <div className="p-5 sm:p-8">
               <div className="flex flex-col items-center text-center mb-6">
                 <div className="mb-3">
-                  <ZenoLogo size={36} variant="monochrome" theme="dark" />
+                  <ZenoLogo size={32} variant="monochrome" theme="dark" />
                 </div>
                 
                 <h2 className="text-[22px] font-bold tracking-tight text-white mb-2">
