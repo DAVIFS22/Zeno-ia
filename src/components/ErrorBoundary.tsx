@@ -1,61 +1,75 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
-    error: null,
-    errorInfo: null,
+    error: null
   };
 
-  public static getDerivedStateFromError(error: Error): Partial<State> {
+  public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Exceção não capturada capturada pelo ErrorBoundary:', error, errorInfo);
-    this.setState({ errorInfo });
+    console.error('[CRITICAL ERROR] Uncaught error in React tree:', error, errorInfo);
   }
 
-  public handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+  private handleReset = () => {
+    this.setState({ hasError: false, error: null });
     window.location.reload();
   };
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+
       return (
-        <div className="min-h-screen bg-[#121212] text-white flex flex-col items-center justify-center p-6 text-center">
-          <div className="max-w-md w-full bg-[#1e1e1e] border border-[#2C2C2E] rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-neutral-500/10 border border-neutral-500/20 text-neutral-400 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
+        <div className="min-h-screen bg-[#0f0f11] flex items-center justify-center p-6 text-white font-sans">
+          <div className="max-w-md w-full bg-[#1c1c20] border border-neutral-800 rounded-3xl p-8 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-8 h-8 text-rose-500" />
             </div>
-            <h2 className="text-xl font-semibold text-white">Ops! Ocorreu um problema na interface</h2>
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              Ocorreu um erro inesperado. Você pode tentar recarregar a aplicação.
+            
+            <h1 className="text-2xl font-bold mb-3">Algo deu errado</h1>
+            <p className="text-neutral-400 text-sm mb-8 leading-relaxed">
+              O ZENO encontrou um erro inesperado que impediu a renderização da interface. 
+              Nossos engenheiros foram notificados.
             </p>
-            {this.state.error && (
-              <div className="w-full bg-[#141414] border border-[#2C2C2E] rounded-xl p-3 text-left overflow-auto max-h-32 text-xs font-mono text-neutral-300">
-                {this.state.error.toString()}
-              </div>
-            )}
-            <button
-              onClick={this.handleReset}
-              className="mt-2 w-full py-3 px-4 rounded-xl bg-white hover:bg-neutral-200 text-black font-semibold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Tentar Novamente</span>
-            </button>
+
+            <div className="bg-black/40 rounded-xl p-4 mb-8 text-left overflow-hidden">
+              <div className="text-[10px] uppercase tracking-widest text-neutral-500 font-bold mb-2">Detalhes do Erro</div>
+              <p className="text-xs font-mono text-rose-400/80 truncate">
+                {this.state.error?.name}: {this.state.error?.message}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={this.handleReset}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-zeno text-white rounded-xl font-semibold text-sm hover:bg-zeno/90 transition-all active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Recarregar
+              </button>
+              <button
+                onClick={() => window.location.href = '/'}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-neutral-800 text-neutral-200 rounded-xl font-semibold text-sm hover:bg-neutral-700 transition-all active:scale-95"
+              >
+                <Home className="w-4 h-4" />
+                Início
+              </button>
+            </div>
           </div>
         </div>
       );

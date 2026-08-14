@@ -207,7 +207,14 @@ export const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         <span className="flex flex-col items-center justify-center p-8 min-h-[320px] w-full bg-[#1e1e1e] relative select-none">
           <span className="relative z-10 flex flex-col items-center text-center space-y-4">
             <Loader2 className="w-8 h-8 text-zeno animate-spin" />
-            <span className="text-sm font-medium text-neutral-400">Gerando imagem...</span>
+            <span className="text-sm font-medium text-neutral-400 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-zeno" />
+              Gerando imagem...
+            </span>
+            <div className="w-48 h-1.5 bg-[#2a2a2a] rounded-full overflow-hidden">
+              <div className="h-full bg-zeno rounded-full animate-progress relative">
+              </div>
+            </div>
           </span>
         </span>
       )}

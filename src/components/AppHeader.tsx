@@ -29,6 +29,22 @@ interface AppHeaderProps {
   isPinned?: boolean;
 }
 
+const areAppHeaderPropsEqual = (prevProps: AppHeaderProps, nextProps: AppHeaderProps) => {
+  return (
+    prevProps.theme === nextProps.theme &&
+    prevProps.logoVariant === nextProps.logoVariant &&
+    prevProps.isSidebarCollapsed === nextProps.isSidebarCollapsed &&
+    prevProps.speed === nextProps.speed &&
+    prevProps.isPinned === nextProps.isPinned &&
+    prevProps.user?.uid === nextProps.user?.uid &&
+    prevProps.user?.email === nextProps.user?.email &&
+    prevProps.user?.isAnonymous === nextProps.user?.isAnonymous &&
+    prevProps.user?.isAdmin === nextProps.user?.isAdmin &&
+    prevProps.userSettings?.theme === nextProps.userSettings?.theme &&
+    prevProps.userSettings?.soundEnabled === nextProps.userSettings?.soundEnabled
+  );
+};
+
 export const AppHeader = React.memo<AppHeaderProps>(({
   theme,
   logoVariant,
@@ -54,6 +70,10 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   const { t } = useTranslation('AppHeader');
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
+
+  const pillClasses = "h-10 min-h-[40px] max-h-[40px] px-[14px] inline-flex items-center justify-center rounded-xl backdrop-blur-md transition-all active:scale-95 cursor-pointer text-[15px] leading-none box-border text-center whitespace-nowrap";
+  const pillDark = `${pillClasses} bg-[#1a1a1a]/65 text-neutral-200 hover:bg-[#1a1a1a]/70`;
+  const pillLight = `${pillClasses} bg-white/65 text-neutral-700 hover:bg-white/70`;
 
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isChatMenuOpen, setIsChatMenuOpen] = useState(false);
@@ -96,11 +116,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
     <header className="absolute top-0 w-full flex items-center justify-between px-4 sm:px-8 py-4 z-35 bg-transparent border-0 shadow-none pointer-events-none">
       <div className="flex items-center gap-4 min-w-0 pointer-events-auto">
         <button 
-          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-95 cursor-pointer ${
-            isDark 
-              ? 'bg-[#1a1a1a]/60 backdrop-blur-md text-neutral-200 hover:bg-[#1a1a1a]/70' 
-              : 'bg-white/60 backdrop-blur-md text-neutral-700 hover:bg-white/70'
-          } ${isSidebarCollapsed ? 'block' : 'md:hidden'}`}
+          className={isDark ? pillDark : pillLight}
           onClick={onOpenSidebar}
           title={t.sidebar?.openSidebar || 'Abrir barra lateral'}
         >
@@ -111,11 +127,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
         <div className="relative" ref={modelMenuRef}>
           <button
             onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-            className={`flex items-center gap-2 px-4 h-10 rounded-xl transition-all cursor-pointer font-semibold ${
-              isDark 
-                ? 'bg-[#1a1a1a]/60 backdrop-blur-md text-white hover:bg-[#1a1a1a]/70' 
-                : 'bg-white/60 backdrop-blur-md text-neutral-900 hover:bg-white/70'
-            }`}
+            className={isDark ? pillDark : pillLight}
           >
             <span className="text-sm">{currentModel.name}</span>
             <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
@@ -168,11 +180,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
         {!user?.isAdmin && !isPro && (
           <button
             onClick={() => onOpenSubscriptionModal()}
-            className={`hidden sm:flex items-center gap-1.5 px-4 h-10 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
-              isDark 
-                ? 'bg-[#1a1a1a]/60 backdrop-blur-md text-zeno hover:bg-[#1a1a1a]/70' 
-                : 'bg-white/60 backdrop-blur-md text-zeno hover:bg-white/70'
-            }`}
+            className={`${isDark ? pillDark : pillLight} flex items-center gap-1.5`}
           >
             <Sparkles className="w-4 h-4 text-zeno" />
             <span>Upgrade</span>
@@ -195,30 +203,11 @@ export const AppHeader = React.memo<AppHeaderProps>(({
           </button>
         )}
 
-        {/* Mobile Upgrade Pill */}
-        {!user?.isAdmin && !isPro && (
-          <button
-            onClick={() => onOpenSubscriptionModal()}
-            className={`sm:hidden flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all ${
-              isDark 
-                ? 'bg-[#1a1a1a]/60 backdrop-blur-md text-zeno' 
-                : 'bg-white/60 backdrop-blur-md text-zeno'
-            }`}
-          >
-            <Sparkles className="w-3 h-3 text-zeno" />
-            <span>Upgrade</span>
-          </button>
-        )}
-
         {/* Chat More Options Dropdown (⋯) (Pill 3) */}
         <div className="relative" ref={chatMenuRef}>
           <button
             onClick={() => setIsChatMenuOpen(!isChatMenuOpen)}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all active:scale-95 cursor-pointer ${
-              isDark 
-                ? 'bg-[#1a1a1a]/60 backdrop-blur-md text-neutral-200 hover:bg-[#1a1a1a]/70' 
-                : 'bg-white/60 backdrop-blur-md text-neutral-700 hover:bg-white/70'
-            }`}
+            className={isDark ? pillDark : pillLight}
             title="Opções da conversa"
           >
             <MoreHorizontal className="w-5 h-5" />
@@ -313,6 +302,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
       </div>
     </header>
   );
-});
+}, areAppHeaderPropsEqual);
 
 AppHeader.displayName = 'AppHeader';

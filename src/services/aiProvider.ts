@@ -20,6 +20,7 @@ export interface AIProviderOptions {
     style?: string;
     negativePrompt?: string;
     seed?: number;
+    speedMode?: string;
   };
   userGeminiApiKey?: string;
   userId?: string;

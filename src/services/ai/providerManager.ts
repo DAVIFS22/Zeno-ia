@@ -80,7 +80,7 @@ export async function callProviderAdapter(
             'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            model: 'gpt-image-2',
+            model: 'dall-e-3',
             prompt: imgConfig.prompt,
             n: 1,
             size,
@@ -131,8 +131,12 @@ export async function callProviderAdapter(
 
     if (provider === 'gemini') {
       let client = aiClient;
-      if (options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10) {
-        client = new GoogleGenAI({ apiKey: options.userGeminiApiKey.trim() });
+      const isUserKey = options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10;
+      if (isUserKey) {
+        console.log(`[Gemini Adapter] Using user-provided API key for request ${requestId}`);
+        client = new GoogleGenAI({ apiKey: options.userGeminiApiKey!.trim() });
+      } else {
+        console.log(`[Gemini Adapter] Using server-side API key for request ${requestId}`);
       }
 
       console.log(`[Gemini Adapter] Calling model: ${model} with contents:`, JSON.stringify(options.contents).substring(0, 500));
@@ -177,6 +181,10 @@ export async function callProviderAdapter(
 
       if (!apiKey) throw new Error(`API KEY faltando para o provedor ${provider}`);
 
+      if (provider === 'groq') {
+        console.log(`[Groq Adapter] Successfully configured model ${model} using GROQ_API_KEY`);
+      }
+
       const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
                   provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' :
                   'https://openrouter.ai/api/v1/chat/completions';
@@ -216,12 +224,21 @@ export async function callProviderAdapter(
     const latencyMs = Date.now() - startTime;
     const msg = err?.message || String(err);
     const is429 = msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('resource_exhausted');
-    const isPermanentAuthOrBillingError = msg.toLowerCase().includes('invalid_api_key') || msg.toLowerCase().includes('api_key_invalid') || msg.toLowerCase().includes('api key not valid') || msg.includes('402') || msg.toLowerCase().includes('insufficient_quota');
+    const isPermanentAuthOrBillingError = 
+      msg.toLowerCase().includes('invalid_api_key') || 
+      msg.toLowerCase().includes('api_key_invalid') || 
+      msg.toLowerCase().includes('api key not valid') || 
+      msg.includes('402') || 
+      msg.includes('401') ||
+      msg.includes('400') || // Bad Request/Invalid Key in some APIs
+      (provider === 'openrouter' && msg.includes('404')) || // No endpoints found usually means billing/policy or deprecated model
+      msg.toLowerCase().includes('insufficient_quota');
+    const isModelNotFound = msg.includes('404') || msg.toLowerCase().includes('model_not_found') || msg.toLowerCase().includes('no endpoints found');
     const isTimeout = msg.includes('timeout') || msg.includes('aborted');
 
-    recordCircuitFailure(key, is429);
+    recordCircuitFailure(key, is429 || isModelNotFound);
     if (isPermanentAuthOrBillingError) {
-      setProviderQuotaExhausted(provider);
+      setProviderQuotaExhausted(provider, msg);
     }
     recordMetricEvent(key, false, latencyMs, is429, isTimeout, 0, false, false, msg);
     incrementAiStat('errorsToday', 1);

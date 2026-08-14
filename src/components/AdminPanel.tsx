@@ -50,6 +50,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [config, setConfig] = useState<FullAdminConfig>(DEFAULT_FULL_ADMIN_CONFIG);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // System Stats State
@@ -1654,6 +1655,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
               <button
                 onClick={async () => {
+                  console.log("Clicou em Resetar Circuit Breakers Agora");
+                  setIsResetting(true);
                   try {
                     const res = await fetch('/api/admin/reset-resilience', {
                       method: 'POST',
@@ -1663,11 +1666,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     alert(data.message || 'Circuit breakers e cotas resetados com sucesso!');
                   } catch (err: any) {
                     alert('Erro ao resetar: ' + err.message);
+                  } finally {
+                    setIsResetting(false);
                   }
                 }}
-                className="w-full py-2 rounded-xl bg-zeno hover:bg-zeno/90 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                disabled={isResetting}
+                className={`w-full py-2 rounded-xl text-white text-xs font-semibold transition-all shadow-sm cursor-pointer ${isResetting ? 'bg-zeno/50 cursor-not-allowed' : 'bg-zeno hover:bg-zeno/90'}`}
               >
-                Resetar Circuit Breakers Agora
+                {isResetting ? 'Resetando...' : 'Resetar Circuit Breakers Agora'}
               </button>
             </div>
 
@@ -1853,28 +1859,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   {/* Metrics Grid */}
-                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-neutral-800 text-center">
+                  <div className="grid grid-cols-5 gap-2 pt-2 border-t border-neutral-800 text-center">
                     <div className="p-2 rounded-xl bg-neutral-900/50">
                       <span className="text-[10px] text-neutral-500 block">Reqs</span>
-                      <span className="text-xs font-bold text-white">{data.metrics.requests}</span>
+                      <span className="text-xs font-bold text-white">{data.metrics?.requests || 0}</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">Tokens</span>
+                      <span className="text-xs font-bold text-zeno">
+                        {(data.metrics?.tokensConsumed || 0) >= 1000 
+                          ? ((data.metrics?.tokensConsumed || 0) / 1000).toFixed(1) + 'k' 
+                          : (data.metrics?.tokensConsumed || 0)}
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-neutral-900/50">
+                      <span className="text-[10px] text-neutral-500 block">Cota</span>
+                      <span className={`text-xs font-bold ${data.quota?.remainingPercentage < 20 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        {data.quota?.remainingPercentage || 0}%
+                      </span>
                     </div>
                     <div className="p-2 rounded-xl bg-neutral-900/50">
                       <span className="text-[10px] text-neutral-500 block">Erros</span>
-                      <span className="text-xs font-bold text-rose-400">{data.metrics.errors}</span>
+                      <span className="text-xs font-bold text-rose-400">{data.metrics?.errors || 0}</span>
                     </div>
                     <div className="p-2 rounded-xl bg-neutral-900/50">
                       <span className="text-[10px] text-neutral-500 block">429s</span>
-                      <span className="text-xs font-bold text-amber-400">{data.metrics.rateLimits429}</span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-neutral-900/50">
-                      <span className="text-[10px] text-neutral-500 block">Latência Média</span>
-                      <span className="text-xs font-bold text-zeno">
-                        {data.metrics.requests > 0 ? Math.round(data.metrics.totalLatencyMs / data.metrics.requests) : 0}ms
-                      </span>
+                      <span className="text-xs font-bold text-amber-400">{data.metrics?.rateLimits429 || 0}</span>
                     </div>
                   </div>
 
-                  {data.metrics.lastError && (
+                  {data.metrics?.lastError && (
                     <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-[11px] text-rose-300 truncate">
                       <strong>Último Erro:</strong> {data.metrics.lastError}
                     </div>

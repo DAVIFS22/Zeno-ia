@@ -1,4 +1,4 @@
-import { ProviderQuotaInfo, ProviderName } from './types';
+import { ProviderQuotaInfo, ProviderName, QuotaStatus } from './types';
 
 const providerQuotas: Record<string, ProviderQuotaInfo> = {
   gemini: {
@@ -93,10 +93,13 @@ export function recordQuotaUsage(provider: string, tokens = 1000) {
   }
 }
 
-export function setProviderQuotaExhausted(provider: string) {
+export function setProviderQuotaExhausted(provider: string, reason?: string) {
   const quota = getProviderQuota(provider);
   quota.remainingPercentage = 0;
-  quota.status = 'exhausted';
+  quota.status = reason?.includes('402') || reason?.toLowerCase().includes('credit') ? 'billing_error' : 
+                 reason?.includes('429') || reason?.toLowerCase().includes('rate limit') ? 'rate_limited' : 'exhausted';
+  quota.lastError = reason;
+  quota.errorTimestamp = Date.now();
 }
 
 export function resetAllQuotas() {

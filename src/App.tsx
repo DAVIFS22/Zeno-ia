@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { getOrCreateUserId } from './lib/userId';
-import { Sparkles, AlertCircle } from 'lucide-react';
+import { Sparkles, AlertCircle, ChevronDown } from 'lucide-react';
 import { Message, ChatSession, FileAttachment, UserSettings, ModelType, DailyUsage, AdaptiveLearningProfile } from './types';
 import { DEFAULT_ADAPTIVE_PROFILE } from './lib/adaptiveLearning';
 import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
@@ -19,6 +19,7 @@ import { YouTubeProcessor } from './components/YouTubeProcessor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AuthScreen } from './components/AuthScreen';
 import { useCloudSync } from './hooks/useCloudSync';
+import { useDataReconciliation } from './hooks/useDataReconciliation';
 import { useDraftManager } from './hooks/useDraftManager';
 import { useRealtimeSubscription } from './hooks/useRealtimeSubscription';
 import { MessageList } from './components/MessageList';
@@ -56,6 +57,8 @@ import {
   FREE_LIMITS,
   getModelDef
 } from './lib/subscription';
+
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function MainAppInner() {
   const { t } = useTranslation();
@@ -351,7 +354,8 @@ function MainAppInner() {
     setCurrentSessionId,
     dailyUsage,
     setDailyUsage,
-    ui
+    ui,
+    adaptiveProfile
   );
 
   const handleChatSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
@@ -479,6 +483,35 @@ function MainAppInner() {
     handleUpdateSettings
   );
 
+  // Offline Data Reconciliation Integration (IndexedDB -> Firestore queue on reconnection)
+  const { isOnline, isSyncing, pendingCount, syncNow } = useDataReconciliation({
+    userId,
+    onSyncComplete: (syncedSessions) => {
+      if (syncedSessions && syncedSessions.length > 0) {
+        setSessions(prev => {
+          const map = new Map<string, ChatSession>();
+          // 1. Start with synced sessions from IDB/Cloud
+          syncedSessions.forEach(s => map.set(s.id, s));
+          // 2. Overlay with current local state (PRESERVE active sessions/messages)
+          prev.forEach(local => {
+            const existing = map.get(local.id);
+            if (!existing) {
+              map.set(local.id, local);
+            } else {
+              // Only overwrite if the local session is NOT "hot" (streaming/locked) 
+              // or if the cloud session is definitively newer
+              const hasLockedMessage = local.messages?.some(m => m.isLocked || m.isStreaming);
+              if (hasLockedMessage || (local.updatedAt || 0) >= (existing.updatedAt || 0)) {
+                map.set(local.id, local);
+              }
+            }
+          });
+          return Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        });
+      }
+    }
+  });
+
   // Multi-layer Draft Manager Integration (LocalStorage + Cloud Sync)
   const {
     cloudDraftPrompt,
@@ -532,10 +565,26 @@ function MainAppInner() {
 
   // Active Session helper
   const activeSession = useMemo(() => {
-    return currentSessionId ? sessions.find(s => s.id === currentSessionId) || null : null;
+    const found = currentSessionId ? sessions.find(s => s.id === currentSessionId) || null : null;
+    if (currentSessionId && !found) {
+      console.warn('[DEBUG - App.tsx] currentSessionId exists but session not found in sessions array!', {
+        currentSessionId,
+        sessionsCount: sessions.length,
+        sessionsIDs: sessions.map(s => s.id)
+      });
+    }
+    return found;
   }, [sessions, currentSessionId]);
 
   const messages = activeSession?.messages || [];
+
+  useEffect(() => {
+    console.log('[DEBUG - App.tsx] Messages state updated:', {
+      count: messages.length,
+      sessionID: currentSessionId,
+      lastMessage: messages.length > 0 ? messages[messages.length - 1].text.substring(0, 30) : 'NONE'
+    });
+  }, [messages, currentSessionId]);
 
   // Sync model speed when active session changes
   useEffect(() => {
@@ -546,12 +595,16 @@ function MainAppInner() {
 
   // Scan active chat messages for generated images to populate library automatically
   useEffect(() => {
-    if (messages && messages.length > 0 && currentSessionId) {
-      messages.forEach(msg => {
-        if (msg.role === 'model' && msg.text && msg.text.includes('![')) {
-          scanAndSaveImagesFromText(msg.text, currentSessionId, activeSession?.title || 'Conversa', speed, userId);
-        }
-      });
+    try {
+      if (messages && messages.length > 0 && currentSessionId) {
+        messages.forEach(msg => {
+          if (msg.role === 'model' && msg.text && msg.text.includes('![')) {
+            scanAndSaveImagesFromText(msg.text, currentSessionId, activeSession?.title || 'Conversa', speed, userId);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('[CRITICAL] Error in image scanning effect:', err);
     }
   }, [messages, currentSessionId, activeSession?.title, speed, userId]);
 
@@ -594,11 +647,24 @@ function MainAppInner() {
   }, []);
 
   // Scroll to bottom on new messages
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef<boolean>(true);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState<boolean>(false);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const isNearBottom = distanceToBottom < 150;
+    shouldAutoScrollRef.current = isNearBottom;
+    setShowScrollBottomBtn(!isNearBottom);
+  }, []);
+
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (shouldAutoScrollRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading]);
+  }, [messages]);
 
   // New Chat Handler
   const handleNewChat = useCallback(() => {
@@ -802,7 +868,7 @@ function MainAppInner() {
   }, [isLoading, handleStopGeneration, ui]);
 
   // Delete Session
-  const handleDeleteSession = useCallback((id: string) => {
+  const handleDeleteSession = useCallback(async (id: string) => {
     setSessions(prev => {
       const filtered = prev.filter(s => s.id !== id);
       if (filtered.length === 0) {
@@ -815,8 +881,27 @@ function MainAppInner() {
         return filtered;
       }
     });
+
+    // Sync deletion with Cloud and IndexedDB
+    try {
+      if (userId) {
+        // Delete from Firestore via API
+        fetch(`/api/sync/sessions?userId=${encodeURIComponent(userId)}&sessionId=${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        }).catch(e => console.warn('[SYNC] Session deletion sync failed:', e));
+        
+        // Delete from IndexedDB
+        const { loadSessionsFromIndexedDB, saveSessionsToIndexedDB } = await import('./lib/indexedDBStorage');
+        const idbSessions = await loadSessionsFromIndexedDB(userId);
+        const filtered = idbSessions.filter((s: any) => s.id !== id);
+        await saveSessionsToIndexedDB(userId, filtered);
+      }
+    } catch (e) {
+      console.warn('[SYNC] Error during background session deletion:', e);
+    }
+
     ui.closeModal('deleteSession');
-  }, [currentSessionId, ui]);
+  }, [currentSessionId, ui, userId]);
 
   const togglePinSession = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -842,11 +927,28 @@ function MainAppInner() {
     setEditingSessionId(null);
   }, [editingTitle]);
 
-  const handleClearAllHistory = useCallback(() => {
+  const handleClearAllHistory = useCallback(async () => {
     setSessions([]);
     setCurrentSessionId(null);
     localStorage.removeItem(`${STORAGE_KEY_SESSIONS}_${userId}`);
     localStorage.removeItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`);
+    
+    // Sync with Cloud and IndexedDB
+    try {
+      if (userId) {
+        // Clear IndexedDB
+        const { clearSessionsFromIndexedDB } = await import('./lib/indexedDBStorage');
+        await clearSessionsFromIndexedDB(userId);
+        
+        // Clear Firestore via API (entire history)
+        fetch(`/api/sync/sessions?userId=${encodeURIComponent(userId)}&clearAll=true`, {
+          method: 'DELETE'
+        }).catch(e => console.warn('[SYNC] History clear sync failed:', e));
+      }
+    } catch (e) {
+      console.warn('[SYNC] Error during background history clear:', e);
+    }
+
     ui.closeModal('settings');
   }, [ui, userId]);
 
@@ -954,9 +1056,10 @@ function MainAppInner() {
       />
 
       {/* Main Container */}
-      <main className={`flex-1 flex flex-col min-w-0 relative h-full transition-colors duration-150 ${
-        theme === 'dark' ? 'bg-[#0D0D0D]' : 'bg-[#F9F9FA]'
-      }`}>
+      <ErrorBoundary>
+        <main className={`flex-1 flex flex-col min-w-0 relative h-full transition-colors duration-150 ${
+          theme === 'dark' ? 'bg-[#0D0D0D]' : 'bg-[#F9F9FA]'
+        }`}>
         {/* Top Header */}
         <AppHeader
           theme={theme}
@@ -982,7 +1085,29 @@ function MainAppInner() {
         />
 
         {/* Main Conversation Feed */}
-        <div className="flex-1 overflow-y-auto w-full scrollbar-custom">
+        <div 
+          ref={chatContainerRef}
+          onScroll={handleChatScroll}
+          className="flex-1 overflow-y-auto w-full scrollbar-custom relative"
+        >
+          {/* Scroll to bottom floating button */}
+          {showScrollBottomBtn && (
+            <div className="sticky bottom-6 z-30 flex justify-center w-full pointer-events-none">
+              <button
+                onClick={() => {
+                  shouldAutoScrollRef.current = true;
+                  setShowScrollBottomBtn(false);
+                  if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                className="pointer-events-auto bg-zeno text-zeno-white px-4 py-2 rounded-full shadow-lg text-xs font-medium flex items-center gap-2 hover:opacity-90 transition-all animate-bounce"
+              >
+                <span>Novas mensagens / Rolar ao fim</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div className="flex flex-col w-full min-h-full pb-36 pt-20 max-w-4xl mx-auto">
             
             {/* Warning Banner */}
@@ -1040,34 +1165,35 @@ function MainAppInner() {
             )}
 
             {/* Conversation Messages Container */}
-
-            <MessageList
-              messages={messages}
-              theme={theme}
-              logoVariant={logoVariant}
-              speed={speed}
-              isLoading={isLoading}
-              copiedId={copiedId}
-              speakingMessageId={speakingMessageId}
-              feedback={feedback}
-              editingMessageId={editingMessageId}
-              editingMessageText={editingMessageText}
-              markdownComponents={markdownComponents}
-              messagesEndRef={messagesEndRef}
-              onCopy={copyToClipboard}
-              onToggleSpeech={toggleSpeech}
-              onSetFeedback={handleSetFeedback}
-              onRegenerate={handleRegenerate}
-              onStartEditMessage={handleStartEditMessage}
-              onCancelEditMessage={handleCancelEditMessage}
-              onSaveEditMessage={handleSaveEditMessage}
-              onEditingTextChange={setEditingMessageText}
-              onOpenSubscriptionModal={handleOpenSubscriptionModal}
-              userId={userId}
-              userToken={session?.access_token || null}
-              onYouTubeAction={handleYouTubeAction}
-              onSendAdaptiveFeedback={handleSendAdaptiveFeedback}
-            />
+            <ErrorBoundary>
+              <MessageList
+                messages={messages}
+                theme={theme}
+                logoVariant={logoVariant}
+                speed={speed}
+                isLoading={isLoading}
+                copiedId={copiedId}
+                speakingMessageId={speakingMessageId}
+                feedback={feedback}
+                editingMessageId={editingMessageId}
+                editingMessageText={editingMessageText}
+                markdownComponents={markdownComponents}
+                messagesEndRef={messagesEndRef}
+                onCopy={copyToClipboard}
+                onToggleSpeech={toggleSpeech}
+                onSetFeedback={handleSetFeedback}
+                onRegenerate={handleRegenerate}
+                onStartEditMessage={handleStartEditMessage}
+                onCancelEditMessage={handleCancelEditMessage}
+                onSaveEditMessage={handleSaveEditMessage}
+                onEditingTextChange={setEditingMessageText}
+                onOpenSubscriptionModal={handleOpenSubscriptionModal}
+                userId={userId}
+                userToken={session?.access_token || null}
+                onYouTubeAction={handleYouTubeAction}
+                onSendAdaptiveFeedback={handleSendAdaptiveFeedback}
+              />
+            </ErrorBoundary>
           </div>
         </div>
 
@@ -1095,6 +1221,7 @@ function MainAppInner() {
           />
         </div>
       </main>
+    </ErrorBoundary>
 
       {/* Global App Modals */}
       <AppModals

@@ -4,22 +4,33 @@ import { ProviderMetrics } from './types';
 
 const providerMetricsStore: Record<string, ProviderMetrics> = {};
 
+const defaultModels = [
+  'gemini:gemini-1.5-flash',
+  'openai:gpt-4o',
+  'groq:llama-3.3-70b-versatile',
+  'openrouter:anthropic/claude-sonnet-5'
+];
+
 export function getProviderMetrics(key: string): ProviderMetrics {
   if (!providerMetricsStore[key]) {
     providerMetricsStore[key] = {
-      requests: 120,
-      successes: 118,
-      errors: 2,
-      rateLimits429: 1,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      rateLimits429: 0,
       timeouts: 0,
-      totalLatencyMs: 45000,
-      retriesCount: 2,
-      fallbacksCount: 1,
-      tokensConsumed: 150000
+      totalLatencyMs: 0,
+      retriesCount: 0,
+      fallbacksCount: 0,
+      tokensConsumed: 0
     };
   }
   return providerMetricsStore[key];
 }
+
+// Seed default models so they always appear in the dashboard
+defaultModels.forEach(model => getProviderMetrics(model));
+
 
 export function recordMetricEvent(
   key: string,

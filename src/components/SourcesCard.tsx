@@ -38,7 +38,14 @@ export function SourcesCard({ sources, theme, onClick }: SourcesCardProps) {
 
       <div className="flex flex-col gap-0">
         {uniqueSources.map((source, idx) => {
-          const domain = source.domain || (() => { try { return new URL(source.url).hostname.replace(/^www\./, ''); } catch(e) { return 'web'; } })();
+          let domain = source.domain || 'web';
+          if (!source.domain && source.url) {
+            try {
+              domain = new URL(source.url).hostname.replace(/^www\./, '');
+            } catch (e) {
+              domain = 'web';
+            }
+          }
           const name = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
           
           return (

@@ -66,6 +66,8 @@ export interface ProviderMetrics {
   tokensConsumed: number;
 }
 
+export type QuotaStatus = 'normal' | 'attention' | 'reduce_priority' | 'avoid' | 'exhausted' | 'billing_error' | 'rate_limited';
+
 export interface ProviderQuotaInfo {
   requestLimit: number;
   requestsUsed: number;
@@ -73,5 +75,7 @@ export interface ProviderQuotaInfo {
   tokensUsed: number;
   remainingPercentage: number;
   resetTimestamp: number;
-  status: 'normal' | 'attention' | 'reduce_priority' | 'avoid' | 'exhausted';
+  status: QuotaStatus;
+  lastError?: string;
+  errorTimestamp?: number;
 }

@@ -112,7 +112,15 @@ export function SourcesBottomSheet({ isOpen, onClose, sources, theme }: SourcesB
 
 function SourceCard({ source, theme, getFaviconUrl }: { source: SearchSource; theme: string, getFaviconUrl: (d: string) => string }) {
   const { t, language } = useTranslation();
-  const domain = source.domain || new URL(source.url).hostname;
+  
+  let domain = source.domain || 'web';
+  if (!source.domain && source.url) {
+    try {
+      domain = new URL(source.url).hostname.replace(/^www\./, '');
+    } catch (e) {
+      domain = 'web';
+    }
+  }
   
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return null;

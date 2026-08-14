@@ -105,7 +105,7 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
   const matchingMsg = React.useMemo(() => {
     if (!searchQuery || !searchQuery.trim()) return null;
     const q = searchQuery.toLowerCase();
-    return session.messages?.find(m => m.text.toLowerCase().includes(q));
+    return session.messages?.find(m => m.text && typeof m.text === 'string' && m.text.toLowerCase().includes(q));
   }, [session, searchQuery]);
 
   return (
@@ -346,11 +346,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   React.useLayoutEffect(() => {
     if (!listContainerRef.current) return;
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.height > 0) {
-          setContainerHeight(entry.contentRect.height);
+      window.requestAnimationFrame(() => {
+        for (const entry of entries) {
+          if (entry.contentRect.height > 0) {
+            setContainerHeight(entry.contentRect.height);
+          }
         }
-      }
+      });
     });
     observer.observe(listContainerRef.current);
     return () => observer.disconnect();
@@ -362,7 +364,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
     if (item.type === 'header') return 28;
     if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchingMsg = item.session.messages?.find(m => m.text.toLowerCase().includes(q));
+      const matchingMsg = item.session.messages?.find(m => m.text && typeof m.text === 'string' && m.text.toLowerCase().includes(q));
       if (matchingMsg) return 54;
     }
     return 38;

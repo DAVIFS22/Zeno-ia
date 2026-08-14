@@ -18,6 +18,8 @@ import { UserGamificationSnippet, UserGamificationSkeleton } from './UserGamific
 import { useVersion } from '../contexts/VersionContext';
 import { GoogleLogo } from './GoogleLogo';
 
+import { SystemHealth } from './SystemHealth';
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -492,6 +494,8 @@ export function SettingsModal({
                       className="w-full accent-neutral-200 cursor-pointer"
                     />
                   </div>
+
+                  <SystemHealth isDark={isDark} />
 
                   <div className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
                     <div className="flex items-center gap-2">

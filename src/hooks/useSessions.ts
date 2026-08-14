@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChatSession, Message } from '../types';
 import { generateTitleFromMessage } from '../utils/date';
+import { loadSessionsFromIndexedDB, saveSessionsToIndexedDB, clearSessionsFromIndexedDB } from '../lib/indexedDBStorage';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
 const STORAGE_KEY_CURRENT_ID = 'zeno_current_session_id_v3';
@@ -16,7 +17,7 @@ export function useSessions(userId: string | null) {
         }
       }
     } catch (e) {
-      console.error('Error loading chat sessions:', e);
+      console.error('Error loading chat sessions from localStorage:', e);
     }
     return [];
   });
@@ -29,78 +30,70 @@ export function useSessions(userId: string | null) {
     return null;
   });
 
-  // Reload sessions when userId changes
+  // Load from IndexedDB on mount or userId change for robust and fast history loading
   useEffect(() => {
     if (!userId) return;
-    try {
-      const saved = localStorage.getItem(`${STORAGE_KEY_SESSIONS}_${userId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSessions(prev => {
-            const map = new Map<string, ChatSession>();
-            parsed.forEach((s: ChatSession) => { if (s && s.id) map.set(s.id, s); });
-            prev.forEach((s: ChatSession) => {
-              if (!s || !s.id) return;
-              const existing = map.get(s.id);
-              if (!existing || (s.messages?.length || 0) >= (existing.messages?.length || 0)) {
-                map.set(s.id, s);
-              }
-            });
-            return Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    let isMounted = true;
+    loadSessionsFromIndexedDB(userId).then(idbSessions => {
+      if (!isMounted) return;
+      if (idbSessions && Array.isArray(idbSessions) && idbSessions.length > 0) {
+        setSessions(prev => {
+          const map = new Map<string, ChatSession>();
+          // IDB sessions take priority or merge
+          idbSessions.forEach((s: ChatSession) => { if (s && s.id) map.set(s.id, s); });
+          prev.forEach((s: ChatSession) => {
+            if (!s || !s.id) return;
+            const existing = map.get(s.id);
+            if (!existing || (s.messages?.length || 0) >= (existing.messages?.length || 0)) {
+              map.set(s.id, s);
+            }
           });
-        }
+          return Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        });
       }
+    }).catch(err => {
+      console.warn('IndexedDB load background error:', err);
+    });
+
+    try {
       const savedId = localStorage.getItem(`${STORAGE_KEY_CURRENT_ID}_${userId}`);
       if (savedId && savedId !== 'null') {
         setCurrentSessionId(savedId);
       }
     } catch (e) {
-      console.error('Error switching chat sessions for user:', e);
+      console.error('Error switching current session ID:', e);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
 
-  // Auto-save sessions
+  // Auto-save sessions to IndexedDB and lightweight localStorage backup
   useEffect(() => {
     if (userId) {
+      // Save to IndexedDB (asynchronous, non-blocking, handles huge history without quota errors)
+      saveSessionsToIndexedDB(userId, sessions).catch(err => {
+        console.warn('Error saving sessions to IndexedDB:', err);
+      });
+
+      // Save lightweight backup to localStorage
       try {
         const lightweightSessions = sessions.map(s => ({
           ...s,
-          messages: s.messages?.map(m => ({
+          messages: (s.messages || []).slice(-20).map(m => ({ // keep last 20 messages in localStorage cache
             ...m,
-            attachments: m.attachments?.map(att => ({
+            attachments: (m.attachments || []).map(att => ({
               ...att,
-              url: att.url && att.url.startsWith('data:') && att.url.length > 50000 ? '[omitted_large_data]' : att.url,
-              content: att.content && att.content.length > 50000 ? '[omitted_large_content]' : att.content,
+              url: att.url && att.url.startsWith('data:') && att.url.length > 30000 ? '[omitted_large_data]' : att.url,
+              content: att.content && att.content.length > 30000 ? '[omitted_large_content]' : att.content,
             }))
           }))
         }));
         localStorage.setItem(`${STORAGE_KEY_SESSIONS}_${userId}`, JSON.stringify(lightweightSessions));
       } catch (e: any) {
-        console.error('Error saving sessions:', e);
-        if (e.name === 'QuotaExceededError' || e.message?.includes('exceeded the quota')) {
-          try {
-            let trimSize = Math.max(1, Math.floor(sessions.length / 2));
-            while (trimSize > 0) {
-              try {
-                const trimmed = sessions.slice(0, trimSize);
-                localStorage.setItem(`${STORAGE_KEY_SESSIONS}_${userId}`, JSON.stringify(trimmed));
-                // If it succeeds, update state so it stops trying to save the big one over and over
-                setSessions(trimmed);
-                break;
-              } catch (retryError: any) {
-                if (retryError.name === 'QuotaExceededError' || retryError.message?.includes('exceeded the quota')) {
-                  if (trimSize === 1) break; // can't trim further
-                  trimSize = Math.floor(trimSize / 2);
-                } else {
-                  break;
-                }
-              }
-            }
-          } catch (retryError) {
-            console.error('Failed even after aggressive trimming:', retryError);
-          }
-        }
+        console.error('Error saving sessions cache to localStorage:', e);
       }
       
       try {
@@ -133,7 +126,10 @@ export function useSessions(userId: string | null) {
   const clearHistory = useCallback(() => {
     setSessions([]);
     setCurrentSessionId(null);
-  }, []);
+    if (userId) {
+      clearSessionsFromIndexedDB(userId).catch(err => console.warn('Error clearing IDB:', err));
+    }
+  }, [userId]);
 
   return {
     sessions,

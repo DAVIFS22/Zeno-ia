@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Sparkles, Terminal, Palette, ArrowRight, Lock, Music,
-  FileText, Mail, Calendar, Code, Cpu, Server, Layout
+  FileText, Mail, Calendar, Code, Cpu, Server, Layout, Lightbulb
 } from 'lucide-react';
 import { ZenoLogo } from './ZenoLogo';
 import { ModelType } from '../types';
@@ -47,9 +47,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
   const getSuggestions = () => {
     if (speed === 'vision' || speed === 'image') {
       return [
-        { title: (t.welcome as any).suggestions?.vision1?.title || 'Logotipo Minimalista', prompt: (t.welcome as any).suggestions?.vision1?.prompt || 'Crie um conceito de logotipo minimalista e elegante para uma marca de tecnologia.', icon: Palette },
-        { title: (t.welcome as any).suggestions?.vision2?.title || 'Ilustração Vetorial', prompt: (t.welcome as any).suggestions?.vision2?.prompt || 'Crie uma ilustração vetorial moderna de uma paisagem de montanhas ao pôr do sol.', icon: Sparkles },
-        { title: (t.welcome as any).suggestions?.vision3?.title || 'Interface UI/UX', prompt: (t.welcome as any).suggestions?.vision3?.prompt || 'Gere um mockup limpo de interface mobile para um aplicativo de finanças pessoais.', icon: Layout },
+        { title: 'Extrair Dados de Recibo / Fatura', prompt: 'Anexe a foto de um recibo ou fatura para extrair itens, valores e total instantaneamente.', icon: FileText },
+        { title: 'Traduzir e Resumir Cardápio', prompt: 'Anexe a foto de um menu ou cardápio para traduzir, resumir pratos e ver recomendações.', icon: Sparkles },
+        { title: 'Analisar Gráfico ou Tabela', prompt: 'Anexe a foto de um gráfico para extrair dados numéricos, tendências e insights detalhados.', icon: Layout },
       ];
     }
     if (speed === 'code' || speed === 'mega') {
@@ -63,6 +63,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = React.memo(({
       { title: (t.welcome as any).suggestions?.general1?.title || 'Resumir Artigo', prompt: (t.welcome as any).suggestions?.general1?.prompt || 'Como posso resumir textos extensos em tópicos diretos e objetivos?', icon: FileText },
       { title: (t.welcome as any).suggestions?.general2?.title || 'E-mail Profissional', prompt: (t.welcome as any).suggestions?.general2?.prompt || 'Escreva uma mensagem profissional para alinhar os próximos passos de um projeto.', icon: Mail },
       { title: (t.welcome as any).suggestions?.general3?.title || 'Planejamento Semanal', prompt: (t.welcome as any).suggestions?.general3?.prompt || 'Crie um cronograma simples de foco e produtividade para a próxima semana.', icon: Calendar },
+      { title: 'Desafio Criativo', prompt: 'Estou buscando um desafio criativo. Quero desenvolver um projeto novo, mas preciso de inspiração. Você pode me ajudar a ter ideias para um aplicativo, um conto, ou qualquer outra coisa inovadora? Vamos definir um objetivo e começar a criar!', icon: Lightbulb },
     ];
   };
 

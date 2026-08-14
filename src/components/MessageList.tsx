@@ -12,7 +12,6 @@ import remarkGfm from 'remark-gfm';
 import { Message, ModelType } from '../types';
 import { SourcesBottomSheet } from './SourcesBottomSheet';
 import { SourcesCard, getUniqueSources } from './SourcesCard';
-import { ZenoLogo } from './ZenoLogo';
 import { ErrorBanner } from './ErrorBanner';
 import { Countdown } from './Countdown';
 import { YouTubeProcessor } from './YouTubeProcessor';
@@ -54,6 +53,33 @@ const StreamingProgress = ({ theme }: { theme: 'dark' | 'light' }) => {
            style={{ width: `${progress}%` }} 
          />
        </div>
+    </div>
+  );
+};
+
+const MessageStatus = ({ status, theme, isLocked }: { status?: 'syncing' | 'sent' | 'error', theme: 'dark' | 'light', isLocked?: boolean }) => {
+  if (!status) return null;
+
+  const configMap = {
+    syncing: { 
+      icon: RefreshCw, 
+      text: isLocked ? 'Streaming' : 'Syncing', 
+      color: isLocked ? 'text-zeno' : 'text-neutral-500', 
+      spin: true 
+    },
+    sent: { icon: Check, text: 'Sent', color: 'text-zeno', spin: false },
+    error: { icon: AlertCircle, text: 'Error', color: 'text-rose-500', spin: false },
+  };
+
+  const config = configMap[status];
+  if (!config) return null;
+
+  const Icon = config.icon;
+
+  return (
+    <div className={`flex items-center gap-1 text-[10px] font-semibold ${config.color} mt-1.5 mr-1 select-none`}>
+      <Icon className={`w-3 h-3 ${config.spin ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+      <span className="uppercase tracking-wider opacity-80">{config.text}</span>
     </div>
   );
 };
@@ -129,6 +155,69 @@ export const MessageItem = React.memo<MessageItemProps>(({
   const feedbackButtonRef = useRef<HTMLButtonElement>(null);
   const feedbackMenuRef = useRef<HTMLDivElement>(null);
   const [feedbackCoords, setFeedbackCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const parseCitations = useCallback((children: React.ReactNode) => {
+    return React.Children.toArray(children).flatMap(child => {
+      if (typeof child !== 'string') return child;
+      
+      const segments = [];
+      let lastIdx = 0;
+      const citeRegex = /\[\[cite:(\d+)\]\]/g;
+      let match;
+      
+      while ((match = citeRegex.exec(child)) !== null) {
+        if (match.index > lastIdx) {
+          segments.push(child.slice(lastIdx, match.index));
+        }
+        
+        const sourceIdx = parseInt(match[1]);
+        const source = msg.searchSources?.[sourceIdx];
+        
+        if (source) {
+          let domain = source.domain || 'web';
+          if (!source.domain && source.url) {
+            try {
+              domain = new URL(source.url).hostname.replace(/^www\./, '');
+            } catch (e) {
+              domain = 'web';
+            }
+          }
+          const shortName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+          
+          segments.push(
+            <a
+              key={`${msg.id}-cite-${match.index}`}
+              href={source.url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 rounded-full text-[11px] font-semibold border transition-all align-middle hover:scale-105 active:scale-95 ${
+                theme === 'dark' 
+                ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-300 hover:bg-[#2C2C2E] hover:text-white' 
+                : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-800'
+              }`}
+            >
+              <img 
+                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+                alt=""
+                className="w-3 h-3 rounded-full object-contain bg-white p-0.5"
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+              <span className="truncate max-w-[80px]">{shortName}</span>
+              <span className="opacity-40 font-bold">·</span>
+              <span className="opacity-70">{sourceIdx + 1}</span>
+            </a>
+          );
+        }
+        lastIdx = citeRegex.lastIndex;
+      }
+      
+      if (lastIdx < child.length) {
+        segments.push(child.slice(lastIdx));
+      }
+      
+      return segments;
+    });
+  }, [msg.id, msg.searchSources, theme]);
 
   const handleToggleMoreMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -312,6 +401,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                 }`}>
                   {msg.text}
                 </div>
+                <MessageStatus status={msg.syncStatus} theme={theme} isLocked={msg.isLocked} />
               </div>
               <div className="mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                 <button
@@ -344,44 +434,8 @@ export const MessageItem = React.memo<MessageItemProps>(({
     );
   }
 
-  // Model response
-  const activeSpeed = msg.modelSpeed || speed;
-  const modelName = activeSpeed === 'think' ? 'ZENO Think' :
-                    activeSpeed === 'search' ? 'ZENO Search' :
-                    activeSpeed === 'vision' ? 'ZENO Vision' :
-                    activeSpeed === 'code' ? 'ZENO Código' :
-                    activeSpeed === 'fast' ? 'ZENO Flash' :
-                    activeSpeed === 'mega' ? 'ZENO Mega' :
-                    activeSpeed === 'image' ? 'ZENO Studio' :
-                    activeSpeed === 'smart' ? 'ZENO Smart' :
-                    activeSpeed === 'strategy' ? 'ZENO Estrategista' :
-                    activeSpeed === 'summary' ? 'ZENO Sumário' :
-                    'ZENO Flash';
-
   return (
     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="group flex flex-col w-full px-3 sm:px-4 py-6 border-b border-neutral-100/5 dark:border-white/5 last:border-b-0" style={{ contain: 'content' }}>
-      {/* Avatar and Name Header */}
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className="relative">
-          <ZenoLogo size={20} variant={logoVariant} theme={theme} />
-          {isLoadingLast && (
-            <div className="absolute -top-1 -right-1">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zeno opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-zeno"></span>
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col">
-          <span className={`text-[14px] font-bold tracking-tight ${
-            theme === 'dark' ? 'text-neutral-100' : 'text-neutral-900'
-          }`}>
-            {modelName}
-          </span>
-        </div>
-      </div>
-
       {/* Message Content (Full Width) */}
       <div className="w-full max-w-full overflow-hidden">
 
@@ -462,7 +516,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
                         {uniqueSources.length > 0 && (
                           <div className="flex items-center gap-2 flex-wrap animate-in fade-in slide-in-from-left-2">
                             {uniqueSources.slice(0, 5).map((source, sIdx) => {
-                              const d = source.domain || (() => { try { return new URL(source.url).hostname; } catch(e) { return 'web'; } })();
+                              let d = source.domain || 'web';
+                              if (!source.domain && source.url) {
+                                try {
+                                  d = new URL(source.url).hostname.replace(/^www\./, '');
+                                } catch (e) {
+                                  d = 'web';
+                                }
+                              }
                               return (
                                 <div key={sIdx} className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-medium ${
                                   theme === 'dark' ? 'bg-white/5 border-white/10 text-neutral-300' : 'bg-neutral-100 border-neutral-200 text-neutral-700'
@@ -489,63 +550,10 @@ export const MessageItem = React.memo<MessageItemProps>(({
                     remarkPlugins={[remarkGfm]}
                     components={{
                       ...markdownComponents,
-                      p: ({ children }) => {
-                        const parts = React.Children.toArray(children).flatMap(child => {
-                          if (typeof child !== 'string') return child;
-                          
-                          const segments = [];
-                          let lastIdx = 0;
-                          const citeRegex = /\[\[cite:(\d+)\]\]/g;
-                          let match;
-                          
-                          while ((match = citeRegex.exec(child)) !== null) {
-                            if (match.index > lastIdx) {
-                              segments.push(child.slice(lastIdx, match.index));
-                            }
-                            
-                            const sourceIdx = parseInt(match[1]);
-                            const source = msg.searchSources?.[sourceIdx];
-                            
-                            if (source) {
-                              const domain = source.domain || (source.url ? new URL(source.url).hostname.replace(/^www\./, '') : 'web');
-                              const shortName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
-                              
-                              segments.push(
-                                <a
-                                  key={match.index}
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 mx-0.5 rounded-full text-[11px] font-semibold border transition-all align-middle hover:scale-105 active:scale-95 ${
-                                    theme === 'dark' 
-                                    ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-300 hover:bg-[#2C2C2E] hover:text-white' 
-                                    : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-800'
-                                  }`}
-                                >
-                                  <img 
-                                    src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                                    alt=""
-                                    className="w-3 h-3 rounded-full object-contain bg-white p-0.5"
-                                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                                  />
-                                  <span className="truncate max-w-[80px]">{shortName}</span>
-                                  <span className="opacity-40 font-bold">·</span>
-                                  <span className="opacity-70">{sourceIdx + 1}</span>
-                                </a>
-                              );
-                            }
-                            lastIdx = citeRegex.lastIndex;
-                          }
-                          
-                          if (lastIdx < child.length) {
-                            segments.push(child.slice(lastIdx));
-                          }
-                          
-                          return segments;
-                        });
-                        
-                        return <div className="mb-2 last:mb-0">{parts}</div>;
-                      }
+                      p: ({ children }) => <div className="mb-4 last:mb-0 leading-relaxed">{parseCitations(children)}</div>,
+                      li: ({ children }) => <li className="mb-2 last:mb-0 leading-relaxed">{parseCitations(children)}</li>,
+                      span: ({ children }) => <span>{parseCitations(children)}</span>,
+                      td: ({ children }) => <td className="p-2 border border-neutral-700/30">{parseCitations(children)}</td>
                     }}
                   >
                     {msg.text}
@@ -823,6 +831,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
     prevProps.msg.role === nextProps.msg.role &&
     prevProps.msg.hasError === nextProps.msg.hasError &&
     prevProps.msg.errorMessage === nextProps.msg.errorMessage &&
+    prevProps.msg.syncStatus === nextProps.msg.syncStatus &&
     prevProps.msg.isLimitWarning === nextProps.msg.isLimitWarning &&
     prevProps.msg.modelSpeed === nextProps.msg.modelSpeed &&
     prevProps.isLastMessage === nextProps.isLastMessage &&
@@ -933,6 +942,8 @@ export const MessageList = React.memo<MessageListProps>(({
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const msg = visibleMessages[virtualRow.index];
+          if (!msg) return null;
+          
           const isLastMessage = virtualRow.index === visibleMessages.length - 1;
           
           return (

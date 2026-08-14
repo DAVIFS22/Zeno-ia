@@ -29,7 +29,7 @@ interface ComposerInputProps {
   attachments: FileAttachment[];
   onAddAttachment: (file: FileAttachment) => void;
   onRemoveAttachment: (id: string) => void;
-  onSubmit: (e?: React.FormEvent) => void;
+  onSubmit: (e?: React.FormEvent, overrideText?: string) => void;
   onStopGeneration: () => void;
   speed: ModelType;
   onSelectSpeed: (speed: ModelType) => void;
@@ -494,40 +494,82 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
         >
           {/* Attached Files Preview */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 pt-2 pb-2 px-4">
-              <AnimatePresence>
-                {attachments.map(att => (
-                  <motion.div
-                    key={att.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5, width: 0, margin: 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className="relative group shrink-0"
-                    title={att.name}
-                  >
-                    <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
-                      isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
-                    }`}>
-                      {(att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && att.url ? (
-                        <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <>
-                          {att.type === 'code' ? <Code className="w-5 h-5 text-neutral-400 mb-0.5" /> : <FileText className="w-5 h-5 text-neutral-400 mb-0.5" />}
-                          <span className="truncate w-full text-center px-1 text-[9px] font-medium text-neutral-500">{att.name.split('.').pop()?.toUpperCase()}</span>
-                        </>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveAttachment(att.id)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-black text-white rounded-full backdrop-blur-md shadow-sm transition-colors border border-white/10"
+            <div className="flex flex-col gap-2 pt-2 pb-2 px-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <AnimatePresence>
+                  {attachments.map(att => (
+                    <motion.div
+                      key={att.id}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5, width: 0, margin: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                      className="relative group shrink-0"
+                      title={att.name}
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                      <div className={`w-14 h-14 rounded-xl overflow-hidden border flex flex-col items-center justify-center ${
+                        isDark ? 'bg-[#232326] border-[#2C2C2E]' : 'bg-neutral-100 border-neutral-200'
+                      }`}>
+                        {(att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && att.url ? (
+                          <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            {att.type === 'code' ? <Code className="w-5 h-5 text-neutral-400 mb-0.5" /> : <FileText className="w-5 h-5 text-neutral-400 mb-0.5" />}
+                            <span className="truncate w-full text-center px-1 text-[9px] font-medium text-neutral-500">{att.name.split('.').pop()?.toUpperCase()}</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveAttachment(att.id)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-black/70 hover:bg-black text-white rounded-full backdrop-blur-md shadow-sm transition-colors border border-white/10"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+
+              {/* Image Analysis Quick Action Chips */}
+              {attachments.some(att => att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-neutral-400 font-medium mr-1">Análise rápida:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = "Extraia todos os itens, valores individuais, taxas e o valor total deste recibo de forma clara e estruturada.";
+                      setInput(text);
+                      onSubmit(undefined, text);
+                    }}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
+                  >
+                    🧾 Extrair Recibo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = "Analise este cardápio, liste as principais categorias, pratos em destaque e faça traduções ou recomendações se necessário.";
+                      setInput(text);
+                      onSubmit(undefined, text);
+                    }}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
+                  >
+                    🍽️ Traduzir/Resumir Cardápio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = "Extraia os dados numéricos, tendências, eixos e insights principais deste gráfico.";
+                      setInput(text);
+                      onSubmit(undefined, text);
+                    }}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
+                  >
+                    📊 Extrair Gráfico
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -82,18 +82,30 @@ export const SupportChatTab: React.FC = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => {
+      const cloudMsgs = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
-          role: data.sender === 'user' ? 'user' : data.sender === 'ai' ? 'assistant' : 'assistant', // mapping for UI
+          role: data.sender === 'user' ? 'user' : 'assistant',
           content: data.text,
-          senderType: data.sender // preserve original sender for visual differentiation
+          senderType: data.sender,
+          timestamp: data.timestamp?.toMillis?.() || data.timestamp || Date.now()
         } as any;
       });
-      if (msgs.length > 0) {
-        setMessages(msgs);
-        setIsTyping(false); // Stop typing if we get a message
+
+      if (cloudMsgs.length > 0) {
+        setMessages(prev => {
+          // Identify messages that exist in local state but not yet in the cloud snapshot
+          // (These are usually the ones just sent by the user)
+          const localOnly = prev.filter(p => 
+            !cloudMsgs.some(c => c.id === p.id || (c.role === p.role && c.content === p.content))
+          );
+          
+          // Combine and sort by timestamp
+          const combined = [...localOnly, ...cloudMsgs];
+          return combined.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        });
+        setIsTyping(false); // Stop typing if we get messages
       }
     });
 

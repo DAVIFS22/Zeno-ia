@@ -106,6 +106,7 @@ export interface QueuedTask {
     style: string;
     aspectRatio: string;
     enhance: boolean;
+    speedMode?: string;
     engine: string;
     negativePrompt: string;
     seed?: number;

@@ -132,9 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addLog('AuthContext: Initiating Google Sign-In');
     try {
       if (options?.rememberDevice) {
-        setPersistence(auth, browserLocalPersistence);
+        await setPersistence(auth, browserLocalPersistence);
       } else {
-        setPersistence(auth, browserSessionPersistence);
+        await setPersistence(auth, browserSessionPersistence);
       }
       addLog('AuthContext: Opening Google Sign-In popup');
       try {

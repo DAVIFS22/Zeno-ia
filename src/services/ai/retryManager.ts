@@ -48,9 +48,12 @@ function isRecoverableError(err: any): boolean {
     msg.includes('api key not valid') ||
     msg.includes('insufficient_quota') ||
     msg.includes('402') ||
+    msg.includes('404') || // endpoint not found
     msg.includes('credits') ||
     msg.includes('exceeded your current quota') ||
-    msg.includes('resource_exhausted')
+    msg.includes('resource_exhausted') ||
+    msg.includes('tokens per day') || // Groq hard limit
+    msg.includes('tpd') // Tokens per day
   ) {
     return false;
   }

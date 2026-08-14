@@ -28,6 +28,9 @@ export type Message = {
   hasError?: boolean;
   errorMessage?: string;
   rawErrorDetails?: string;
+  syncStatus?: 'syncing' | 'sent' | 'error';
+  isLocked?: boolean;
+  isStreaming?: boolean;
   isLimitWarning?: boolean;
   youtubeUrl?: string;
   isSearch?: boolean;
@@ -46,6 +49,7 @@ export type ChatSession = {
   speed?: ModelType;
   isPinned?: boolean;
   isFavorite?: boolean;
+  isNew?: boolean;
 };
 
 export type GeneratedImage = {

@@ -9,6 +9,7 @@ import { uploadImageWithFallback } from "./src/server/storage/imageUploadManager
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import Stripe from "stripe";
+import { getProviderQuota } from './src/services/ai/quotaManager';
 import { SubscriptionService } from "./src/lib/subscriptionService";
 import { 
   getUserUsage, 
@@ -154,13 +155,24 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
 
-  // Initialize task manager background loop & register image generator
+  // Initialize task manager background loop & register image generator with turbo speed optimization support
   initFallbackQueueRunner();
+  
+  // Reset resilience states at startup to clear any temporary blocks from previous session
+  try {
+    resetAllCircuits();
+    resetAllQuotas();
+    console.log('[STARTUP] Resilience systems reset successfully.');
+  } catch (e) {}
+
   registerImageGenerator(async (options) => {
-    const { prompt, style, aspectRatio, enhance, engine, seed, userEmail } = options;
-    console.log(`[ZENO VISION ENGINE] Executando tarefa de imagem resiliente. Prompt: "${prompt}"`);
+    const { prompt, style, aspectRatio, enhance, speedMode, engine, seed, userEmail } = options;
+    const isTurbo = speedMode === 'turbo';
+    console.log(`[ZENO VISION ENGINE] Executando tarefa de imagem (${isTurbo ? 'Modo Turbo / Flux Schnell' : 'Alta Qualidade / Flux Dev'}). Prompt: "${prompt}"`);
     
-    const enhancedPrompt = enhance ? `${prompt}, highly detailed, 8k resolution, professional lighting, masterpiece` : prompt;
+    const enhancedPrompt = enhance 
+      ? (isTurbo ? `${prompt}, sharp focus, vibrant colors, fast render` : `${prompt}, highly detailed, 8k resolution, professional lighting, masterpiece, photorealistic`)
+      : prompt;
     
     try {
       const result = await generateImageWithFallback({
@@ -170,7 +182,8 @@ async function startServer() {
           prompt: enhancedPrompt,
           aspectRatio: aspectRatio || '1:1',
           style: style || 'photorealistic',
-          seed: seed || 0
+          seed: seed || 0,
+          speedMode: speedMode || 'quality'
         },
         userGeminiApiKey: process.env.GEMINI_API_KEY
       }, ai);
@@ -317,6 +330,17 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     res.status(500).json({ error: err.message || "Erro no upload." });
   }
 });
+
+  app.get("/api/admin/debug/health", (req, res) => {
+    const providers = ['gemini', 'openai', 'groq', 'openrouter'];
+    const summary = getAllProviderMetricsSummary();
+    const data = providers.map(p => ({
+      provider: p,
+      quota: getProviderQuota(p),
+      metrics: Object.values(summary).find(m => m.provider === p)
+    }));
+    res.json(data);
+  });
 
   app.post("/api/admin/reset-resilience", async (req, res) => {
     try {
@@ -652,7 +676,10 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje',
         'cotação', 'resultado do', 'placar', 'preço atual', 'notícias de',
         'o que aconteceu', 'como está', 'qual é o', 'qual e o', 'quando foi',
-        'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre'
+        'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre',
+        'agora', 'lançamento', 'estreia', 'filme', 'série', 'cripto', 'dólar', 'euro', 'bolsa', 'ações',
+        'qual o', 'como está', 'onde fica', 'porque está', 'motivo de', 'entenda o que', 'saiba mais sobre',
+        'hoje', 'ontem', '2024', '2025'
       ];
       const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
       const hasImages = hasAttachments && attachments.some(a => (a.mimeType || a.type || '').includes('image'));
@@ -731,7 +758,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 
       // Multi-language support instructions
       const uiLanguage = req.body.language || 'pt-BR';
-      modelSystemPrompt += `\n\n[IDIOMA OBRIGATÓRIO]: O idioma da interface é ${uiLanguage}. A REGRA MAIS IMPORTANTE E ESTRITA: VOCÊ DEVE RESPONDER ÚNICA E EXCLUSIVAMENTE NO IDIOMA DA INTERFACE (${uiLanguage}). Sob NENHUMA circunstância você deve gerar textos em chinês, mandarim, caracteres asiáticos, ou qualquer outro idioma que não seja o solicitado pela interface. Se não entender o idioma do usuário, responda em ${uiLanguage} pedindo para ele reformular.`;
+      modelSystemPrompt += `\n\n[IDIOMA OBRIGATÓRIO]: O idioma da interface e de resposta é ${uiLanguage}. A REGRA MAIS IMPORTANTE: VOCÊ DEVE RESPONDER ÚNICA E EXCLUSIVAMENTE NO IDIOMA ${uiLanguage}. Sob NENHUMA circunstância você deve gerar textos em chinês (mandarim, simplificado, tradicional), caracteres asiáticos, ou qualquer outro idioma que não seja o solicitado (${uiLanguage}). Se a pergunta estiver em outro idioma, você deve traduzir mentalmente, mas responder obrigatoriamente em ${uiLanguage}. NUNCA comece a resposta em um idioma e termine em outro. NUNCA utilize caracteres 'zh-CN' ou similares.`;
 
       let modelTemperature = modelCfg.temperature;
 
@@ -891,16 +918,23 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         return res.end();
       }
 
-      // Convert history to the format expected by GenAI SDK
+      // Convert history to the format expected by GenAI SDK - Ensuring strict alternating roles
       const contents: any[] = [];
       if (history && Array.isArray(history)) {
+        let lastRole: string | null = null;
         history.forEach((msg) => {
+          const currentRole = msg.role === "user" ? "user" : "model";
+          
+          // Skip consecutive messages with the same role to prevent Gemini API errors
+          if (currentRole === lastRole) return;
+          
           let historyText = msg.text || "";
           historyText = historyText.replace(/!\[.*?\]\(data:.*?\)/g, "[Imagem Anexada]");
           contents.push({
-            role: msg.role === "user" ? "user" : "model",
+            role: currentRole,
             parts: [{ text: historyText }],
           });
+          lastRole = currentRole;
         });
       }
       let finalMessageText = message;
@@ -923,6 +957,9 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         }
       }
 
+      // Ensure that if the last history message was a "user" message, we don't cause a conflict
+      // But usually, the last message in history is the model response.
+      // If history is empty, the first message is "user".
       userParts.push({ text: finalMessageText });
 
       contents.push({
@@ -2615,6 +2652,30 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     }
   });
 
+  app.delete("/api/sync/sessions", async (req, res) => {
+    try {
+      const { userId, sessionId, clearAll } = req.query;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
+
+      if (clearAll === 'true') {
+        const chatSnap = await adminDb.collection('chats').where('userId', '==', userId).get();
+        const batch = adminDb.batch();
+        chatSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        return res.json({ success: true, message: "History cleared" });
+      }
+
+      if (sessionId) {
+        await adminDb.collection('chats').doc(sessionId as string).delete();
+        return res.json({ success: true, message: "Session deleted" });
+      }
+
+      return res.status(400).json({ error: "sessionId or clearAll required" });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/sync/settings", async (req, res) => {
     try {
       const { userId } = req.query;
@@ -3095,12 +3156,12 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
   // Image Generation Endpoint (used by ImageStudioModal)
   app.post("/api/generate-image", async (req, res) => {
     try {
-      const { prompt, style, aspectRatio, enhance, userEmail, userId, plan } = req.body;
+      const { prompt, style, aspectRatio, enhance, speedMode, userEmail, userId, plan } = req.body;
       if (!prompt) {
         return res.status(400).json({ error: "Prompt é obrigatório." });
       }
 
-      console.log(`[API /generate-image] Solicitação de ${userEmail || userId || 'Anônimo'} (${plan || 'ZENO Free'}): "${prompt}"`);
+      console.log(`[API /generate-image] Solicitação de ${userEmail || userId || 'Anônimo'} (${plan || 'ZENO Free'}): "${prompt}" [Speed: ${speedMode || 'quality'}]`);
 
       const task = await createQueuedTask({
         userId: userId || 'anon-user',
@@ -3111,9 +3172,10 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
           style: style || 'photorealistic',
           aspectRatio: aspectRatio || '1:1',
           enhance: enhance !== undefined ? enhance : true,
+          speedMode: speedMode || 'quality',
           engine: "flux",
           negativePrompt: ""
-        },
+        } as any,
         req
       });
 
@@ -3541,6 +3603,22 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log("[STARTUP] Checking API Keys Presence:");
+    console.log(`- GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Present (' + process.env.GEMINI_API_KEY.length + ' chars)' : 'MISSING'}`);
+    console.log(`- OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'Present' : 'MISSING'}`);
+    console.log(`- GROQ_API_KEY: ${process.env.GROQ_API_KEY ? 'Present' : 'MISSING'}`);
+    console.log(`- OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Present' : 'MISSING'}`);
+    
+    // Quick test for Gemini key validity if present
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'dummy_key') {
+      getAvailableModels().then(models => {
+        if (models.length > 0) {
+          console.log(`[STARTUP] Gemini API Key is VALID. Found ${models.length} models.`);
+        } else {
+          console.error(`[STARTUP] Gemini API Key appears INVALID or restricted. Could not list models.`);
+        }
+      });
+    }
   });
 }
 

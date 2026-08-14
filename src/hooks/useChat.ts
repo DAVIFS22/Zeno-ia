@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Message, ChatSession, FileAttachment, ModelType, UserSettings, DailyUsage } from '../types';
+import { Message, ChatSession, FileAttachment, ModelType, UserSettings, DailyUsage, AdaptiveLearningProfile } from '../types';
 import { detectIntent } from '../utils/intent';
 import { isModelPro, checkUsageLimit } from '../lib/subscription';
 import { generateTitleFromMessage } from '../utils/date';
@@ -21,7 +21,8 @@ export function useChat(
   setCurrentSessionId: (id: string | null) => void,
   dailyUsage: DailyUsage,
   setDailyUsage: React.Dispatch<React.SetStateAction<DailyUsage>>,
-  ui: any
+  ui: any,
+  adaptiveProfile?: AdaptiveLearningProfile
 ) {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
@@ -81,53 +82,110 @@ export function useChat(
       setAttachments([]);
     }
 
+    console.log('[DEBUG - handleSubmit] START', { currentSessionId, currentInput });
+
     let sessionId = currentSessionId;
     if (!sessionId) {
-      const newSession: ChatSession = {
+      const newSessionId = Date.now().toString();
+      const userMessage: Message = {
         id: Date.now().toString(),
+        role: 'user',
+        text: currentInput,
+        timestamp: Date.now(),
+        attachments: currentAttachments,
+        syncStatus: 'syncing',
+        isLocked: true,
+      };
+
+      const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
+      const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
+      const msgLower = currentInput.toLowerCase();
+      const isClientSearch = finalSpeed === 'search' || msgLower.includes('buscar') || msgLower.includes('pesquisar');
+      
+      const initialModelMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: '',
+        timestamp: Date.now(),
+        modelSpeed: isClientSearch ? 'search' : finalSpeed,
+        youtubeUrl,
+        isSearching: isClientSearch,
+        isSearch: isClientSearch,
+        isLocked: true,
+        isStreaming: true,
+      };
+
+      const newSession: ChatSession = {
+        id: newSessionId,
         title: generateTitleFromMessage(currentInput),
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        messages: [],
+        messages: [userMessage, initialModelMessage],
         speed: finalSpeed,
+        isNew: true, // Mark as new to protect from sync overrides
       };
-      sessionId = newSession.id;
-      setSessions(prev => [newSession, ...prev]);
+
+      console.log('[DEBUG - handleSubmit] Creating new session', { newSessionId, messagesCount: newSession.messages.length });
+      
+      sessionId = newSessionId;
+      // We set current session ID first to prepare the UI
       setCurrentSessionId(sessionId);
+      
+      setSessions(prev => {
+        console.log('[DEBUG - setSessions] Adding new session. Prev count:', prev.length);
+        const next = [newSession, ...prev];
+        return next;
+      });
+      
+      // Define messages for the rest of the flow
+      var messagesForFlow = { userMessage, initialModelMessage };
+    } else {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: currentInput,
+        timestamp: Date.now(),
+        attachments: currentAttachments,
+        syncStatus: 'syncing',
+        isLocked: true,
+      };
+
+      const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
+      const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
+      const msgLower = currentInput.toLowerCase();
+      const isClientSearch = finalSpeed === 'search' || msgLower.includes('buscar') || msgLower.includes('pesquisar');
+      
+      const initialModelMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: '',
+        timestamp: Date.now(),
+        modelSpeed: isClientSearch ? 'search' : finalSpeed,
+        youtubeUrl,
+        isSearching: isClientSearch,
+        isSearch: isClientSearch,
+        isLocked: true,
+        isStreaming: true,
+      };
+
+      console.log('[DEBUG - handleSubmit] Adding messages to existing session', { sessionId });
+
+      setSessions(prev => {
+        console.log('[DEBUG - setSessions] Mapping prev sessions. Count:', prev.length);
+        const next = prev.map(s => (s.id === sessionId ? {
+          ...s,
+          messages: [...s.messages, userMessage, initialModelMessage],
+          updatedAt: Date.now(),
+        } : s));
+        const updatedSession = next.find(s => s.id === sessionId);
+        console.log('[DEBUG - setSessions] Updated session message count:', updatedSession?.messages.length);
+        return next;
+      });
+      
+      var messagesForFlow = { userMessage, initialModelMessage };
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: currentInput,
-      timestamp: Date.now(),
-      attachments: currentAttachments,
-    };
-
-    const youtubeMatch = currentInput.match(YOUTUBE_REGEX);
-    const youtubeUrl = youtubeMatch ? youtubeMatch[0] : undefined;
-
-    const msgLower = currentInput.toLowerCase();
-    const isClientSearch = finalSpeed === 'search' || msgLower.includes('buscar') || msgLower.includes('pesquisar');
-    
-    const initialModelMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      text: '',
-      timestamp: Date.now(),
-      modelSpeed: isClientSearch ? 'search' : finalSpeed,
-      youtubeUrl,
-      isSearching: isClientSearch,
-      isSearch: isClientSearch,
-    };
-
-    setSessions(prev =>
-      prev.map(s => (s.id === sessionId ? {
-        ...s,
-        messages: [...s.messages, userMessage, initialModelMessage],
-        updatedAt: Date.now(),
-      } : s))
-    );
+    const { userMessage, initialModelMessage } = messagesForFlow;
 
     setIsLoading(true);
     abortControllerRef.current = new AbortController();
@@ -143,10 +201,9 @@ export function useChat(
         userEmail: userSettings.userEmail,
         plan: isPro ? 'ZENO Pro' : userSettings.plan,
         geminiApiKey: userSettings.geminiApiKey,
+        adaptiveProfile: adaptiveProfile || userSettings.adaptiveProfile,
         history: sessions.find(s => s.id === sessionId)?.messages.slice(-10).map(m => ({ role: m.role, text: m.text })) || [],
       };
-
-
 
       // Retrieve Firebase ID token if user is authenticated
       let token: string | null = null;
@@ -214,6 +271,14 @@ export function useChat(
         throw new Error(errorData.error || `Falha na conexão com o servidor (${response.status})`);
       }
 
+      // Mark user message as sent
+      setSessions(prev =>
+        prev.map(s => (s.id === sessionId ? {
+          ...s,
+          messages: s.messages.map(m => m.id === userMessage.id ? { ...m, syncStatus: 'sent', isLocked: false } : m)
+        } : s))
+      );
+
       console.log("GETTING READER");
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -261,34 +326,31 @@ export function useChat(
                   }
 
                   setSessions(prev => {
-                    const exists = prev.some(s => s.id === sessionId);
-                    if (exists) {
-                      return prev.map(s => (s.id === sessionId ? {
-                        ...s,
-                        messages: s.messages.map((m, i) => i === s.messages.length - 1 ? {
-                          ...m,
-                          text: accumulatedText,
-                          isSearching: data.isSearching ?? m.isSearching,
-                          searchSources: data.sources ? filterValidSources(data.sources) : m.searchSources,
-                          isToolCalling: data.toolCall ? true : false
-                        } : m)
-                      } : s));
-                    } else {
-                      // Re-insert session if removed by concurrent sync
-                      const reconstructed: ChatSession = {
-                        id: sessionId!,
-                        title: generateTitleFromMessage(currentInput),
-                        createdAt: Date.now(),
+                    const sessionIndex = prev.findIndex(s => s.id === sessionId);
+                    if (sessionIndex !== -1) {
+                      const newSessions = [...prev];
+                      const currentSession = newSessions[sessionIndex];
+                      console.log('[DEBUG - streaming] Updating session:', sessionId, 'current messages:', currentSession.messages.length);
+                      
+                      newSessions[sessionIndex] = {
+                        ...currentSession,
                         updatedAt: Date.now(),
-                        messages: [userMessage, {
-                          ...initialModelMessage,
-                          text: accumulatedText,
-                          isSearching: data.isSearching ?? false,
-                          searchSources: data.sources ? filterValidSources(data.sources) : []
-                        }],
-                        speed: finalSpeed,
+                        messages: currentSession.messages.map((m) => 
+                          m.id === initialModelMessage.id ? {
+                            ...m,
+                            text: accumulatedText,
+                            isSearching: data.isSearching ?? m.isSearching,
+                            searchSources: data.sources ? filterValidSources(data.sources) : m.searchSources,
+                            isToolCalling: data.toolCall ? true : false,
+                            isStreaming: true,
+                            isLocked: true
+                          } : m
+                        )
                       };
-                      return [reconstructed, ...prev];
+                      return newSessions;
+                    } else {
+                      console.warn('[BUG INVESTIGATION] Session missing from state during streaming! SessionId:', sessionId, 'Total sessions:', prev.length);
+                      return prev;
                     }
                   });
                 } catch (e) {}
@@ -298,6 +360,15 @@ export function useChat(
         }
       } finally {
         if (watchdogTimer) clearTimeout(watchdogTimer);
+        // Clear streaming flag and isNew when done
+        setSessions(prev =>
+          prev.map(s => s.id === sessionId ? {
+            ...s,
+            updatedAt: Date.now(),
+            isNew: false, // Clearing the new protection flag
+            messages: s.messages.map(m => m.id === initialModelMessage.id ? { ...m, isStreaming: false, isLocked: false } : m)
+          } : s)
+        );
       }
     } catch (err: any) {
       const isAbort = err.name === 'AbortError';
@@ -318,12 +389,22 @@ export function useChat(
       setSessions(prev =>
         prev.map(s => (s.id === sessionId ? {
           ...s,
-          messages: s.messages.map((m, i) => i === s.messages.length - 1 ? {
-            ...m,
-            hasError: true,
-            errorMessage,
-            isSearching: false
-          } : m)
+          updatedAt: Date.now(),
+          isNew: false, // Clearing the new protection flag
+          messages: s.messages.map((m) => {
+            if (m.id === userMessage.id) return { ...m, syncStatus: 'error', isLocked: false };
+            if (m.id === initialModelMessage.id) {
+              return {
+                ...m,
+                hasError: true,
+                errorMessage,
+                isSearching: false,
+                isStreaming: false,
+                isLocked: false
+              };
+            }
+            return m;
+          })
         } : s))
       );
     } finally {

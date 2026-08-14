@@ -63,6 +63,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('photorealistic');
   const [selectedRatio, setSelectedRatio] = useState('1:1');
+  const [speedMode, setSpeedMode] = useState<'turbo' | 'quality'>('quality');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentImage, setCurrentImage] = useState<GeneratedImage | null>(null);
   const [history, setHistory] = useState<GeneratedImage[]>([]);
@@ -196,6 +197,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
           style: selectedStyle,
           aspectRatio: selectedRatio,
           enhance: true,
+          speedMode,
           userEmail,
           userId,
           plan
@@ -413,6 +415,42 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                     <span>{ratio.name}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Speed & Optimization Mode Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Rocket className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Modo de Desempenho</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setSpeedMode('turbo')}
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-medium ${
+                    speedMode === 'turbo'
+                      ? 'bg-neutral-700 border-neutral-500 text-neutral-100 shadow-xs'
+                      : theme === 'dark'
+                        ? 'bg-[#212121] border-[#2C2C2E] hover:border-[#2C2C2E] text-neutral-400'
+                        : 'bg-neutral-100 border-neutral-200 hover:border-neutral-300 text-neutral-600'
+                  }`}
+                >
+                  <Rocket className="w-4 h-4 text-emerald-400" />
+                  <span>Turbo (Mais rápido)</span>
+                </button>
+                <button
+                  onClick={() => setSpeedMode('quality')}
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-medium ${
+                    speedMode === 'quality'
+                      ? 'bg-neutral-700 border-neutral-500 text-neutral-100 shadow-xs'
+                      : theme === 'dark'
+                        ? 'bg-[#212121] border-[#2C2C2E] hover:border-[#2C2C2E] text-neutral-400'
+                        : 'bg-neutral-100 border-neutral-200 hover:border-neutral-300 text-neutral-600'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <span>Alta Qualidade</span>
+                </button>
               </div>
             </div>
 
