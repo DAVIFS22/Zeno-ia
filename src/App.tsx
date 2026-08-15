@@ -9,7 +9,6 @@ import { DEFAULT_ADAPTIVE_PROFILE } from './lib/adaptiveLearning';
 import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
 import { CodeBlock } from './components/CodeBlock';
 import { ImageWithLoader } from './components/ImageWithLoader';
-import { ZenoLogo } from './components/ZenoLogo';
 import { syncLibraryWithBackend, scanAndSaveImagesFromText } from './lib/imageLibraryStorage';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { PlanUsageCard } from './components/PlanUsageCard';
@@ -41,6 +40,7 @@ import { hasPremiumAccess } from './config/admin';
 import { filterValidSources } from './utils/sourceValidation';
 import { isAuthorizedImageUrl } from './utils/imageSecurity';
 import { copyToClipboard as performCopyToClipboard } from './utils/clipboard';
+import { configureUtterance } from './utils/voiceSynthesis';
 import { checkAndGetNewVersion, markVersionAsSeen, hasRelevantContent } from './lib/versionSystem';
 
 const STORAGE_KEY_SESSIONS = 'zeno_chat_sessions_v3';
@@ -75,6 +75,13 @@ function MainAppInner() {
     switchAccount, 
     session 
   } = useAuth();
+
+  console.log('[DEBUG] MainAppInner Render:', { 
+    authLoading, 
+    userId: profile?.uid || 'no-profile-uid', 
+    profileEmail: profile?.email || 'no-email',
+    hasUser: !!user
+  });
 
   const userId = profile?.uid || getOrCreateUserId(profile?.uid);
 
@@ -177,6 +184,7 @@ function MainAppInner() {
   const prevUserIdRef = useRef<string>(userId);
 
   useEffect(() => {
+    console.log('[DEBUG] useEffect Account Isolation Triggered:', { authLoading, userId, prevUserId: prevUserIdRef.current });
     if (authLoading) return; // Wait for auth to be determined
 
     if (prevUserIdRef.current !== userId) {
@@ -186,15 +194,15 @@ function MainAppInner() {
       // Defensive check: If we have a profile UID but Firebase Auth isn't matching it yet, wait
       // This avoids "Missing or insufficient permissions" during the split-second of auth transition
       if (profile && user && user.uid !== userId) {
-        console.warn('[ACCOUNT ISOLATION] UID mismatch during transition. Skipping init.');
+        console.warn('[ACCOUNT ISOLATION] UID mismatch during transition. Skipping init:', { userUid: user.uid, profileUid: profile.uid, userId });
         return;
       }
 
       // 1. Initialize account via backend API (Admin SDK) to bypass client permission issues
       const initAccountOnServer = async () => {
-        console.log('[DEBUG] initAccountOnServer called with userId:', userId);
+        console.log('[DEBUG] initAccountOnServer called with userId:', userId, 'profile:', !!profile);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         try {
           const res = await fetch('/api/account/init', {
             method: 'POST',
@@ -209,9 +217,13 @@ function MainAppInner() {
           });
           clearTimeout(timeoutId);
           console.log('[ACCOUNT ISOLATION] Account initialized on server status:', res.status);
-        } catch(e) {
+        } catch(e: any) {
           clearTimeout(timeoutId);
-          console.error("Failed to initialize user on server:", e);
+          if (e?.name === 'AbortError') {
+            console.warn("Account initialization request timed out (15s)");
+          } else {
+            console.error("Failed to initialize user on server:", e);
+          }
         }
       };
       
@@ -237,6 +249,7 @@ function MainAppInner() {
             systemInstruction: '',
             autoRead: false,
             voiceSpeed: 1.0,
+            voicePersonality: 'friendly',
             speechLanguage: 'pt-BR',
             customInstructions: '',
             memoryEnabled: true,
@@ -341,6 +354,8 @@ function MainAppInner() {
     setInput,
     attachments,
     setAttachments,
+    isThinkingMode,
+    setIsThinkingMode,
     isLoading,
     handleSubmit,
     abortChat
@@ -553,15 +568,18 @@ function MainAppInner() {
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = userSettings.speechLanguage || 'pt-BR';
-    utterance.rate = userSettings.voiceSpeed || 1.0;
+    configureUtterance(utterance, {
+      lang: userSettings.speechLanguage || 'pt-BR',
+      speed: userSettings.voiceSpeed ?? 1.0,
+      personality: userSettings.voicePersonality || 'friendly'
+    });
 
     utterance.onend = () => setSpeakingMessageId(null);
     utterance.onerror = () => setSpeakingMessageId(null);
 
     setSpeakingMessageId(id);
     window.speechSynthesis.speak(utterance);
-  }, [speakingMessageId, userSettings.speechLanguage, userSettings.voiceSpeed]);
+  }, [speakingMessageId, userSettings.speechLanguage, userSettings.voiceSpeed, userSettings.voicePersonality, t.common.error]);
 
   // Active Session helper
   const activeSession = useMemo(() => {
@@ -656,15 +674,21 @@ function MainAppInner() {
     if (!el) return;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const isNearBottom = distanceToBottom < 150;
-    shouldAutoScrollRef.current = isNearBottom;
+    
+    // If intelligent scroll is DISABLED, we always want to auto-scroll (shouldAutoScrollRef = true)
+    // If ENABLED (default), we only auto-scroll if near bottom
+    const isIntelligent = userSettings.intelligentAutoScroll !== false;
+    shouldAutoScrollRef.current = isIntelligent ? isNearBottom : true;
+    
     setShowScrollBottomBtn(!isNearBottom);
-  }, []);
+  }, [userSettings.intelligentAutoScroll]);
 
   useEffect(() => {
-    if (shouldAutoScrollRef.current && messagesEndRef.current) {
+    const isAutoScrollEnabled = userSettings.autoScrollToBottom !== false;
+    if (isAutoScrollEnabled && shouldAutoScrollRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, userSettings.autoScrollToBottom]);
 
   // New Chat Handler
   const handleNewChat = useCallback(() => {
@@ -985,16 +1009,42 @@ function MainAppInner() {
 
   // Filter & Group Sessions
   const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    const q = searchQuery.toLowerCase();
-    return sessions.filter(
-      s => s.title.toLowerCase().includes(q) || s.messages.some(m => m.text.toLowerCase().includes(q))
-    );
+    try {
+      if (!searchQuery.trim()) return sessions;
+      const q = searchQuery.toLowerCase();
+      return sessions.filter(
+        s => (s.title?.toLowerCase() || '').includes(q) || s.messages?.some(m => (m.text?.toLowerCase() || '').includes(q))
+      );
+    } catch (err) {
+      console.error('[CRITICAL] Error filtering sessions:', err);
+      return sessions;
+    }
   }, [sessions, searchQuery]);
 
   const groupedSessions = useMemo(() => {
-    return groupSessionsByDate(filteredSessions, userSettings.groupByDate !== false);
+    try {
+      return groupSessionsByDate(filteredSessions, userSettings.groupByDate !== false);
+    } catch (err) {
+      console.error('[CRITICAL] Error grouping sessions:', err);
+      return [];
+    }
   }, [filteredSessions, userSettings.groupByDate]);
+
+  console.log('[DEBUG] MainAppInner - Finalizing render state', { sessionsCount: sessions.length, groupedKeys: Object.keys(groupedSessions) });
+
+  if (authLoading) {
+    console.log('[DEBUG] MainAppInner - Showing Pulse Loader');
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#0D0D0D] text-white">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-2 border-[#0084DF] border-t-transparent animate-spin" />
+          <p className="text-sm text-neutral-400 font-medium tracking-wide">Iniciando ZENO IA...</p>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('[DEBUG] MainAppInner - Rendering Full UI');
 
   return (
     <LanguageProvider userLanguage={userSettings.language}>
@@ -1015,7 +1065,6 @@ function MainAppInner() {
         logoVariant={logoVariant}
         isSidebarOpen={ui.isSidebarOpen}
         isSidebarCollapsed={ui.isSidebarCollapsed}
-        isSearchVisible={ui.isSearchVisible}
         searchQuery={searchQuery}
         groupedSessions={groupedSessions}
         currentSessionId={currentSessionId}
@@ -1024,7 +1073,6 @@ function MainAppInner() {
         userSettings={userSettings}
         onCloseSidebar={handleCloseSidebar}
         onNewChat={handleNewChat}
-        onToggleSearchVisible={handleToggleSearchVisible}
         onOpenSettings={() => ui.openModal('settings')}
         onOpenAuthModal={() => ui.openModal('auth')}
         onOpenImageLibrary={() => ui.openModal('imageLibrary')}
@@ -1071,7 +1119,6 @@ function MainAppInner() {
           onToggleTheme={handleToggleTheme}
           onOpenSettings={() => ui.openModal('settings')}
           onOpenAuthModal={() => ui.openModal('auth')}
-          onNewChat={handleNewChat}
           user={profile}
           speed={speed}
           onSelectSpeed={setSpeed}
@@ -1210,6 +1257,8 @@ function MainAppInner() {
             onStopGeneration={handleStopGeneration}
             speed={speed}
             onSelectSpeed={handleSelectSpeed}
+            isThinkingMode={isThinkingMode}
+            setIsThinkingMode={setIsThinkingMode}
             theme={theme}
             plan={userSettings.plan}
             onOpenSubscriptionModal={handleOpenSubscriptionModal}
@@ -1256,27 +1305,46 @@ function MainAppInner() {
 }
 
 function MainAppWrapper() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
+  
+  console.log('[DEBUG] MainAppWrapper render', { authLoading, hasProfile: !!profile });
+
   // For the provider, we prefer the real Firebase UID. 
   // If not available, we use the local ID, but most Firestore-based logic should wait for the UID.
   const userId = profile?.uid || getOrCreateUserId(profile?.uid);
   const userEmail = profile?.email || '';
 
   return (
-    <SubscriptionProvider userId={userId} userEmail={userEmail}>
-      <MainAppInner />
-    </SubscriptionProvider>
+    <ErrorBoundary>
+      <SubscriptionProvider userId={userId} userEmail={userEmail}>
+        <MainAppInner />
+      </SubscriptionProvider>
+    </ErrorBoundary>
   );
 }
 
-  const AuthWrapper = () => {
-    const { loading } = useAuth();
-    const { t } = useTranslation();
-    if (loading) return <div className="flex items-center justify-center min-h-screen bg-[#050505] text-white">{t.common.loading}...</div>;
-    return <MainAppWrapper />;
+const AuthWrapper = () => {
+  const { loading, profile } = useAuth();
+  const { t } = useTranslation();
+  
+  console.log('[DEBUG] AuthWrapper render', { loading, hasProfile: !!profile });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#050505] text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-zeno border-t-transparent animate-spin" />
+          <p className="text-sm font-medium opacity-80">{t.common.loading}...</p>
+        </div>
+      </div>
+    );
   }
+  
+  return <MainAppWrapper />;
+}
 
 export default function App() {
+  console.log('[DEBUG] App Root render');
   return (
     <AuthProvider>
       <LanguageProvider>

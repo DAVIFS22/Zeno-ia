@@ -1,6 +1,6 @@
 export type AICategory = 'general' | 'think' | 'code' | 'speed' | 'search' | 'image' | 'vision' | 'image_generation';
 
-export type ProviderName = 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'mistral' | 'llama' | 'groq' | 'openrouter' | 'replicate';
+export type ProviderName = 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'mistral' | 'llama' | 'groq' | 'openrouter' | 'replicate' | 'xai' | 'grok';
 
 export interface AIProviderModelConfig {
   provider: ProviderName;
@@ -32,10 +32,14 @@ export interface AIRequestOptions {
   userGeminiApiKey?: string;
   userId?: string;
   userPlan?: string;
+  isThinkingMode?: boolean;
+  userRequestedModel?: string;
+  timeoutMs?: number;
 }
 
 export interface AIResponseResult {
   text: string;
+  thought?: string;
   imageUrl?: string;
   provider: ProviderName;
   modelUsed: string;

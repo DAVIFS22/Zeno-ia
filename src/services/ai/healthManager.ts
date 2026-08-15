@@ -8,6 +8,8 @@ const defaultModels = [
   'gemini:gemini-1.5-flash',
   'openai:gpt-4o',
   'groq:llama-3.3-70b-versatile',
+  'xai:grok-4.6',
+  'openrouter:x-ai/grok-4.6',
   'openrouter:anthropic/claude-sonnet-5'
 ];
 
@@ -138,7 +140,7 @@ export function getAllProviderMetricsSummary() {
 }
 
 let isHealthCheckRunning = false;
-export function startHealthCheckLoop(aiClient: any) {
+export function startHealthCheckLoop() {
   if (isHealthCheckRunning) return;
   isHealthCheckRunning = true;
   setInterval(async () => {

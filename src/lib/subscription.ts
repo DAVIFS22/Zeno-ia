@@ -12,7 +12,7 @@ export interface ModelDef {
 }
 
 export const ZENO_MODELS: ModelDef[] = Object.values(ZENO_MODELS_CONFIG)
-  .filter(m => ['smart', 'zeno', 'think', 'search', 'vision', 'code', 'mega', 'fast'].includes(m.id))
+  .filter(m => ['smart', 'zeno', 'think', 'search', 'vision', 'code', 'grok', 'grok-4.6', 'mega', 'fast'].includes(m.id))
   .sort((a, b) => a.priority - b.priority)
   .map(m => ({
     id: m.id,

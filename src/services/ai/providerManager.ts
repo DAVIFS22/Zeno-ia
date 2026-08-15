@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { AIRequestOptions, AIResponseResult, ProviderName } from './types';
 import { recordCircuitSuccess, recordCircuitFailure } from './circuitBreaker';
 import { recordQuotaUsage, setProviderQuotaExhausted } from './quotaManager';
@@ -7,16 +7,33 @@ import { logAiEvent } from './logger';
 import { incrementAiStat } from './metrics';
 import { sanitizeResponseText } from '../../utils/imageSecurity';
 
-const defaultAi = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || 'dummy_key',
-  httpOptions: { headers: { 'User-Agent': 'zeno-ai-resilience' } }
-});
+function getGeminiClient(userKey?: string) {
+  const envKey = process.env.GEMINI_API_KEY;
+  const hasUserKey = userKey && userKey.trim().length > 10;
+  
+  // Se for chave do usuário, usamos ela. Se não, verificamos a do sistema.
+  if (hasUserKey) {
+    return new GoogleGenAI({
+      apiKey: userKey!.trim(),
+      httpOptions: { headers: { 'User-Agent': 'zeno-ai-resilience' } }
+    });
+  }
+
+  // Validação da chave do sistema - se não existir, retorna erro tratável
+  if (!envKey || envKey === 'dummy_key' || envKey.trim().length < 5) {
+    throw new Error("PROVIDER_NOT_CONFIGURED: GEMINI_API_KEY não configurada.");
+  }
+    
+  return new GoogleGenAI({
+    apiKey: envKey.trim(),
+    httpOptions: { headers: { 'User-Agent': 'zeno-ai-resilience' } }
+  });
+}
 
 export async function callProviderAdapter(
   provider: ProviderName,
   model: string,
-  options: AIRequestOptions,
-  aiClient: GoogleGenAI = defaultAi
+  options: AIRequestOptions
 ): Promise<AIResponseResult> {
   const startTime = Date.now();
   const requestId = Math.random().toString(36).substring(2, 9);
@@ -26,15 +43,18 @@ export async function callProviderAdapter(
 
   try {
     let text = "";
+    let thought = "";
     let sources: any[] = [];
     let groundingMetadata: any = null;
     let functionCalls: any[] = [];
 
     if (options.category === 'image_generation') {
       if (provider === 'gemini') {
-        let client = aiClient;
-        if (options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10) {
-          client = new GoogleGenAI({ apiKey: options.userGeminiApiKey.trim() });
+        let client;
+        try {
+          client = getGeminiClient(options.userGeminiApiKey);
+        } catch (e) {
+          throw new Error(`Provedor Gemini não configurado para geração de imagem.`);
         }
 
         const imgConfig = options.imageOptions || { prompt: '' };
@@ -130,16 +150,22 @@ export async function callProviderAdapter(
     }
 
     if (provider === 'gemini') {
-      let client = aiClient;
+      let client;
+      try {
+        client = getGeminiClient(options.userGeminiApiKey);
+      } catch (e: any) {
+        throw new Error(`Provedor Gemini não configurado ou chave inválida: ${e.message}`);
+      }
       const isUserKey = options.userGeminiApiKey && options.userGeminiApiKey.trim().length > 10;
+      const timeout = options.timeoutMs || 25000;
+      
       if (isUserKey) {
         console.log(`[Gemini Adapter] Using user-provided API key for request ${requestId}`);
-        client = new GoogleGenAI({ apiKey: options.userGeminiApiKey!.trim() });
       } else {
         console.log(`[Gemini Adapter] Using server-side API key for request ${requestId}`);
       }
 
-      console.log(`[Gemini Adapter] Calling model: ${model} with contents:`, JSON.stringify(options.contents).substring(0, 500));
+      console.log(`[Gemini Adapter] Calling model: ${model} with timeout ${timeout}ms`);
 
       const response = await (client as any).models.generateContent({
         model,
@@ -149,6 +175,9 @@ export async function callProviderAdapter(
           temperature: options.temperature || 0.7,
           maxOutputTokens: options.maxOutputTokens || 2048,
           tools: options.tools && options.tools.length > 0 ? options.tools : undefined,
+          thinkingConfig: options.isThinkingMode ? { thinkingLevel: ThinkingLevel.HIGH } : undefined,
+          // Note: SDK might not support explicit timeout in config here directly, 
+          // but we can use AbortController if needed. For Gemini SDK, we rely on its internal timeout or external wrap.
         }
       });
 
@@ -158,6 +187,9 @@ export async function callProviderAdapter(
       
       const candidates = (response as any).candidates;
       if (candidates && candidates[0]) {
+        const parts = candidates[0].content?.parts || [];
+        thought = parts.filter((p: any) => p.thought).map((p: any) => p.text).join('\n').trim();
+
         groundingMetadata = candidates[0].groundingMetadata;
         functionCalls = (response as any).functionCalls ? (response as any).functionCalls() : [];
       }
@@ -174,23 +206,126 @@ export async function callProviderAdapter(
         }).filter(Boolean);
       }
 
-    } else if (provider === 'openai' || provider === 'groq' || provider === 'openrouter') {
-      const apiKey = provider === 'openai' ? process.env.OPENAI_API_KEY :
-                     provider === 'groq' ? process.env.GROQ_API_KEY :
-                     process.env.OPENROUTER_API_KEY;
+    } else if (provider === 'openai' || provider === 'groq' || provider === 'openrouter' || provider === 'xai' || provider === 'grok') {
+      const isXai = provider === 'xai' || provider === 'grok';
+      const xaiKey = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
+      
+      if (isXai) {
+        if (xaiKey) {
+          console.log(`[xAI Grok Adapter] Attempting direct xAI API with model ${model}`);
+          try {
+            const url = 'https://api.x.ai/v1/chat/completions';
+            const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
+            text = await callOpenAiCompatible(
+              url,
+              xaiKey,
+              model,
+              messages,
+              options.temperature || 0.7,
+              options.maxOutputTokens || 1024,
+              {},
+              options.timeoutMs || 15000
+            );
+          } catch (xaiErr: any) {
+            const xaiMsg = xaiErr?.message || String(xaiErr);
+            const isCreditOrPermError = xaiMsg.includes('403') || 
+                                       xaiMsg.toLowerCase().includes('permission-denied') || 
+                                       xaiMsg.toLowerCase().includes('credits') ||
+                                       xaiMsg.toLowerCase().includes('license') ||
+                                       xaiMsg.includes('401') ||
+                                       xaiMsg.includes('402');
 
-      if (!apiKey) throw new Error(`API KEY faltando para o provedor ${provider}`);
+            if (isCreditOrPermError) {
+              setProviderQuotaExhausted('xai', xaiMsg);
+              recordCircuitFailure(`xai:${model}`, false, true);
+            }
 
-      if (provider === 'groq') {
-        console.log(`[Groq Adapter] Successfully configured model ${model} using GROQ_API_KEY`);
+            if (isCreditOrPermError && process.env.OPENROUTER_API_KEY) {
+              console.warn(`[xAI Grok Adapter] Direct xAI API falhou (${xaiMsg.slice(0, 100)}). Redirecionando automaticamente para OpenRouter (x-ai/${model})...`);
+              const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
+              const targetModel = model.includes('/') ? model : `x-ai/${model}`;
+              const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
+              try {
+                text = await callOpenAiCompatible(
+                  openRouterUrl,
+                  process.env.OPENROUTER_API_KEY,
+                  targetModel,
+                  messages,
+                  options.temperature || 0.7,
+                  options.maxOutputTokens || 1024,
+                  { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' },
+                  options.timeoutMs || 25000
+                );
+              } catch (orErr: any) {
+                const orMsg = orErr?.message || String(orErr);
+                if (orMsg.includes('402') || orMsg.toLowerCase().includes('credit') || orMsg.includes('403') || orMsg.includes('401')) {
+                  setProviderQuotaExhausted('openrouter', orMsg);
+                  recordCircuitFailure(`openrouter:${targetModel}`, false, true);
+                }
+                throw orErr;
+              }
+            } else {
+              throw xaiErr;
+            }
+          }
+        } else if (process.env.OPENROUTER_API_KEY) {
+          console.log(`[xAI Grok Adapter] Routing via OpenRouter (x-ai/${model})`);
+          const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
+          const targetModel = model.includes('/') ? model : `x-ai/${model}`;
+          const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
+          try {
+            text = await callOpenAiCompatible(
+              openRouterUrl,
+              process.env.OPENROUTER_API_KEY,
+              targetModel,
+              messages,
+              options.temperature || 0.7,
+              options.maxOutputTokens || 1024,
+              { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' },
+              options.timeoutMs || 25000
+            );
+          } catch (orErr: any) {
+            const orMsg = orErr?.message || String(orErr);
+            if (orMsg.includes('402') || orMsg.toLowerCase().includes('credit') || orMsg.includes('403') || orMsg.includes('401')) {
+              setProviderQuotaExhausted('openrouter', orMsg);
+              recordCircuitFailure(`openrouter:${targetModel}`, false, true);
+            }
+            throw orErr;
+          }
+        } else {
+          throw new Error(`API KEY faltando para o provedor ${provider} (Configure XAI_API_KEY ou OPENROUTER_API_KEY)`);
+        }
+      } else {
+        const apiKey = provider === 'openai' ? process.env.OPENAI_API_KEY :
+                       provider === 'groq' ? process.env.GROQ_API_KEY :
+                       process.env.OPENROUTER_API_KEY;
+
+        if (!apiKey) throw new Error(`API KEY faltando para o provedor ${provider}`);
+
+        if (provider === 'groq') {
+          console.log(`[Groq Adapter] Successfully configured model ${model} using GROQ_API_KEY`);
+        }
+
+        const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+                    provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' :
+                    'https://openrouter.ai/api/v1/chat/completions';
+
+        const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
+        const extraHeaders = provider === 'openrouter' 
+          ? { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' } 
+          : {};
+
+        text = await callOpenAiCompatible(
+          url, 
+          apiKey, 
+          model, 
+          messages, 
+          options.temperature || 0.7, 
+          options.maxOutputTokens || 1024, 
+          extraHeaders,
+          options.timeoutMs || 15000
+        );
       }
-
-      const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-                  provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' :
-                  'https://openrouter.ai/api/v1/chat/completions';
-
-      const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
-      text = await callOpenAiCompatible(url, apiKey, model, messages, options.temperature || 0.7, options.maxOutputTokens || 1024, provider === 'openrouter' ? { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' } : {});
     } else {
       throw new Error(`Provedor ${provider} não suportado diretamente pelo adapter.`);
     }
@@ -208,6 +343,7 @@ export async function callProviderAdapter(
 
     return {
       text: sanitized,
+      thought: thought || undefined,
       provider,
       modelUsed: model,
       isAlternative: provider !== 'gemini',
@@ -228,6 +364,10 @@ export async function callProviderAdapter(
       msg.toLowerCase().includes('invalid_api_key') || 
       msg.toLowerCase().includes('api_key_invalid') || 
       msg.toLowerCase().includes('api key not valid') || 
+      msg.includes('403') ||
+      msg.toLowerCase().includes('permission-denied') ||
+      msg.toLowerCase().includes('credits') ||
+      msg.toLowerCase().includes('license') ||
       msg.includes('402') || 
       msg.includes('401') ||
       msg.includes('400') || // Bad Request/Invalid Key in some APIs
@@ -236,9 +376,15 @@ export async function callProviderAdapter(
     const isModelNotFound = msg.includes('404') || msg.toLowerCase().includes('model_not_found') || msg.toLowerCase().includes('no endpoints found');
     const isTimeout = msg.includes('timeout') || msg.includes('aborted');
 
-    recordCircuitFailure(key, is429 || isModelNotFound);
+    recordCircuitFailure(key, is429 || isModelNotFound, isPermanentAuthOrBillingError);
     if (isPermanentAuthOrBillingError) {
       setProviderQuotaExhausted(provider, msg);
+      if (msg.toLowerCase().includes('openrouter') || msg.toLowerCase().includes('openrouter_credits')) {
+        setProviderQuotaExhausted('openrouter', msg);
+      }
+      if (msg.toLowerCase().includes('x.ai') || msg.toLowerCase().includes('console.x.ai')) {
+        setProviderQuotaExhausted('xai', msg);
+      }
     }
     recordMetricEvent(key, false, latencyMs, is429, isTimeout, 0, false, false, msg);
     incrementAiStat('errorsToday', 1);
@@ -293,10 +439,11 @@ async function callOpenAiCompatible(
   messages: any[],
   temperature: number,
   max_tokens: number,
-  extraHeaders: Record<string, string> = {}
+  extraHeaders: Record<string, string> = {},
+  timeoutMs = 15000
 ) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   const res = await fetch(url, {
     method: 'POST',

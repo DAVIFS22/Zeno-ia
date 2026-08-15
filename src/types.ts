@@ -7,7 +7,7 @@ export type FileAttachment = {
   content?: string;
 };
 
-export type ModelType = 'zeno' | 'think' | 'search' | 'vision' | 'smart' | 'fast' | 'mega' | 'image' | 'code' | 'strategy' | 'summary' | 'pdf';
+export type ModelType = 'zeno' | 'think' | 'search' | 'vision' | 'smart' | 'fast' | 'mega' | 'image' | 'code' | 'strategy' | 'summary' | 'pdf' | 'grok' | 'grok-4.6';
 
 export type SearchSource = {
   title: string;
@@ -22,6 +22,7 @@ export type Message = {
   id: string;
   role: 'user' | 'model';
   text: string;
+  thought?: string;
   timestamp?: number;
   modelSpeed?: ModelType;
   attachments?: FileAttachment[];
@@ -183,6 +184,8 @@ export type DailyUsage = {
   voiceTranscriptionsCount?: number;
 };
 
+export type VoicePersonality = 'formal' | 'friendly' | 'enthusiastic' | 'calm' | 'concise';
+
 export type UserSettings = {
   // Conta & Assinatura
   userName: string;
@@ -199,6 +202,8 @@ export type UserSettings = {
   showHomeSuggestions?: boolean;
   logoVariant: 'monochrome' | 'gradient';
   fontSize: 'normal' | 'large' | 'compact';
+  autoScrollToBottom?: boolean;
+  intelligentAutoScroll?: boolean;
   // IA & Aprendizado Adaptativo
   defaultSpeed: ModelType;
   temperature: number;
@@ -207,6 +212,7 @@ export type UserSettings = {
   // Voz
   autoRead: boolean;
   voiceSpeed: number;
+  voicePersonality?: VoicePersonality;
   speechLanguage: string;
   // Memória
   customInstructions: string;

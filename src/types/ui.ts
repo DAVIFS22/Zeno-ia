@@ -1,6 +1,7 @@
 export type ModalId = 
   | 'settings'
   | 'imageStudio'
+  | 'imageAnalysis'
   | 'imageLibrary'
   | 'musicStudio'
   | 'projects'

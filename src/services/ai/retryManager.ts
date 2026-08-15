@@ -36,8 +36,10 @@ export async function executeWithRetry<T>(
 function isRecoverableError(err: any): boolean {
   const msg = (err?.message || String(err)).toLowerCase();
   
-  // Permanent errors that should NOT be retried
+  // Permanent errors or rate limits that should NOT be retried (jump to next provider immediately)
   if (
+    msg.includes('429') ||
+    msg.includes('rate limit') ||
     msg.includes('401') ||
     msg.includes('403') ||
     msg.includes('unauthorized') ||
@@ -58,10 +60,8 @@ function isRecoverableError(err: any): boolean {
     return false;
   }
 
-  // Recoverable errors
+  // Recoverable errors (Network/Timeout/5xx)
   return (
-    msg.includes('429') ||
-    msg.includes('rate limit') ||
     msg.includes('500') ||
     msg.includes('502') ||
     msg.includes('503') ||

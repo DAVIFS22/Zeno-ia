@@ -18,6 +18,7 @@ import { AdaptiveLearningModal } from './AdaptiveLearningModal';
 import { PythonLearningModule } from './PythonLearningModule';
 import { GamificationModal } from './GamificationModal';
 import { VersionNewsModal } from './VersionNewsModal';
+import { ImageAnalysisModal } from './ImageAnalysisModal';
 import { AdaptiveLearningProfile } from '../types';
 
 interface AppModalsProps {
@@ -81,6 +82,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const editProfileModal = useModal('editProfile');
   const adaptiveModal = useModal('adaptive');
   const imageStudioModal = useModal('imageStudio');
+  const imageAnalysisModal = useModal('imageAnalysis');
   const imageLibraryModal = useModal('imageLibrary');
   const projectsModal = useModal('projects');
   const pluginsModal = useModal('plugins');
@@ -512,6 +514,21 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           isOpen={versionNewsModal.isOpen}
           onClose={versionNewsModal.close}
           isDark={theme === 'dark'}
+        />
+      )}
+
+      {/* Image Analysis Modal (Receipts, Menus, Charts, OCR) */}
+      {imageAnalysisModal.isOpen && (
+        <ImageAnalysisModal
+          isOpen={imageAnalysisModal.isOpen}
+          onClose={imageAnalysisModal.close}
+          isDark={theme === 'dark'}
+          onSubmitToChat={(text, attachment) => {
+            if (onSubmitPrompt) {
+              onSubmitPrompt(undefined, text);
+            }
+          }}
+          geminiApiKey={userSettings.geminiApiKey}
         />
       )}
     </>

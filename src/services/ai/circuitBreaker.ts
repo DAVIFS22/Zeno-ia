@@ -1,4 +1,4 @@
-import { CircuitState } from './types.js';
+import { CircuitState } from './types';
 
 interface CircuitRecord {
   state: CircuitState;
@@ -62,7 +62,7 @@ export function recordCircuitSuccess(key: string) {
   }
 }
 
-export function recordCircuitFailure(key: string, isRateLimit = false) {
+export function recordCircuitFailure(key: string, isRateLimit = false, isPermanentError = false) {
   let record = circuits[key];
   if (!record) {
     record = {
@@ -75,20 +75,21 @@ export function recordCircuitFailure(key: string, isRateLimit = false) {
     circuits[key] = record;
   }
 
-  record.failures += 1;
+  record.failures += isPermanentError ? FAILURE_THRESHOLD : 1;
 
-  // Trip open if HALF_OPEN, or if failures >= threshold, or if 2+ consecutive rate limits
+  // Trip open immediately if permanent error, or HALF_OPEN, or if failures >= threshold, or if 2+ consecutive rate limits
   const rateLimitThreshold = 2;
-  const shouldTrip = record.state === 'HALF_OPEN' || 
+  const shouldTrip = isPermanentError ||
+                    record.state === 'HALF_OPEN' || 
                     record.failures >= FAILURE_THRESHOLD || 
                     (isRateLimit && record.failures >= rateLimitThreshold);
 
   if (shouldTrip) {
     record.state = 'OPEN';
-    const duration = isRateLimit ? RATE_LIMIT_COOLDOWN_MS : COOLDOWN_PERIOD_MS;
+    const duration = isPermanentError ? 15 * 60 * 1000 : (isRateLimit ? RATE_LIMIT_COOLDOWN_MS : COOLDOWN_PERIOD_MS);
     record.cooldownUntil = Date.now() + duration;
     record.lastStateChange = Date.now();
-    console.warn(`[CIRCUIT BREAKER] ${key} disparado -> OPEN (Cooldown: ${duration / 1000}s, Motivo: ${isRateLimit ? 'Rate Limit 429' : 'Múltiplas falhas'})`);
+    console.warn(`[CIRCUIT BREAKER] ${key} disparado -> OPEN (Cooldown: ${duration / 1000}s, Motivo: ${isPermanentError ? 'Erro permanente / Sem créditos' : (isRateLimit ? 'Rate Limit 429' : 'Múltiplas falhas')})`);
   }
 }
 

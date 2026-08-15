@@ -28,6 +28,7 @@ export function useChat(
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [isThinkingMode, setIsThinkingMode] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent, overrideText?: string, extraContext?: string) => {
@@ -35,11 +36,14 @@ export function useChat(
 
     let textToSend = overrideText !== undefined ? overrideText : input;
     
+    const hasImageAttachment = attachments.some(
+      a => a.type === 'image' || (a.url && a.url.startsWith('data:image/')) || !!a.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)
+    );
+
     // Auto-inject default prompt if attachments exist but text is empty
     if (textToSend.trim() === '' && attachments.length > 0) {
-      const firstAttachment = attachments[0];
-      if (firstAttachment.type === 'image') {
-        textToSend = "Descreva esta imagem.";
+      if (hasImageAttachment) {
+        textToSend = "Analise esta imagem em detalhes. Descreva o que você vê e extraia quaisquer textos, recibos, cardápios ou gráficos presentes com alta precisão.";
       } else {
         textToSend = "Analise este arquivo.";
       }
@@ -52,6 +56,8 @@ export function useChat(
 
     if (intent === 'image') {
       finalSpeed = 'image';
+    } else if (hasImageAttachment) {
+      finalSpeed = 'vision';
     }
 
     if (isModelPro(finalSpeed) && !isPro) {
@@ -202,6 +208,7 @@ export function useChat(
         plan: isPro ? 'ZENO Pro' : userSettings.plan,
         geminiApiKey: userSettings.geminiApiKey,
         adaptiveProfile: adaptiveProfile || userSettings.adaptiveProfile,
+        isThinkingMode,
         history: sessions.find(s => s.id === sessionId)?.messages.slice(-10).map(m => ({ role: m.role, text: m.text })) || [],
       };
 
@@ -339,6 +346,7 @@ export function useChat(
                           m.id === initialModelMessage.id ? {
                             ...m,
                             text: accumulatedText,
+                            thought: data.thought ?? m.thought,
                             isSearching: data.isSearching ?? m.isSearching,
                             searchSources: data.sources ? filterValidSources(data.sources) : m.searchSources,
                             isToolCalling: data.toolCall ? true : false,
@@ -384,6 +392,10 @@ export function useChat(
         errorMessage = "Falha na conexão com o servidor. Verifique sua conexão com a internet e tente novamente em instantes.";
       } else if (errorMessage.includes("Mensagem é obrigatória") || errorMessage.includes("message is required")) {
         errorMessage = "Por favor, digite uma mensagem ou inclua um anexo para enviar.";
+      } else if (errorMessage.includes("PROVIDER_NOT_CONFIGURED") || errorMessage.includes("chave inválida")) {
+        errorMessage = "Configuração de IA necessária. Por favor, verifique se as chaves da API de IA foram configuradas corretamente nas configurações do app.";
+      } else if (errorMessage.includes("rate limit") || errorMessage.includes("quota")) {
+        errorMessage = "Nossos limites de uso de IA foram atingidos momentaneamente. Por favor, tente novamente em alguns instantes.";
       }
 
       setSessions(prev =>
@@ -417,6 +429,8 @@ export function useChat(
     setInput,
     attachments,
     setAttachments,
+    isThinkingMode,
+    setIsThinkingMode,
     isLoading,
     handleSubmit,
     abortChat: () => {

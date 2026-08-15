@@ -1,13 +1,22 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// DIAGNÓSTICO DE ERROS GLOBAIS
+process.on('uncaughtException', (err) => {
+  console.error('❌ [SERVER FATAL] Uncaught Exception:', err.message);
+  console.error(err.stack);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ [SERVER FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 import express from "express";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { uploadImageWithFallback } from "./src/server/storage/imageUploadManager";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import Stripe from "stripe";
 import { getProviderQuota } from './src/services/ai/quotaManager';
 import { SubscriptionService } from "./src/lib/subscriptionService";
@@ -51,24 +60,8 @@ import { resetAllQuotas } from './src/services/ai/quotaManager';
 
 // Startup Firestore connection test removed to avoid listCollections dependency
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || 'dummy_key',
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
-function getAiClient(userKey?: string) {
-  if (userKey && userKey.trim().length > 10) {
-    return new GoogleGenAI({ apiKey: userKey.trim() });
-  }
-  return ai;
-}
-
 // Start provider health check loop in background
-startHealthCheckLoop(ai);
+startHealthCheckLoop();
 
 if (!process.env.GEMINI_API_KEY) {
   console.warn('[WARNING] GEMINI_API_KEY não encontrada. Algumas funcionalidades podem não funcionar corretamente.');
@@ -86,10 +79,12 @@ async function getAvailableModels() {
   }
 
   try {
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'dummy_key') {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'dummy_key') {
       console.warn('[MODELS] Skipping model list: No valid API key configured.');
       return [];
     }
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.list();
     const models = [];
     // Pager is an async iterator
@@ -111,7 +106,10 @@ async function getAvailableModels() {
 }
 
 async function smartSelectModel(taskType: string, isPro: boolean = false) {
-  return 'gemini-1.5-flash';
+  if (taskType === 'think' || taskType === 'code' || taskType === 'vision' || isPro) {
+    return 'gemini-3.1-pro-preview';
+  }
+  return 'gemini-3.7-flash';
 }
 
 import { supportTools } from "./src/lib/supportTools";
@@ -186,7 +184,7 @@ async function startServer() {
           speedMode: speedMode || 'quality'
         },
         userGeminiApiKey: process.env.GEMINI_API_KEY
-      }, ai);
+      });
 
       if (result.imageUrl) {
         try {
@@ -332,7 +330,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 });
 
   app.get("/api/admin/debug/health", (req, res) => {
-    const providers = ['gemini', 'openai', 'groq', 'openrouter'];
+    const providers = ['gemini', 'openai', 'groq', 'xai', 'openrouter'];
     const summary = getAllProviderMetricsSummary();
     const data = providers.map(p => ({
       provider: p,
@@ -352,6 +350,40 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     }
   });
 
+  app.post("/api/analyze-image", upload.single("image"), async (req: any, res: any) => {
+    try {
+      const file = req.file;
+      const prompt = req.body.prompt || "Analise esta imagem.";
+      const geminiApiKey = req.body.geminiApiKey;
+
+      if (!file) return res.status(400).json({ error: "Nenhuma imagem fornecida." });
+
+      const aiResult = await generateTextWithFallback({
+        contents: [
+          { 
+            role: "user", 
+            parts: [
+              { 
+                inlineData: { 
+                  mimeType: file.mimetype, 
+                  data: file.buffer.toString("base64") 
+                } 
+              }, 
+              { text: prompt }
+            ] 
+          }
+        ],
+        category: 'vision',
+        userGeminiApiKey: geminiApiKey,
+      });
+
+      res.json({ analysis: aiResult.text });
+    } catch (err: any) {
+      console.error("[ANALYZE IMAGE ERROR]:", err);
+      res.status(500).json({ error: err.message || "Erro na análise da imagem." });
+    }
+  });
+
   // API Routes
   app.post("/api/generate-music", async (req, res) => {
     try {
@@ -359,7 +391,6 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
       if (!prompt) return res.status(400).json({ error: "Tema da música é obrigatório." });
 
       const modelName = mode === 'clip' ? 'lyria-3-clip-preview' : 'lyria-3-pro-preview';
-      const effectiveAi = getAiClient(geminiApiKey);
       const apiKey = geminiApiKey && geminiApiKey.trim().length > 10 ? geminiApiKey.trim() : process.env.GEMINI_API_KEY;
 
       if (!apiKey) {
@@ -387,12 +418,14 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         // Fallback to Gemini Flash for lyrics & chords if Lyria quota exceeded (429) or error
         try {
           const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre}, tom ${keySig}, andamento ${tempo}, com base no tema: "${prompt}". VÁ DIRETO para a composição (com título, versos, refrão e acordes). NÃO inclua nenhuma saudação, introdução ou explicação como "Aqui está..." ou "Esta é uma composição...". NÃO use linhas com "---".`;
-          const fallbackResponse = await effectiveAi.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: fallbackPrompt,
+          
+          const aiResult = await generateTextWithFallback({
+            contents: [{ role: "user", parts: [{ text: fallbackPrompt }] }],
+            category: 'general',
+            userGeminiApiKey: geminiApiKey,
           });
 
-          const fallbackLyrics = fallbackResponse.text || `(Verso 1)\n${prompt}\n\n(Refrão)\nMelodia composta para ${genre}\nTom: ${keySig} • ${tempo}`;
+          const fallbackLyrics = aiResult.text || `(Verso 1)\n${prompt}\n\n(Refrão)\nMelodia composta para ${genre}\nTom: ${keySig} • ${tempo}`;
 
           return res.json({
             title: prompt.slice(0, 40) + (prompt.length > 40 ? '...' : ''),
@@ -473,11 +506,12 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
       console.error("[GENERATE MUSIC EXCEPTION]:", err);
       try {
         const { prompt, genre, keySig, tempo, geminiApiKey } = req.body;
-        const effectiveAi = getAiClient(geminiApiKey);
         const fallbackPrompt = `Escreva apenas a letra e os acordes de uma música no gênero ${genre || 'Pop'}, tom ${keySig || 'C Major'}, andamento ${tempo || '110 BPM'}, com base no tema: "${prompt || 'Inovação'}". VÁ DIRETO para a composição. NÃO inclua saudações, introduções ou explicações. NÃO use linhas com "---".`;
-        const fallbackResponse = await effectiveAi.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: fallbackPrompt,
+        
+        const aiResult = await generateTextWithFallback({
+          contents: [{ role: "user", parts: [{ text: fallbackPrompt }] }],
+          category: 'general',
+          userGeminiApiKey: geminiApiKey,
         });
 
         return res.json({
@@ -485,7 +519,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
           genre: genre || 'Pop',
           key: keySig || 'C Major',
           tempo: tempo || '110 BPM',
-          lyrics: fallbackResponse.text,
+          lyrics: aiResult.text,
           chordsSummary: `${keySig || 'C Major'} - Standard`,
           notice: "Não foi possível gerar o áudio agora (limite de uso atingido). Sua letra foi criada normalmente.",
           audioData: null,
@@ -559,6 +593,195 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
       res.json(models);
     } catch (err) {
       res.status(500).json({ error: "Erro ao listar modelos." });
+    }
+  });
+
+  const imageAnalysisUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
+
+  app.post("/api/analyze-image", imageAnalysisUpload.single('image'), async (req: any, res: any) => {
+    try {
+      let imageBuffer: Buffer | null = null;
+      let mimeType: string = "image/jpeg";
+
+      if (req.file) {
+        imageBuffer = req.file.buffer;
+        mimeType = req.file.mimetype || "image/jpeg";
+      } else if (req.body?.image) {
+        const rawImage = req.body.image;
+        if (typeof rawImage === 'string' && rawImage.startsWith('data:')) {
+          const match = rawImage.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = match[1];
+            imageBuffer = Buffer.from(match[2], 'base64');
+          } else {
+            const parts = rawImage.split(',');
+            imageBuffer = Buffer.from(parts[1] || parts[0], 'base64');
+          }
+        } else if (typeof rawImage === 'string') {
+          imageBuffer = Buffer.from(rawImage, 'base64');
+        }
+      } else if (req.body?.imageBase64) {
+        imageBuffer = Buffer.from(req.body.imageBase64, 'base64');
+        mimeType = req.body.mimeType || "image/jpeg";
+      }
+
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return res.status(400).json({ error: "Nenhuma imagem válida foi enviada para análise." });
+      }
+
+      const mode: 'receipt' | 'menu' | 'chart' | 'ocr' | 'general' | 'custom' = req.body.mode || 'general';
+      const userPrompt = req.body.prompt || '';
+      const targetLanguage = req.body.targetLanguage || 'pt-BR';
+      const geminiApiKey = req.body.geminiApiKey;
+
+      let systemPrompt = "";
+      let taskPrompt = "";
+
+      if (mode === 'receipt') {
+        systemPrompt = `Você é o ZENO Vision Specialist em extração e auditoria de documentos fiscais, recibos, cupons e faturas.
+Sua missão é extrair com precisão cirúrgica todas as informações visíveis na imagem.
+
+ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
+### 🧾 Dados do Estabelecimento
+- **Nome / Razão Social:**
+- **CNPJ / Identificação:** (se visível)
+- **Endereço / Local:** (se visível)
+- **Data e Horário:**
+
+### 🛒 Itens e Serviços
+Crie uma tabela Markdown completa:
+| # | Item / Descrição | Qtd | Preço Unit. | Total |
+|---|---|---|---|---|
+
+### 💰 Resumo Financeiro
+- **Subtotal:**
+- **Descontos Aplicados:**
+- **Taxas / Impostos / Gorjeta:**
+- **TOTAL GERAL:** (Destaque em negrito com moeda original)
+- **Forma de Pagamento:** (Cartão de Crédito/Débito, Dinheiro, Pix, etc.)
+
+### 📌 Informações Adicionais & Auditoria
+- Número da Nota/Cupom, Código de Autorização, Troco, Observações relevantes.`;
+
+        taskPrompt = userPrompt 
+          ? `Analise este recibo/fatura e responda também à seguinte solicitação: "${userPrompt}". Siga a estrutura de extração de dados completa.`
+          : `Extraia detalhadamente todos os dados deste recibo, discriminando itens, valores unitários, impostos e total.`;
+
+      } else if (mode === 'menu') {
+        systemPrompt = `Você é o ZENO Gastronomy & Vision Expert, especialista em análise, tradução e consultoria de cardápios e menus internacionais.
+Sua missão é decifrar o cardápio, categorizar cada prato, traduzir com riqueza de detalhes para o idioma ${targetLanguage} e alertar sobre restrições alimentares.
+
+ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
+### 🍽️ Cardápio: [Nome do Estabelecimento / Culinária]
+
+Para cada categoria identificada (ex: Entradas / Appetizers, Pratos Principais / Mains, Sobremesas / Desserts, Bebidas / Drinks):
+#### [Nome da Categoria]
+- **[Nome Traduzido]** *(Nome Original)* — **[Preço]**
+  - **Descrição:** Descrição detalhada dos ingredientes e modo de preparo.
+  - **Alertas / Selos:** 🌱 Vegetariano | 🌿 Vegano | 🌾 Sem Glúten | ⚠️ Contém Lactose/Nozes/Frutos do Mar (se aplicável).
+
+### 🌟 Destaques & Recomendações do Chef
+Apresente as 2 a 3 melhores sugestões de pratos com base na imagem, explicando o porquê.`;
+
+        taskPrompt = userPrompt
+          ? `Analise e traduza este cardápio para ${targetLanguage}. Atenda também: "${userPrompt}".`
+          : `Traduza e estruture este cardápio para ${targetLanguage}, detalhando pratos, ingredientes, preços e alertas dietéticos.`;
+
+      } else if (mode === 'chart') {
+        systemPrompt = `Você é o ZENO Data Scientist & Senior Business Analyst, especialista em interpretação de gráficos, tabelas e infográficos.
+Sua missão é extrair dados quantitativos com exatidão e gerar insights acionáveis.
+
+ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
+### 📊 Visão Geral do Gráfico
+- **Tipo de Visualização:** (ex: Gráfico de Linhas, Barras, Pizza, Dispersão, Heatmap)
+- **Título / Tema Central:**
+- **Eixos e Unidades:** Eixo X (Horizontal) e Eixo Y (Vertical), Unidade de Medida, Intervalo de Tempo e Legendas.
+
+### 🔢 Dados Quantitativos Extraídos
+Tabela ou lista estruturada com os valores numéricos mais importantes identificados na imagem:
+| Categoria / Período | Métrica / Valor | Variação / % |
+|---|---|---|
+
+### 📈 Tendências, Padrões e Anomalias
+- **Tendência Principal:** (ex: Crescimento contínuo de X%, Queda no período Y)
+- **Pontos Extremos:** Ponto mais alto (pico) e ponto mais baixo (vale).
+- **Correlações ou Desvios:** Padrões sazonais ou anomalias notáveis.
+
+### 💡 Conclusões & Insights Estratégicos
+Forneça de 3 a 5 conclusões e recomendações práticas baseadas nos dados analisados.`;
+
+        taskPrompt = userPrompt
+          ? `Analise este gráfico em detalhes. Atenda também: "${userPrompt}".`
+          : `Extraia todas as métricas, eixos, tendências e conclusões estratégicas deste gráfico.`;
+
+      } else if (mode === 'ocr') {
+        systemPrompt = `Você é o ZENO OCR Specialist. Sua tarefa é transcrever todo o texto visível na imagem com exatidão absoluta e fornecer um resumo executivo.
+
+ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
+### 📝 Transcrição Literal do Texto
+\`\`\`text
+[Texto transcrito na íntegra preservando quebras de linha e estrutura]
+\`\`\`
+
+### 📌 Resumo Executivo & Tópicos Principais
+- Resumo claro em tópicos dos pontos essenciais do documento.`;
+
+        taskPrompt = userPrompt
+          ? `Transcreva o texto deste documento e responda: "${userPrompt}".`
+          : `Transcreva todo o texto contido nesta imagem com precisão e resuma seus pontos principais.`;
+
+      } else {
+        systemPrompt = `Você é o ZENO Vision AI, um assistente multimodal de última geração.
+Analise a imagem com alta acuidade visual, descrevendo detalhes, respondendo perguntas com precisão e formatando a resposta com Markdown elegante.`;
+
+        taskPrompt = userPrompt || `Analise esta imagem detalhadamente, descrevendo seus elementos principais, contexto e informações relevantes.`;
+      }
+
+      const base64Str = imageBuffer.toString('base64');
+      const aiResult = await generateTextWithFallback({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  data: base64Str,
+                  mimeType: mimeType
+                }
+              },
+              { text: taskPrompt }
+            ]
+          }
+        ],
+        systemInstruction: systemPrompt,
+        category: 'vision',
+        userGeminiApiKey: geminiApiKey,
+        temperature: 0.2,
+        maxOutputTokens: 2500
+      });
+
+      const analysisText = aiResult.text;
+      const modelUsed = aiResult.modelUsed;
+
+      if (!analysisText) {
+        throw new Error("Não foi possível analisar a imagem.");
+      }
+
+      const lines = analysisText.split('\n').map(l => l.trim()).filter(l => l.length > 10 && !l.startsWith('#') && !l.startsWith('|'));
+      const extractedSummary = lines[0] || "Análise visual concluída com sucesso.";
+
+      return res.json({
+        analysis: analysisText,
+        extractedSummary,
+        mode,
+        modelUsed,
+        provider: 'gemini',
+        timestamp: Date.now()
+      });
+
+    } catch (err: any) {
+      console.error("[ANALYZE IMAGE ERROR]:", err);
+      return res.status(500).json({ error: err?.message || "Erro ao processar e analisar a imagem." });
     }
   });
 
@@ -648,7 +871,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     let currentIsSearch = false;
 
     try {
-      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile, geminiApiKey } = req.body;
+      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile, geminiApiKey, isThinkingMode } = req.body;
       if (userId) currentUserId = userId;
       
       if (!message || typeof message !== 'string') {
@@ -682,19 +905,26 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         'hoje', 'ontem', '2024', '2025'
       ];
       const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-      const hasImages = hasAttachments && attachments.some(a => (a.mimeType || a.type || '').includes('image'));
+      const hasImages = hasAttachments && attachments.some(a => 
+        (a.mimeType || a.type || '').includes('image') || 
+        (a.url && a.url.startsWith('data:image/')) || 
+        !!a.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)
+      );
       console.log(`[DEBUG] hasAttachments: ${hasAttachments}, hasImages: ${hasImages}, msg: ${msgLower}`);
 
       let isSearchIntent = (normSpeed === 'search' || searchTriggers.some(t => msgLower.includes(t))) && !hasImages;
       console.log(`[DEBUG] isSearchIntent: ${isSearchIntent}`);
       currentIsSearch = isSearchIntent;
 
-      if (isSearchIntent) {
+      if (hasImages) {
+        taskType = 'vision';
+        normSpeed = 'vision';
+        apiModelName = await smartSelectModel('vision', isPro);
+      } else if (isSearchIntent) {
         taskType = 'search';
         normSpeed = 'search';
-      }
-
-      if (isSmartMode !== false && !isSearchIntent) { // Default to smart mode
+        apiModelName = await smartSelectModel('search', isPro);
+      } else if (isSmartMode !== false) { // Default to smart mode
         taskType = 'general';
         const msgLower = message.toLowerCase();
         
@@ -707,7 +937,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
           else if (mime.includes('video')) taskType = 'general';
         } else if (msgLower.includes('código') || msgLower.includes('programação') || msgLower.includes('react') || msgLower.includes('typescript')) {
           taskType = 'code';
-        } else if (msgLower.includes('pense') || msgLower.includes('raciocínio') || msgLower.includes('matemática')) {
+        } else if (msgLower.includes('pense') || msgLower.includes('raciocínio') || msgLower.includes('matemática') || isThinkingMode) {
           taskType = 'think';
         } else if (msgLower.includes('pesquise') || msgLower.includes('busca') || msgLower.includes('notícias')) {
           taskType = 'search';
@@ -720,15 +950,11 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         else if (taskType === 'search') normSpeed = 'search';
         else if (taskType === 'vision' || taskType === 'image') normSpeed = 'vision';
         else normSpeed = 'zeno';
-      } else if (isSearchIntent) {
-        taskType = 'search';
-        normSpeed = 'search';
-        apiModelName = await smartSelectModel('search', isPro);
       } else {
         const modelCfg = getModelConfig(normSpeed);
         apiModelName = modelCfg.apiModel;
         // Map speed to category
-        if (normSpeed === 'think' || normSpeed === 'mega') taskType = 'think';
+        if (normSpeed === 'think' || normSpeed === 'mega' || normSpeed === 'grok' || normSpeed === 'grok-4.6') taskType = 'think';
         else if (normSpeed === 'code') taskType = 'code';
         else if (normSpeed === 'search') taskType = 'search';
         else if (normSpeed === 'fast') taskType = 'speed';
@@ -747,7 +973,15 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
 
       let modelSystemPrompt = `${systemInstruction}\n\n[Diretrizes do Modelo ${modelCfg.name}]: ${modelCfg.systemPrompt}`;
 
-      if (isSearchIntent) {
+      if (hasImages) {
+        modelSystemPrompt += `\n\n[DIRETRIZES DE VISÃO COMPUTACIONAL & ANÁLISE MULTIMODAL AVANÇADA]:
+Você possui capacidade avançada de visão computacional e OCR para analisar e extrair dados das imagens enviadas.
+- **Recibos, Cupons Fiscais e Faturas**: Extraia com exatidão o nome do estabelecimento/empresa, data e hora, lista de itens com quantidades e preços unitários formatados em uma tabela Markdown limpa, subtotal, impostos/taxas/gorjeta, descontos e o VALOR TOTAL em negrito destacado.
+- **Cardápios e Menus de Restaurantes**: Identifique as seções/categorias, nomes dos pratos, preços, ingredientes principais, traduza para o idioma de resposta quando relevante e alerte sobre potenciais alérgenos (glúten, lactose, nozes, frutos do mar).
+- **Gráficos e Infográficos**: Identifique o tipo de gráfico (barras, linhas, pizza, dispersão), leia com exatidão os rótulos e valores dos eixos X e Y, legendas, variações percentuais e forneça insights e conclusões analíticas claras.
+- **OCR e Documentos / Prints de Código**: Transcreva o texto ou código visível fielmente preservando formatação, indentação e estrutura lógica.
+- **Análise Geral de Imagens**: Descreva minuciosamente os elementos visuais, paleta de cores, composição espacial, objetos, pessoas e significado conceitual.`;
+      } else if (isSearchIntent) {
         modelSystemPrompt += `\n\n[REGRA DE PESQUISA NA WEB OBRIGATÓRIA]: Você possui acesso em tempo real à internet através da ferramenta de pesquisa Google Search. SEMPRE utilize os resultados da pesquisa para responder com precisão e dados atualizados. NUNCA responda que não possui acesso à internet ou que não pode acessar a internet em tempo real. NUNCA gere imagens automaticamente durante pesquisas. NUNCA utilize serviços de geração de imagens como fonte ou referência. IMPORTANTE: NUNCA crie uma seção 'Fontes:', 'Referências:' nem liste domínios, URLs ou links soltos ao final da sua resposta. A interface do usuário já exibirá automaticamente os sites utilizados em um componente visual separado. Apenas forneça a resposta de forma direta e atualizada.`;
       } else {
         modelSystemPrompt += `\n\n[REGRA DE MÍDIA E IMAGENS]: Quando o usuário solicitar a geração de uma imagem (ex: "gere uma imagem de...", "desenhe...", "crie uma foto"), o sistema detecta a intenção e gera a imagem automaticamente na conversa.`;
@@ -982,8 +1216,10 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         isSearchIntent,
         hasImages,
         category: taskType as any,
-        userGeminiApiKey: geminiApiKey
-      }, ai);
+        userGeminiApiKey: geminiApiKey,
+        isThinkingMode,
+        userRequestedModel: apiModelName
+      });
 
       if (aiResult.functionCalls && aiResult.functionCalls.length > 0) {
         const call = aiResult.functionCalls[0];
@@ -1129,7 +1365,7 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         await new Promise(r => setTimeout(r, 300));
       }
 
-      res.write(`data: ${JSON.stringify({ text: fullResponseText, isSearch: isSearchIntent, sources: searchSources, isSearching: false, groundingMetadata: aiResult.groundingMetadata })}\n\n`);
+      res.write(`data: ${JSON.stringify({ text: fullResponseText, thought: aiResult.thought, isSearch: isSearchIntent, sources: searchSources, isSearching: false, groundingMetadata: aiResult.groundingMetadata })}\n\n`);
 
       res.write("data: [DONE]\n\n");
       res.end();
@@ -1227,15 +1463,13 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
         basePrompt += `\n\nComo não há contexto, faça sugestões gerais úteis, como 'Escrever um e-mail', 'Resumir um texto longo', 'Criar uma imagem criativa', etc.`;
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+      const aiResult = await generateTextWithFallback({
         contents: [{ role: "user", parts: [{ text: basePrompt }] }],
-        config: {
-          temperature: 0.7,
-        }
+        category: 'speed',
+        temperature: 0.7,
       });
       
-      const responseText = response.text || "[]";
+      const responseText = aiResult.text || "[]";
       let suggestions = [];
       try {
         const cleanJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -3484,7 +3718,7 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
         temperature: 0.2,
         tools: tools,
         category: 'speed'
-      }, ai);
+      });
       
       functionCalls = aiResult.functionCalls || [];
       // If the model called a tool, we often want to prioritize the tool call and ignore the "thought" text
@@ -3603,22 +3837,12 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log("[STARTUP] Checking API Keys Presence:");
-    console.log(`- GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Present (' + process.env.GEMINI_API_KEY.length + ' chars)' : 'MISSING'}`);
-    console.log(`- OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'Present' : 'MISSING'}`);
-    console.log(`- GROQ_API_KEY: ${process.env.GROQ_API_KEY ? 'Present' : 'MISSING'}`);
-    console.log(`- OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Present' : 'MISSING'}`);
-    
-    // Quick test for Gemini key validity if present
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'dummy_key') {
-      getAvailableModels().then(models => {
-        if (models.length > 0) {
-          console.log(`[STARTUP] Gemini API Key is VALID. Found ${models.length} models.`);
-        } else {
-          console.error(`[STARTUP] Gemini API Key appears INVALID or restricted. Could not list models.`);
-        }
-      });
-    }
+    // Startup logs for API key presence
+    console.log("[STARTUP] Checking AI Provider Keys:");
+    console.log(`- GEMINI: ${process.env.GEMINI_API_KEY ? 'Configured' : 'MISSING'}`);
+    console.log(`- GROQ: ${process.env.GROQ_API_KEY ? 'Configured' : 'MISSING'}`);
+    console.log(`- XAI: ${process.env.XAI_API_KEY ? 'Configured' : 'MISSING'}`);
+    console.log(`- OPENROUTER: ${process.env.OPENROUTER_API_KEY ? 'Configured' : 'MISSING'}`);
   });
 }
 

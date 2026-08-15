@@ -1,11 +1,11 @@
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import React, { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Copy, Check, Edit3, Volume2, VolumeX, ThumbsUp, ThumbsDown, RefreshCw, Sparkles, AlertCircle, ChevronUp, Layers,
   Globe, Share2, MoreHorizontal, ExternalLink, ChevronDown, Target, Terminal, BrainCircuit, Zap, Palette, Frown, Minimize2, Maximize2, AlertTriangle, HelpCircle, ShieldAlert,
-  FileText, FileCode, Image as ImageIcon
+  FileText, FileCode, Image as ImageIcon, Loader2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,6 +14,7 @@ import { SourcesBottomSheet } from './SourcesBottomSheet';
 import { SourcesCard, getUniqueSources } from './SourcesCard';
 import { ErrorBanner } from './ErrorBanner';
 import { Countdown } from './Countdown';
+import { ThinkingIndicator } from './ThinkingIndicator';
 import { YouTubeProcessor } from './YouTubeProcessor';
 import { useTranslation } from '../i18n';
 import { copyToClipboard } from '../utils/clipboard';
@@ -63,12 +64,12 @@ const MessageStatus = ({ status, theme, isLocked }: { status?: 'syncing' | 'sent
   const configMap = {
     syncing: { 
       icon: RefreshCw, 
-      text: isLocked ? 'Streaming' : 'Syncing', 
+      text: isLocked ? 'Gerando' : 'Sincronizando', 
       color: isLocked ? 'text-zeno' : 'text-neutral-500', 
       spin: true 
     },
-    sent: { icon: Check, text: 'Sent', color: 'text-zeno', spin: false },
-    error: { icon: AlertCircle, text: 'Error', color: 'text-rose-500', spin: false },
+    sent: { icon: Check, text: 'Enviado', color: 'text-zeno', spin: false },
+    error: { icon: AlertCircle, text: 'Erro', color: 'text-rose-500', spin: false },
   };
 
   const config = configMap[status];
@@ -147,6 +148,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showFeedbackMenu, setShowFeedbackMenu] = useState(false);
   const [sharedSuccess, setSharedSuccess] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -280,16 +282,23 @@ export const MessageItem = React.memo<MessageItemProps>(({
   );
 
   const handleShare = async () => {
+    setIsSharing(true);
     if (navigator.share) {
       try {
         await navigator.share({
           title: 'Resposta do ZENO AI',
           text: msg.text,
         });
+        setIsSharing(false);
+        setSharedSuccess(true);
+        setTimeout(() => setSharedSuccess(false), 2000);
         return;
-      } catch (e) {}
+      } catch (e) {
+        // user cancelled or share failed, fallback to copy
+      }
     }
     await copyToClipboard(msg.text);
+    setIsSharing(false);
     setSharedSuccess(true);
     setTimeout(() => setSharedSuccess(false), 2000);
   };
@@ -545,25 +554,48 @@ export const MessageItem = React.memo<MessageItemProps>(({
                    )}
                 </div>
               ) : (
-                <div className="markdown-body">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      ...markdownComponents,
-                      p: ({ children }) => <div className="mb-4 last:mb-0 leading-relaxed">{parseCitations(children)}</div>,
-                      li: ({ children }) => <li className="mb-2 last:mb-0 leading-relaxed">{parseCitations(children)}</li>,
-                      span: ({ children }) => <span>{parseCitations(children)}</span>,
-                      td: ({ children }) => <td className="p-2 border border-neutral-700/30">{parseCitations(children)}</td>
-                    }}
-                  >
-                    {msg.text}
-                  </ReactMarkdown>
+                <div className="space-y-3">
+                  {msg.thought && (
+                    <details className={`group p-3 rounded-xl border text-xs ${theme === 'dark' ? 'bg-[#1C1C1E]/60 border-[#2C2C2E] text-neutral-300' : 'bg-neutral-50 border-neutral-200 text-neutral-700'}`}>
+                      <summary className="flex items-center gap-2 cursor-pointer font-medium text-zeno select-none">
+                        <BrainCircuit className="w-4 h-4" />
+                        <span>Processo de Pensamento (Raciocínio Avançado)</span>
+                      </summary>
+                      <div className={`mt-2.5 pt-2.5 border-t whitespace-pre-wrap font-mono text-[11px] leading-relaxed ${theme === 'dark' ? 'border-[#2C2C2E] text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
+                        {msg.thought}
+                      </div>
+                    </details>
+                  )}
+                  <div className="markdown-body">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        ...markdownComponents,
+                        p: ({ children }) => <div className="mb-4 last:mb-0 leading-relaxed">{parseCitations(children)}</div>,
+                        li: ({ children }) => <li className="mb-2 last:mb-0 leading-relaxed">{parseCitations(children)}</li>,
+                        span: ({ children }) => <span>{parseCitations(children)}</span>,
+                        td: ({ children }) => <td className="p-2 border border-neutral-700/30">{parseCitations(children)}</td>
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                    {isLoadingLast && isLastMessage && msg.role === 'model' && (
+                      <motion.span
+                        animate={{ opacity: [1, 0.2, 1] }}
+                        transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+                        className="inline-block w-2 h-4 bg-zeno ml-1 rounded-sm align-middle shadow-[0_0_8px_rgba(0,132,223,0.7)]"
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Streaming Progress Bar */}
-              {isLoadingLast && msg.role === 'model' && msg.text && (
-                <StreamingProgress theme={theme} />
+              {isLoadingLast && msg.role === 'model' && (
+                <>
+                  <ThinkingIndicator theme={theme} isVisible={!msg.text} thoughtContent={msg.thought} />
+                  {msg.text && <StreamingProgress theme={theme} />}
+                </>
               )}
 
               {/* Discrete Source Citation Bar */}
@@ -580,18 +612,46 @@ export const MessageItem = React.memo<MessageItemProps>(({
           {/* Message Actions Footer */}
           {msg.role === 'model' && msg.text && !msg.hasError && (
             <div className="mt-3 flex flex-wrap items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => onCopy(msg.id, msg.text)}
                 className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                  isCopied ? 'bg-zeno/10 text-zeno' : (
+                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                  )
                 }`}
                 title="Copiar resposta"
               >
-                {isCopied ? <Check className="w-4 h-4 text-zeno" strokeWidth={1.5} /> : <Copy className="w-4 h-4" strokeWidth={1.5} />}
-              </button>
+                <AnimatePresence mode="wait" initial={false}>
+                  {isCopied ? (
+                    <motion.div
+                      key="check"
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      exit={{ scale: 0, rotate: 180 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                    >
+                      <Check className="w-4 h-4 text-zeno" strokeWidth={2} />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="copy"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <Copy className="w-4 h-4" strokeWidth={1.5} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
 
               <div className="relative">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.92 }}
                   ref={feedbackButtonRef}
                   onClick={handleToggleFeedbackMenu}
                   className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
@@ -602,11 +662,15 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   }`}
                   title="Avaliar resposta"
                 >
-                  <div className="flex items-center -space-x-1">
+                  <motion.div 
+                    className="flex items-center -space-x-1"
+                    animate={itemFeedback ? { scale: [1, 1.25, 1] } : { scale: 1 }}
+                    transition={{ duration: 0.3, type: 'tween', ease: 'easeInOut' }}
+                  >
                     <ThumbsUp className={`w-3.5 h-3.5 ${itemFeedback === 'up' ? 'text-zeno' : 'text-neutral-400'}`} strokeWidth={1.5} />
                     <ThumbsDown className={`w-3.5 h-3.5 ${itemFeedback === 'down' ? 'text-rose-500' : 'text-neutral-400'}`} strokeWidth={1.5} />
-                  </div>
-                </button>
+                  </motion.div>
+                </motion.button>
 
                 {showFeedbackMenu && feedbackCoords && createPortal(
                   <div 
@@ -628,38 +692,76 @@ export const MessageItem = React.memo<MessageItemProps>(({
                         setShowFeedbackMenu(false);
                         handleFeedbackClick('up');
                       }}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2 transition-transform active:scale-95"
                     >
-                      <ThumbsUp className={`w-3.5 h-3.5 ${itemFeedback === 'up' ? 'text-zeno' : 'text-neutral-400'}`} strokeWidth={1.5} />
-                      <span>Boa resposta</span>
+                      <ThumbsUp className={`w-3.5 h-3.5 ${itemFeedback === 'up' ? 'text-zeno' : 'text-neutral-400'}`} strokeWidth={2} />
+                      <span className={itemFeedback === 'up' ? 'font-semibold text-zeno' : ''}>Boa resposta</span>
                     </button>
                     <button
                       onClick={() => {
                         setShowFeedbackMenu(false);
                         handleFeedbackClick('down');
                       }}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-500/10 flex items-center gap-2 transition-transform active:scale-95"
                     >
-                      <ThumbsDown className={`w-3.5 h-3.5 ${itemFeedback === 'down' ? 'text-rose-500' : 'text-neutral-400'}`} strokeWidth={1.5} />
-                      <span>Resposta ruim</span>
+                      <ThumbsDown className={`w-3.5 h-3.5 ${itemFeedback === 'down' ? 'text-rose-500' : 'text-neutral-400'}`} strokeWidth={2} />
+                      <span className={itemFeedback === 'down' ? 'font-semibold text-rose-500' : ''}>Resposta ruim</span>
                     </button>
                   </div>,
                   document.body
                 )}
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={handleShare}
+                disabled={isSharing}
                 className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
-                  theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                  sharedSuccess ? 'bg-zeno/10 text-zeno' : (
+                    theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
+                  )
                 }`}
                 title="Compartilhar"
               >
-                {sharedSuccess ? <Check className="w-4 h-4 text-zeno" strokeWidth={1.5} /> : <Share2 className="w-4 h-4" strokeWidth={1.5} />}
-              </button>
+                <AnimatePresence mode="wait" initial={false}>
+                  {isSharing ? (
+                    <motion.div
+                      key="sharing"
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin text-zeno" strokeWidth={2} />
+                    </motion.div>
+                  ) : sharedSuccess ? (
+                    <motion.div
+                      key="shared"
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      exit={{ scale: 0, rotate: 180 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                    >
+                      <Check className="w-4 h-4 text-zeno" strokeWidth={2} />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="share"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                    >
+                      <Share2 className="w-4 h-4" strokeWidth={1.5} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
 
               {isLastMessage && !isLoadingLast && (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.08, rotate: 360 }}
+                  whileTap={{ scale: 0.92 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
                   onClick={onRegenerate}
                   className={`p-1.5 rounded-lg transition-colors flex items-center justify-center text-xs ${
                     theme === 'dark' ? 'hover:bg-[#232326] text-neutral-400 hover:text-neutral-200' : 'hover:bg-neutral-200/70 text-neutral-600 hover:text-neutral-900'
@@ -667,7 +769,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   title="Regenerar resposta"
                 >
                   <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
-                </button>
+                </motion.button>
               )}
 
               {/* More options dropdown */}
@@ -947,17 +1049,21 @@ export const MessageList = React.memo<MessageListProps>(({
           const isLastMessage = virtualRow.index === visibleMessages.length - 1;
           
           return (
-            <div
+            <motion.div
               key={msg.id}
               data-index={virtualRow.index}
               ref={rowVirtualizer.measureElement}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.25 }}
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 width: '100%',
                 transform: `translateY(${virtualRow.start}px)`,
-                paddingBottom: '2rem' // To keep the space-y-8 feel
+                paddingBottom: '2rem',
+                willChange: 'opacity, transform'
               }}
             >
               <MessageItem
@@ -987,7 +1093,7 @@ export const MessageList = React.memo<MessageListProps>(({
                 onYouTubeAction={onYouTubeAction}
                 onSendAdaptiveFeedback={onSendAdaptiveFeedback}
               />
-            </div>
+            </motion.div>
           );
         })}
       </div>

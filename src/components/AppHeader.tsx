@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Menu, Sparkles, ChevronDown, Lock, Check, MoreHorizontal, Share2, Folder, Pin, Archive, Flag, Trash2 } from 'lucide-react';
 import { UserSettings, ModelType } from '../types';
 import { useSubscription } from '../contexts/SubscriptionContext';
@@ -16,7 +17,6 @@ interface AppHeaderProps {
   onToggleTheme: () => void;
   onOpenSettings: () => void;
   onOpenAuthModal: () => void;
-  onNewChat: () => void;
   user?: any;
   speed: ModelType;
   onSelectSpeed: (speed: ModelType) => void;
@@ -55,7 +55,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onToggleTheme,
   onOpenSettings,
   onOpenAuthModal,
-  onNewChat,
   user,
   speed,
   onSelectSpeed,
@@ -71,9 +70,9 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
 
-  const pillClasses = "h-10 min-h-[40px] max-h-[40px] px-[14px] inline-flex items-center justify-center rounded-xl backdrop-blur-md transition-all active:scale-95 cursor-pointer text-[15px] leading-none box-border text-center whitespace-nowrap";
-  const pillDark = `${pillClasses} bg-[#1a1a1a]/65 text-neutral-200 hover:bg-[#1a1a1a]/70`;
-  const pillLight = `${pillClasses} bg-white/65 text-neutral-700 hover:bg-white/70`;
+  const pillClasses = "h-10 min-h-[40px] max-h-[40px] px-[14px] inline-flex items-center justify-center rounded-xl backdrop-blur-md transition-all cursor-pointer text-[15px] leading-none box-border text-center whitespace-nowrap outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-zeno focus-visible:ring-offset-2";
+  const pillDark = `${pillClasses} bg-[#1a1a1a]/65 text-neutral-200 hover:bg-[#1a1a1a]/80 border border-white/5`;
+  const pillLight = `${pillClasses} bg-white/65 text-neutral-700 hover:bg-white/80 border border-black/5`;
 
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isChatMenuOpen, setIsChatMenuOpen] = useState(false);
@@ -114,29 +113,40 @@ export const AppHeader = React.memo<AppHeaderProps>(({
 
   return (
     <header className="absolute top-0 w-full flex items-center justify-between px-4 sm:px-8 py-4 z-35 bg-transparent border-0 shadow-none pointer-events-none">
-      <div className="flex items-center gap-4 min-w-0 pointer-events-auto">
-        <button 
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 pointer-events-auto">
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
           className={isDark ? pillDark : pillLight}
           onClick={onOpenSidebar}
           title={t.sidebar?.openSidebar || 'Abrir barra lateral'}
         >
           <Menu className="w-5 h-5" />
-        </button>
+        </motion.button>
 
         {/* Top Header Model Selector (Pill 1) */}
         <div className="relative" ref={modelMenuRef}>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-            className={isDark ? pillDark : pillLight}
+            className={`${isDark ? pillDark : pillLight} gap-2`}
           >
-            <span className="text-sm">{currentModel.name}</span>
-            <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
+            <span className="text-sm font-medium">{currentModel.name}</span>
+            <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-300 ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+          </motion.button>
 
-          {isModelMenuOpen && (
-            <div className={`absolute top-full left-0 mt-2 w-72 p-2 rounded-2xl border shadow-2xl z-50 ${
-              isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
-            }`}>
+          <AnimatePresence>
+            {isModelMenuOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className={`absolute top-full left-0 mt-2 w-72 p-2 rounded-2xl border shadow-2xl z-50 ${
+                  isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+                }`}
+              >
               <div className="px-2 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-200 dark:border-[#2C2C2E]">
                 Selecionar Modelo
               </div>
@@ -172,26 +182,31 @@ export const AppHeader = React.memo<AppHeaderProps>(({
                   );
                 })}
               </div>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+      </div>
 
         {/* Upgrade Badge Pill (Conditional: never for admin or pro) */}
         {!user?.isAdmin && !isPro && (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02, y: -1 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onOpenSubscriptionModal()}
-            className={`${isDark ? pillDark : pillLight} flex items-center gap-1.5`}
+            className={`${isDark ? pillDark : pillLight} flex items-center gap-1.5 border-zeno/20 hover:border-zeno/40`}
           >
-            <Sparkles className="w-4 h-4 text-zeno" />
-            <span>Upgrade</span>
-          </button>
+            <Sparkles className="w-4 h-4 text-zeno animate-pulse" />
+            <span className="font-semibold text-zeno">Upgrade</span>
+          </motion.button>
         )}
       </div>
 
       {/* Header Actions */}
       <div className="flex items-center gap-2 pointer-events-auto">
         {(!user || user.isAnonymous) && (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={onOpenAuthModal}
             className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border cursor-pointer ${
               isDark 
@@ -200,23 +215,32 @@ export const AppHeader = React.memo<AppHeaderProps>(({
             }`}
           >
             Faça login para salvar
-          </button>
+          </motion.button>
         )}
 
         {/* Chat More Options Dropdown (⋯) (Pill 3) */}
         <div className="relative" ref={chatMenuRef}>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => setIsChatMenuOpen(!isChatMenuOpen)}
             className={isDark ? pillDark : pillLight}
             title="Opções da conversa"
           >
             <MoreHorizontal className="w-5 h-5" />
-          </button>
+          </motion.button>
 
-          {isChatMenuOpen && (
-            <div className={`absolute top-full right-0 mt-2 w-52 p-1.5 rounded-2xl border shadow-2xl z-50 text-xs ${
-              isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
-            }`}>
+          <AnimatePresence>
+            {isChatMenuOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className={`absolute top-full right-0 mt-2 w-52 p-1.5 rounded-2xl border shadow-2xl z-50 text-xs ${
+                  isDark ? 'bg-[#18181b] border-[#2C2C2E] text-white' : 'bg-white border-neutral-200 text-neutral-900'
+                }`}
+              >
               <button
                 onClick={() => {
                   setIsChatMenuOpen(false);
@@ -296,9 +320,10 @@ export const AppHeader = React.memo<AppHeaderProps>(({
                 <Trash2 className="w-4 h-4 text-red-500" />
                 <span>Excluir</span>
               </button>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+      </div>
       </div>
     </header>
   );

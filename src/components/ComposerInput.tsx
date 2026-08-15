@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud
+  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud, Image as ImageIcon, Eye, Brain, Plus, Camera
 } from 'lucide-react';
 import { FileAttachment, UserPlan, ModelType, DailyUsage } from '../types';
 import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
@@ -33,6 +33,8 @@ interface ComposerInputProps {
   onStopGeneration: () => void;
   speed: ModelType;
   onSelectSpeed: (speed: ModelType) => void;
+  isThinkingMode: boolean;
+  setIsThinkingMode: (val: boolean) => void;
   theme: 'dark' | 'light';
   plan?: UserPlan;
   onOpenSubscriptionModal?: (reason?: string) => void;
@@ -54,6 +56,8 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   onStopGeneration,
   speed,
   onSelectSpeed,
+  isThinkingMode,
+  setIsThinkingMode,
   theme,
   plan = 'ZENO Free',
   onOpenSubscriptionModal,
@@ -65,10 +69,26 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
 }) => {
   const { t } = useTranslation('ComposerInput');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setIsAttachMenuOpen(false);
+      }
+    };
+    if (isAttachMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isAttachMenuOpen]);
 
     // --- Groq Whisper Transcription Logic via MediaRecorder ---
   const [isListening, setIsListening] = useState(false);
@@ -262,91 +282,104 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
     }
   }, [input]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const processFile = useCallback((file: File) => {
+    const isImg = file.type.startsWith('image/') || !!file.name.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i);
+    const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md|csv|txt)$/i);
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      const isImg = file.type.startsWith('image/') || !!file.name.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i);
-      const isCode = file.name.match(/\.(ts|tsx|js|jsx|py|json|html|css|md|csv|txt)$/i);
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (isImg) {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1600;
+        let width = img.width;
+        let height = img.height;
 
-      if (isImg) {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
           }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            const newAttachment: FileAttachment = {
-              id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-              name: file.name,
-              size: Math.round((dataUrl.length - 22) * 3 / 4), // Approximate size
-              type: 'image',
-              url: dataUrl,
-            };
-            onAddAttachment(newAttachment);
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
           }
-        };
-        img.onerror = () => {
-          // Fallback if canvas compression fails or image format is unsupported by HTML Image element
-          const fallbackReader = new FileReader();
-          fallbackReader.onload = (evt) => {
-            const dataUrl = evt.target?.result as string;
-            const newAttachment: FileAttachment = {
-              id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-              name: file.name,
-              size: file.size,
-              type: 'image',
-              url: dataUrl,
-            };
-            onAddAttachment(newAttachment);
-          };
-          fallbackReader.readAsDataURL(file);
-        };
-        img.src = URL.createObjectURL(file);
-      } else {
-        const reader = new FileReader();
-        reader.onload = (event) => {
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           const newAttachment: FileAttachment = {
             id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-            name: file.name,
+            name: file.name || 'imagem-capturada.jpg',
+            size: Math.round((dataUrl.length - 22) * 3 / 4),
+            type: 'image',
+            url: dataUrl,
+          };
+          onAddAttachment(newAttachment);
+        }
+      };
+      img.onerror = () => {
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = (evt) => {
+          const dataUrl = evt.target?.result as string;
+          const newAttachment: FileAttachment = {
+            id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            name: file.name || 'imagem.jpg',
             size: file.size,
-            type: isPdf ? 'document' : isCode ? 'code' : 'document',
-            url: isPdf ? (event.target?.result as string) : undefined,
-            content: !isPdf ? (event.target?.result as string) : undefined,
+            type: 'image',
+            url: dataUrl,
           };
           onAddAttachment(newAttachment);
         };
-        if (isPdf) {
-          reader.readAsDataURL(file);
-        } else {
-          reader.readAsText(file);
+        fallbackReader.readAsDataURL(file);
+      };
+      img.src = URL.createObjectURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const newAttachment: FileAttachment = {
+          id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          name: file.name,
+          size: file.size,
+          type: isPdf ? 'document' : isCode ? 'code' : 'document',
+          url: isPdf ? (event.target?.result as string) : undefined,
+          content: !isPdf ? (event.target?.result as string) : undefined,
+        };
+        onAddAttachment(newAttachment);
+      };
+      if (isPdf) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+    }
+  }, [onAddAttachment]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach(file => processFile(file));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processFile(file);
+          e.preventDefault();
         }
       }
-    });
-
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -364,8 +397,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
     setIsDragging(false);
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      const event = { target: { files } } as any;
-      handleFileChange(event);
+      Array.from(files).forEach(file => processFile(file));
     }
   };
 
@@ -494,11 +526,10 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
         >
           {/* Attached Files Preview */}
           {attachments.length > 0 && (
-            <div className="flex flex-col gap-2 pt-2 pb-2 px-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <AnimatePresence>
-                  {attachments.map(att => (
-                    <motion.div
+            <div className="flex flex-wrap items-center gap-3 pt-2 pb-2 px-4 border-b border-neutral-200/50 dark:border-[#2C2C2E]/50">
+              <AnimatePresence>
+                {attachments.map(att => (
+                  <motion.div
                       key={att.id}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -526,109 +557,203 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                       >
                         <X className="w-3 h-3" />
                       </button>
+                      
+                      {(att.type === 'image' || (att.url && att.url.startsWith('data:image/'))) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                             setIsTranscribing(true);
+                             try {
+                               const response = await fetch(att.url!);
+                               const blob = await response.blob();
+                               const formData = new FormData();
+                               formData.append('image', blob, att.name);
+                               formData.append('prompt', "Analise esta imagem detalhadamente.");
+                               
+                               const res = await fetch('/api/analyze-image', {
+                                 method: 'POST',
+                                 body: formData
+                               });
+                               const data = await res.json();
+                               if (res.ok) {
+                                  setInput(input ? `${input}\n\nAnálise: ${data.analysis}` : `Análise: ${data.analysis}`);
+                               } else {
+                                  setSpeechError(data.error || "Erro ao analisar imagem.");
+                               }
+                             } catch (e) {
+                               console.error(e);
+                               setSpeechError("Erro ao analisar imagem.");
+                             } finally {
+                               setIsTranscribing(false);
+                             }
+                          }}
+                          className="absolute -bottom-1.5 -left-1.5 w-5 h-5 flex items-center justify-center bg-zeno hover:bg-zeno/90 text-white rounded-full shadow-sm transition-colors border border-white/10"
+                          title="Analisar com Gemini"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                        </button>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
-              </div>
-
-              {/* Image Analysis Quick Action Chips */}
-              {attachments.some(att => att.type === 'image' || (att.url && att.url.startsWith('data:image/')) || !!att.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)) && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] text-neutral-400 font-medium mr-1">Análise rápida:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const text = "Extraia todos os itens, valores individuais, taxas e o valor total deste recibo de forma clara e estruturada.";
-                      setInput(text);
-                      onSubmit(undefined, text);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
-                  >
-                    🧾 Extrair Recibo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const text = "Analise este cardápio, liste as principais categorias, pratos em destaque e faça traduções ou recomendações se necessário.";
-                      setInput(text);
-                      onSubmit(undefined, text);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
-                  >
-                    🍽️ Traduzir/Resumir Cardápio
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const text = "Extraia os dados numéricos, tendências, eixos e insights principais deste gráfico.";
-                      setInput(text);
-                      onSubmit(undefined, text);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-zeno/10 hover:bg-zeno/20 text-zeno border border-zeno/20 transition-colors cursor-pointer"
-                  >
-                    📊 Extrair Gráfico
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
           {/* Input Controls Row */}
-          <div className="flex items-center gap-2 w-full px-2">
-            {/* File Attachment */}
-            <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || isListening || isTranscribing}
-            title={t.composer.uploadDoc}
-            className={`p-2 rounded-full transition-colors flex-shrink-0 cursor-pointer ${
-              isDark
-                ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
-                : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
-            }`}
-          >
-            <Paperclip className="w-4 h-4" />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            multiple
-            className="hidden"
-            accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
-          />
+          <div className="flex items-center gap-1.5 w-full px-2 relative">
+            
+            <div ref={attachMenuRef} className="relative flex-shrink-0">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                disabled={isLoading || isListening || isTranscribing}
+                className={`p-2 rounded-full transition-all duration-200 cursor-pointer ${
+                  isAttachMenuOpen ? 'rotate-45' : 'rotate-0'
+                } ${
+                  isAttachMenuOpen || attachments.length > 0 || isThinkingMode
+                    ? 'text-zeno bg-zeno/10 hover:bg-zeno/20'
+                    : isDark
+                      ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
+                      : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
+                }`}
+              >
+                <Plus className="w-5 h-5" />
+              </motion.button>
 
-          {/* Text Area or Inline Voice Recording Indicator */}
-          {isListening ? (
-            <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-              <VoiceBlob className="w-4 h-4 text-zeno shrink-0" />
-              <span className="text-sm font-medium text-zeno animate-pulse truncate">
-                Ouvindo... fale agora
-              </span>
+              <AnimatePresence>
+                {isAttachMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className={`absolute bottom-full left-0 mb-3 w-48 rounded-xl shadow-xl border overflow-hidden ${
+                      isDark ? 'bg-[#1C1C1E] border-[#2C2C2E]' : 'bg-white border-neutral-200'
+                    }`}
+                  >
+                    <div className="flex flex-col py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          cameraInputRef.current?.click();
+                        }}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                        }`}
+                      >
+                        <Camera className="w-4 h-4 text-neutral-500" />
+                        <span className="font-medium">Câmera</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          imageInputRef.current?.click();
+                        }}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4 text-neutral-500" />
+                        <span className="font-medium">Fotos</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                        }`}
+                      >
+                        <Paperclip className="w-4 h-4 text-neutral-500" />
+                        <span className="font-medium">Arquivos</span>
+                      </button>
+                      <div className={`h-px w-full my-1 ${isDark ? 'bg-[#2C2C2E]' : 'bg-neutral-100'}`} />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          setIsThinkingMode(!isThinkingMode);
+                        }}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                          isDark ? 'hover:bg-[#2C2C2E]' : 'hover:bg-neutral-50'
+                        } ${isThinkingMode ? 'text-zeno' : isDark ? 'text-neutral-200' : 'text-neutral-700'}`}
+                      >
+                        <Brain className={`w-4 h-4 ${isThinkingMode ? 'text-zeno' : 'text-neutral-500'}`} />
+                        <span className="font-medium">Pense bem</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          ) : isTranscribing ? (
-            <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-              <div className="w-4 h-4 border-2 border-zeno border-t-transparent rounded-full animate-spin shrink-0" />
-              <span className="text-sm font-medium text-zeno truncate">
-                Transcrevendo áudio...
-              </span>
-            </div>
-          ) : (
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (hasContent && !isLoading) {
-                    onSubmit(e);
+
+            <input
+              type="file"
+              ref={cameraInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*"
+              capture="environment"
+            />
+            <input
+              type="file"
+              ref={imageInputRef}
+              onChange={handleFileChange}
+              multiple
+              className="hidden"
+              accept="image/*"
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              className="hidden"
+              accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
+            />
+
+            {/* Text Area or Inline Voice Recording Indicator */}
+            {isListening ? (
+              <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
+                <VoiceBlob className="w-4 h-4 text-zeno shrink-0" />
+                <span className="text-sm font-medium text-zeno animate-pulse truncate">
+                  Ouvindo... fale agora
+                </span>
+              </div>
+            ) : isTranscribing ? (
+              <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
+                <div className="w-4 h-4 border-2 border-zeno border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="text-sm font-medium text-zeno truncate">
+                  Transcrevendo áudio...
+                </span>
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onPaste={handlePaste}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (hasContent && !isLoading) {
+                      onSubmit(e);
+                    }
                   }
+                }}
+                placeholder={
+                  isDragging 
+                    ? (t.composer.uploadDoc || "Solte a imagem ou arquivo aqui") 
+                    : attachments.some(a => a.type === 'image') 
+                      ? "Pergunte algo sobre a imagem..." 
+                      : "Pergunte ao ZENO..."
                 }
-              }}
-              placeholder={
-                isDragging ? (t.composer.uploadDoc || "Solte o documento aqui") : "Pergunte ao ZENO"
-              }
               disabled={isLoading}
               rows={1}
               className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-sm py-1.5 font-normal ${
@@ -667,16 +792,20 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
           {/* Submit / Stop Button */}
           {!isListening && (
             isLoading ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 type="button"
                 onClick={onStopGeneration}
                 title={t.common.stop}
                 className="w-9 h-9 rounded-full bg-zeno hover:bg-zeno/90 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
               >
                 <Square className="w-3.5 h-3.5 fill-current" />
-              </button>
+              </motion.button>
             ) : (
-              <button
+              <motion.button
+                whileHover={hasContent ? { scale: 1.05 } : {}}
+                whileTap={hasContent ? { scale: 0.95 } : {}}
                 type="submit"
                 disabled={!hasContent}
                 title={t.common.send}
@@ -689,7 +818,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
                 }`}
               >
                 <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              </motion.button>
             )
           )}
           </div>

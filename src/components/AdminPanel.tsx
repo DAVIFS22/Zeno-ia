@@ -98,21 +98,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsLoading(true);
     setSaveStatus(null);
     try {
-      const token = await user.getIdToken();
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'x-user-email': userEmail
+      let token: string | null = null;
+      try {
+        token = await user.getIdToken();
+      } catch (tokenErr) {
+        console.warn('[AdminPanel] Não foi possível obter o token do usuário:', tokenErr);
+      }
+
+      const headers: Record<string, string> = {
+        'x-user-email': userEmail || ''
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const safeFetch = async (url: string) => {
+        try {
+          const res = await fetch(url, { headers });
+          return res;
+        } catch (err) {
+          console.warn(`[AdminPanel] Erro ao buscar ${url}:`, err);
+          return null;
+        }
       };
 
       const [configRes, statsRes, logsRes, auditRes, aiRes] = await Promise.all([
-        fetch('/api/admin/config', { headers }),
-        fetch('/api/admin/stats', { headers }),
-        fetch('/api/admin/logs', { headers }),
-        fetch('/api/admin/audit-metrics', { headers }),
-        fetch('/api/admin/ai-providers', { headers })
+        safeFetch('/api/admin/config'),
+        safeFetch('/api/admin/stats'),
+        safeFetch('/api/admin/logs'),
+        safeFetch('/api/admin/audit-metrics'),
+        safeFetch('/api/admin/ai-providers')
       ]);
 
-      if (configRes.status === 403 || statsRes.status === 403 || logsRes.status === 403 || auditRes.status === 403 || aiRes.status === 403) {
+      if (
+        (configRes && configRes.status === 403) ||
+        (statsRes && statsRes.status === 403) ||
+        (logsRes && logsRes.status === 403) ||
+        (auditRes && auditRes.status === 403) ||
+        (aiRes && aiRes.status === 403)
+      ) {
         setSaveStatus({
           type: 'error',
           message: `Erro 403: ${t.admin.denied}`
@@ -121,35 +145,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         return;
       }
 
-      if (configRes.ok) {
-        const data = await configRes.json();
-        if (data.config) {
-          setConfig(prev => ({ ...prev, ...data.config }));
+      if (configRes && configRes.ok) {
+        try {
+          const data = await configRes.json();
+          if (data && data.config) {
+            setConfig(prev => ({ ...prev, ...data.config }));
+          }
+        } catch (jsonErr) {
+          console.warn('[AdminPanel] Erro ao ler config JSON:', jsonErr);
         }
       }
 
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
+      if (statsRes && statsRes.ok) {
+        try {
+          const statsData = await statsRes.json();
+          if (statsData) setStats(statsData);
+        } catch (jsonErr) {
+          console.warn('[AdminPanel] Erro ao ler stats JSON:', jsonErr);
+        }
       }
 
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setAuditLogs(logsData.auditLogs || []);
-        setSystemLogs(logsData.systemLogs || []);
+      if (logsRes && logsRes.ok) {
+        try {
+          const logsData = await logsRes.json();
+          if (logsData) {
+            setAuditLogs(logsData.auditLogs || []);
+            setSystemLogs(logsData.systemLogs || []);
+          }
+        } catch (jsonErr) {
+          console.warn('[AdminPanel] Erro ao ler logs JSON:', jsonErr);
+        }
       }
 
-      if (auditRes.ok) {
-        const auditData = await auditRes.json();
-        setAuditMetrics(auditData);
+      if (auditRes && auditRes.ok) {
+        try {
+          const auditData = await auditRes.json();
+          if (auditData) setAuditMetrics(auditData);
+        } catch (jsonErr) {
+          console.warn('[AdminPanel] Erro ao ler audit metrics JSON:', jsonErr);
+        }
       }
 
-      if (aiRes.ok) {
-        const aiData = await aiRes.json();
-        setAiProvidersData(aiData);
+      if (aiRes && aiRes.ok) {
+        try {
+          const aiData = await aiRes.json();
+          if (aiData) setAiProvidersData(aiData);
+        } catch (jsonErr) {
+          console.warn('[AdminPanel] Erro ao ler AI providers JSON:', jsonErr);
+        }
       }
     } catch (error: any) {
-      console.error('[AdminPanel] Erro ao carregar dados do backend:', error);
+      console.warn('[AdminPanel] Falha controlada ao carregar dados do backend:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1690,16 +1736,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <button
                 onClick={async () => {
                   if (!user) return;
-                  const token = await user.getIdToken();
-                  const res = await fetch('/api/admin/debug/reset-stats', {
-                    method: 'POST',
-                    headers: { 
-                      'Authorization': `Bearer ${token}`,
-                      'x-user-email': userEmail 
-                    }
-                  });
-                  const data = await res.json();
-                  alert(data.message || 'Comando enviado.');
+                  try {
+                    const token = await user.getIdToken();
+                    const res = await fetch('/api/admin/debug/reset-stats', {
+                      method: 'POST',
+                      headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'x-user-email': userEmail 
+                      }
+                    });
+                    const data = await res.json();
+                    alert(data.message || 'Comando enviado.');
+                  } catch (err: any) {
+                    console.error('Erro ao resetar estatísticas:', err);
+                    alert('Erro ao executar comando: ' + err.message);
+                  }
                 }}
                 className="w-full py-2 rounded-xl bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-600/30 text-xs font-semibold transition-all"
               >
@@ -1720,16 +1771,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <button
                 onClick={async () => {
                   if (!user) return;
-                  const token = await user.getIdToken();
-                  const res = await fetch('/api/admin/debug/clear-logs', {
-                    method: 'POST',
-                    headers: { 
-                      'Authorization': `Bearer ${token}`,
-                      'x-user-email': userEmail 
-                    }
-                  });
-                  const data = await res.json();
-                  alert(data.message || 'Comando enviado.');
+                  try {
+                    const token = await user.getIdToken();
+                    const res = await fetch('/api/admin/debug/clear-logs', {
+                      method: 'POST',
+                      headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'x-user-email': userEmail 
+                      }
+                    });
+                    const data = await res.json();
+                    alert(data.message || 'Comando enviado.');
+                  } catch (err: any) {
+                    console.error('Erro ao limpar logs:', err);
+                    alert('Erro ao executar comando: ' + err.message);
+                  }
                 }}
                 className="w-full py-2 rounded-xl bg-neutral-600/10 hover:bg-neutral-600/20 text-neutral-400 border border-neutral-600/30 text-xs font-semibold transition-all"
               >

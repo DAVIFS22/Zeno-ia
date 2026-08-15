@@ -13,6 +13,8 @@ export interface AIProviderOptions {
   isSearchIntent?: boolean;
   hasImages?: boolean;
   category?: 'general' | 'think' | 'code' | 'speed' | 'search' | 'image' | 'vision' | 'image_generation';
+  isThinkingMode?: boolean;
+  userRequestedModel?: string;
   imageOptions?: {
     prompt: string;
     aspectRatio?: string;
@@ -29,8 +31,9 @@ export interface AIProviderOptions {
 
 export interface AIProviderResult {
   text: string;
+  thought?: string;
   imageUrl?: string;
-  provider: 'gemini' | 'openai' | 'groq' | 'openrouter' | 'replicate';
+  provider: 'gemini' | 'openai' | 'groq' | 'openrouter' | 'replicate' | 'xai' | 'grok';
   modelUsed: string;
   isAlternative: boolean;
   sources?: Array<{ title: string; url: string; domain: string }>;
@@ -50,15 +53,14 @@ export const routingConfig: Record<string, Array<{ provider: string, model: stri
   image_generation: baseRoutingConfig.image_generation.map(m => ({ provider: m.provider, model: m.model }))
 };
 
-export function startHealthCheckLoop(aiClient: GoogleGenAI) {
-  startHc(aiClient);
+export function startHealthCheckLoop() {
+  startHc();
 }
 
 export async function generateTextWithFallback(
-  options: AIProviderOptions,
-  aiClient: GoogleGenAI
+  options: AIProviderOptions
 ): Promise<AIProviderResult> {
-  const result = await generateTextWithResilience(options as any, aiClient);
+  const result = await generateTextWithResilience(options as any);
   return {
     text: result.text,
     provider: result.provider as any,
@@ -71,10 +73,9 @@ export async function generateTextWithFallback(
 }
 
 export async function generateImageWithFallback(
-  options: AIProviderOptions,
-  aiClient: GoogleGenAI
+  options: AIProviderOptions
 ): Promise<AIProviderResult> {
-  const result = await generateImageWithResilience(options as any, aiClient);
+  const result = await generateImageWithResilience(options as any);
   return {
     text: result.text,
     imageUrl: result.imageUrl,

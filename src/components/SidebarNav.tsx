@@ -6,7 +6,7 @@ import {
   Plus, MessageSquare, Settings, Search, PanelLeftClose, 
   X, Pin, Edit2, Trash2, Sparkles, User, Lock, Check,
   Image, Folder, Cpu, Sliders, Shield, ChevronDown, MoreHorizontal,
-  HelpCircle, LogOut
+  HelpCircle, LogOut, Scan
 } from 'lucide-react';
 import { UserSettings, ChatSession } from '../types';
 import { ZenoLogo } from './ZenoLogo';
@@ -14,6 +14,7 @@ import { useSubscription } from '../contexts/SubscriptionContext';
 import { isAdminUser } from '../config/admin';
 import { useTranslation } from '../i18n';
 import { useVersion } from '../contexts/VersionContext';
+import { useUIState } from '../hooks/useUIState';
 import { GoogleLogo } from './GoogleLogo';
 import { HighlightText } from './HighlightText';
 
@@ -228,7 +229,6 @@ interface SidebarNavProps {
   editingSessionId: string | null;
   editingTitle: string;
   searchQuery: string;
-  isSearchVisible: boolean;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onTogglePinSession: (id: string, e: React.MouseEvent) => void;
@@ -237,7 +237,6 @@ interface SidebarNavProps {
   onSetEditingSessionId: (id: string | null) => void;
   onSetEditingTitle: (title: string) => void;
   onSetDeletingSessionId: (id: string | null) => void;
-  onToggleSearchVisible: () => void;
   onSearchQueryChange: (query: string) => void;
   onCloseSidebar: () => void;
   onOpenImageLibrary: () => void;
@@ -267,7 +266,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   editingSessionId,
   editingTitle,
   searchQuery,
-  isSearchVisible,
   onNewChat,
   onSelectSession,
   onTogglePinSession,
@@ -276,7 +274,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   onSetEditingSessionId,
   onSetEditingTitle,
   onSetDeletingSessionId,
-  onToggleSearchVisible,
   onSearchQueryChange,
   onCloseSidebar,
   onOpenImageLibrary,
@@ -293,6 +290,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
   session,
   onSwitchAccount
 }) => {
+  const ui = useUIState();
   const { t } = useTranslation();
   const { currentVersion } = useVersion();
   const isDark = theme === 'dark';
@@ -432,18 +430,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
 
           <div className="flex items-center gap-1">
             <button
-              onClick={onToggleSearchVisible}
-              className={`p-1.5 rounded-md transition-colors ${
-                isSearchVisible 
-                  ? `${bgActiveItem} ${textMain}` 
-                  : `${hoverItemBg} ${textMuted} hover:${textMain}`
-              }`}
-              title="Pesquisar histórico"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-
-            <button
               onClick={onCloseSidebar}
               className={`p-1.5 rounded-md ${hoverItemBg} ${textMuted} hover:${textMain} transition-colors md:flex hidden`}
               title="Fechar barra lateral"
@@ -454,14 +440,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
         </div>
 
         {/* Novo Chat Button */}
-        <button 
+        <motion.button 
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onNewChat}
           className="flex items-center gap-2.5 px-4 h-[42px] rounded-xl bg-zeno hover:bg-zeno/90 text-white font-medium transition-all duration-150 w-full text-left text-xs sm:text-sm shadow-md shadow-zeno/20 group cursor-pointer"
         >
           <MessageSquare className="w-4 h-4 flex-shrink-0 text-white" />
           <span className="flex-1 truncate">Novo chat</span>
           <Plus className="w-3.5 h-3.5 flex-shrink-0 text-zeno group-hover:text-white" />
-        </button>
+        </motion.button>
 
         {/* Streamlined Menu Options */}
         <div className="space-y-0.5 pt-1">
@@ -474,11 +462,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
           </button>
 
           <button 
-            onClick={onToggleSearchVisible}
-            className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain}`}
+            onClick={() => ui.openModal('imageAnalysis')}
+            className={`flex items-center gap-2.5 px-3 h-[34px] rounded-lg ${hoverItemBg} transition-colors w-full text-left text-xs font-normal ${textMuted} hover:${textMain} cursor-pointer`}
           >
-            <Search className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1 truncate">Histórico</span>
+            <Scan className="w-4 h-4 flex-shrink-0 text-zeno" />
+            <span className="flex-1 truncate">Análise de Imagens</span>
           </button>
 
           <button 
@@ -498,25 +486,22 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
           </button>
         </div>
 
-        {/* Search input if active */}
-        {isSearchVisible && (
-          <div className={`flex items-center gap-2 px-3 h-[34px] rounded-lg text-xs ${bgActiveItem} border ${borderMain} ${textMain} mt-1`}>
-            <Search className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Buscar no histórico..."
-              className="bg-transparent border-none focus:outline-none w-full text-xs placeholder-neutral-500"
-              autoFocus
-            />
-            {searchQuery && (
-              <button onClick={() => onSearchQueryChange('')} className="p-0.5 text-neutral-400 hover:text-white">
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        )}
+        {/* Search input - Always visible */}
+        <div className={`flex items-center gap-2 px-3 h-[34px] rounded-lg text-xs ${bgActiveItem} border ${borderMain} ${textMain} mt-1`}>
+          <Search className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            placeholder="Buscar no histórico..."
+            className="bg-transparent border-none focus:outline-none w-full text-xs placeholder-neutral-500"
+          />
+          {searchQuery && (
+            <button onClick={() => onSearchQueryChange('')} className="p-0.5 text-neutral-400 hover:text-white">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sessions / History - Virtualized with react-window */}
@@ -595,7 +580,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
 
         {/* User Card */}
         <div className="relative pt-0.5" ref={profileMenuRef}>
-          <div 
+          <motion.div 
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => {
               if (!user || user.isAnonymous) {
                 onOpenAuthModal();
@@ -649,7 +636,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = React.memo(({
                 <ChevronDown className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Profile Dropdown Menu */}
           <AnimatePresence>{isProfileMenuOpen && user && !user.isAnonymous && (

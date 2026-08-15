@@ -54,6 +54,24 @@ const providerQuotas: Record<string, ProviderQuotaInfo> = {
     remainingPercentage: 68.3,
     resetTimestamp: Date.now() + 24 * 3600 * 1000,
     status: 'normal'
+  },
+  xai: {
+    requestLimit: 10000,
+    requestsUsed: 500,
+    tokenLimit: 4000000,
+    tokensUsed: 250000,
+    remainingPercentage: 93.7,
+    resetTimestamp: Date.now() + 24 * 3600 * 1000,
+    status: 'normal'
+  },
+  grok: {
+    requestLimit: 10000,
+    requestsUsed: 500,
+    tokenLimit: 4000000,
+    tokensUsed: 250000,
+    remainingPercentage: 93.7,
+    resetTimestamp: Date.now() + 24 * 3600 * 1000,
+    status: 'normal'
   }
 };
 
@@ -69,7 +87,19 @@ export function getProviderQuota(provider: string): ProviderQuotaInfo {
       status: 'normal'
     };
   }
-  return providerQuotas[provider];
+
+  const quota = providerQuotas[provider];
+  // Auto-recovery check for billing_error or exhausted after 5 minutes cooldown
+  if ((quota.status === 'billing_error' || quota.status === 'exhausted' || quota.status === 'rate_limited') && quota.errorTimestamp) {
+    const cooldownMs = quota.status === 'rate_limited' ? 2 * 60 * 1000 : 5 * 60 * 1000;
+    if (Date.now() - quota.errorTimestamp > cooldownMs) {
+      quota.status = 'normal';
+      quota.remainingPercentage = 50;
+      console.log(`[QUOTA MANAGER] Cooldown encerrado para o provedor ${provider}. Status redefinido para normal.`);
+    }
+  }
+
+  return quota;
 }
 
 export function recordQuotaUsage(provider: string, tokens = 1000) {
@@ -96,10 +126,18 @@ export function recordQuotaUsage(provider: string, tokens = 1000) {
 export function setProviderQuotaExhausted(provider: string, reason?: string) {
   const quota = getProviderQuota(provider);
   quota.remainingPercentage = 0;
-  quota.status = reason?.includes('402') || reason?.toLowerCase().includes('credit') ? 'billing_error' : 
-                 reason?.includes('429') || reason?.toLowerCase().includes('rate limit') ? 'rate_limited' : 'exhausted';
+  const isBilling = reason?.includes('402') || 
+                    reason?.includes('403') || 
+                    reason?.toLowerCase().includes('credit') || 
+                    reason?.toLowerCase().includes('license') ||
+                    reason?.toLowerCase().includes('permission-denied') ||
+                    reason?.toLowerCase().includes('insufficient_quota');
+  const isRateLimit = reason?.includes('429') || reason?.toLowerCase().includes('rate limit');
+  
+  quota.status = isBilling ? 'billing_error' : isRateLimit ? 'rate_limited' : 'exhausted';
   quota.lastError = reason;
   quota.errorTimestamp = Date.now();
+  console.warn(`[QUOTA MANAGER] Provedor ${provider} marcado como ${quota.status} devido a: ${reason?.slice(0, 120)}`);
 }
 
 export function resetAllQuotas() {

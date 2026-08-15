@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, User, Moon, Sun, Brain, Shield,
   Download, Trash2, Check, Sparkles, Plus, RefreshCw,
   Lock, Zap, Wand2, Globe, ArrowLeft, ChevronRight, Laptop,
-  Volume2, Bell, Code, Fingerprint, ExternalLink, LogOut, Edit2
+  Volume2, Bell, Code, Fingerprint, ExternalLink, LogOut, Edit2,
+  Play, Square, Smile, Briefcase, Flame, Wind
 } from 'lucide-react';
-import { UserSettings } from '../types';
+import { UserSettings, VoicePersonality } from '../types';
+import { configureUtterance, getPersonalityPreviewText } from '../utils/voiceSynthesis';
 import { SupportChatTab } from "./SupportChatTab";
 import { LifeBuoy } from "lucide-react";
 import { ZenoLogo } from './ZenoLogo';
@@ -77,6 +79,15 @@ export function SettingsModal({
   const [subView, setSubView] = useState<'main' | 'subscriptions'>('main');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [previewingPersonality, setPreviewingPersonality] = useState<VoicePersonality | null>(null);
+
+  // Stop preview audio when modal is closed
+  useEffect(() => {
+    if (!isOpen && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setPreviewingPersonality(null);
+    }
+  }, [isOpen]);
 
   const safeSettings: UserSettings = {
     userName: settings?.userName || user?.displayName || 'Usuário ZENO',
@@ -91,6 +102,7 @@ export function SettingsModal({
     systemInstruction: settings?.systemInstruction || '',
     autoRead: settings?.autoRead ?? false,
     voiceSpeed: settings?.voiceSpeed ?? 1.0,
+    voicePersonality: settings?.voicePersonality || 'friendly',
     speechLanguage: settings?.speechLanguage || 'pt-BR',
     customInstructions: settings?.customInstructions || '',
     memoryEnabled: settings?.memoryEnabled ?? true,
@@ -102,6 +114,34 @@ export function SettingsModal({
     soundEnabled: settings?.soundEnabled ?? true,
     notificationsEnabled: settings?.notificationsEnabled ?? true,
     showHomeSuggestions: settings?.showHomeSuggestions ?? false
+  };
+
+  const handleTestPersonality = (personality: VoicePersonality) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    if (previewingPersonality === personality) {
+      window.speechSynthesis.cancel();
+      setPreviewingPersonality(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const sampleText = getPersonalityPreviewText(personality, safeSettings.speechLanguage);
+    const utterance = new SpeechSynthesisUtterance(sampleText);
+    
+    configureUtterance(utterance, {
+      lang: safeSettings.speechLanguage || 'pt-BR',
+      speed: safeSettings.voiceSpeed ?? 1.0,
+      personality
+    });
+
+    utterance.onend = () => setPreviewingPersonality(null);
+    utterance.onerror = () => setPreviewingPersonality(null);
+
+    setPreviewingPersonality(personality);
+    window.speechSynthesis.speak(utterance);
   };
 
   const userEmail = safeSettings.userEmail || user?.email || '';
@@ -387,6 +427,24 @@ export function SettingsModal({
                       <option value="large">{t.settings.fontSizeLarge}</option>
                     </select>
                   </div>
+
+                  <div className="pt-4 border-t border-[#2C2C2E]/60 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Scroll Automático Inteligente</p>
+                      <p className="text-xs text-neutral-400">Rolar para o fim automaticamente apenas quando estiver próximo do rodapé, evitando interrupções na leitura de mensagens antigas.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSettings({ intelligentAutoScroll: !safeSettings.intelligentAutoScroll })}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        safeSettings.intelligentAutoScroll !== false ? 'bg-zeno' : 'bg-[#232326]'
+                      }`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        safeSettings.intelligentAutoScroll !== false ? 'translate-x-4' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -520,31 +578,40 @@ export function SettingsModal({
 
               {/* 5. VOZ */}
               {activeCategory === 'voice' && (
-                <div className="space-y-6 animate-fadeIn">
-                  <div className="flex items-center justify-between">
+                <div id="settings-voice-tab" className="space-y-6 animate-fadeIn">
+                  {/* Leitura Automática */}
+                  <div id="setting-auto-read-row" className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{t.settings.autoReadText}</p>
                       <p className="text-xs text-neutral-400">{t.settings.autoReadDesc}</p>
                     </div>
                     <button
+                      id="btn-toggle-auto-read"
                       type="button"
                       onClick={() => onUpdateSettings({ autoRead: !safeSettings.autoRead })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        safeSettings.autoRead ? 'bg-neutral-200' : 'bg-[#232326]'
+                        safeSettings.autoRead ? 'bg-zeno' : isDark ? 'bg-[#232326]' : 'bg-neutral-300'
                       }`}
                     >
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-black transition-transform ${
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
                         safeSettings.autoRead ? 'translate-x-4' : 'translate-x-1'
                       }`} />
                     </button>
                   </div>
 
-                  <div className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{t.settings.voice}</h3>
+                  {/* Idioma da Voz */}
+                  <div id="setting-speech-language-section" className="space-y-2 pt-4 border-t border-[#2C2C2E]/60">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="select-speech-language" className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                        {t.settings.voice}
+                      </label>
+                      <span className="text-[11px] text-neutral-400">Síntese de Voz ZENO</span>
+                    </div>
                     <select
+                      id="select-speech-language"
                       value={safeSettings.speechLanguage || 'pt-BR'}
                       onChange={(e) => onUpdateSettings({ speechLanguage: e.target.value })}
-                      className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none ${
+                      className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none focus:border-zeno ${
                         isDark ? 'bg-[#17171a] border-[#2C2C2E] text-white' : 'bg-neutral-50 border-neutral-200 text-neutral-900'
                       }`}
                     >
@@ -552,6 +619,178 @@ export function SettingsModal({
                       <option value="en-US">{t.settings.voiceLangEn}</option>
                       <option value="es-ES">{t.settings.voiceLangEs}</option>
                     </select>
+                  </div>
+
+                  {/* Personalidades de Síntese de Voz */}
+                  <div id="setting-voice-personalities-section" className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                          {t.settings.voicePersonality}
+                        </h3>
+                        {previewingPersonality && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-zeno font-medium animate-pulse">
+                            <Volume2 className="w-3 h-3" />
+                            Reproduzindo...
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        {t.settings.voicePersonalityDesc}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {[
+                        {
+                          id: 'formal' as VoicePersonality,
+                          title: t.settings.voicePersonalityFormal,
+                          desc: t.settings.voicePersonalityFormalDesc,
+                          icon: Briefcase
+                        },
+                        {
+                          id: 'friendly' as VoicePersonality,
+                          title: t.settings.voicePersonalityFriendly,
+                          desc: t.settings.voicePersonalityFriendlyDesc,
+                          icon: Smile
+                        },
+                        {
+                          id: 'enthusiastic' as VoicePersonality,
+                          title: t.settings.voicePersonalityEnthusiastic,
+                          desc: t.settings.voicePersonalityEnthusiasticDesc,
+                          icon: Flame
+                        },
+                        {
+                          id: 'calm' as VoicePersonality,
+                          title: t.settings.voicePersonalityCalm,
+                          desc: t.settings.voicePersonalityCalmDesc,
+                          icon: Wind
+                        },
+                        {
+                          id: 'concise' as VoicePersonality,
+                          title: t.settings.voicePersonalityConcise,
+                          desc: t.settings.voicePersonalityConciseDesc,
+                          icon: Zap
+                        }
+                      ].map((item) => {
+                        const isSelected = (safeSettings.voicePersonality || 'friendly') === item.id;
+                        const isPlaying = previewingPersonality === item.id;
+                        const IconComponent = item.icon;
+
+                        return (
+                          <div
+                            key={item.id}
+                            id={`voice-personality-${item.id}`}
+                            onClick={() => onUpdateSettings({ voicePersonality: item.id })}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between group ${
+                              isSelected
+                                ? 'bg-zeno/10 border-zeno ring-1 ring-zeno/30'
+                                : isDark
+                                ? 'bg-[#17171a] border-[#2C2C2E] hover:border-neutral-700'
+                                : 'bg-neutral-50 border-neutral-200 hover:border-neutral-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`p-1.5 rounded-lg ${
+                                  isSelected ? 'bg-zeno text-white' : isDark ? 'bg-[#232326] text-neutral-300' : 'bg-neutral-200 text-neutral-700'
+                                }`}>
+                                  <IconComponent className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <span className={`text-xs font-semibold ${
+                                    isSelected ? 'text-zeno' : isDark ? 'text-white' : 'text-neutral-900'
+                                  }`}>
+                                    {item.title}
+                                  </span>
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <div className="w-2 h-2 rounded-full bg-zeno ring-4 ring-zeno/20" />
+                              )}
+                            </div>
+
+                            <p className="text-[11px] text-neutral-400 line-clamp-2 mb-3">
+                              {item.desc}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-dashed border-neutral-800/40">
+                              <span className="text-[10px] text-neutral-400">
+                                {isSelected ? 'Personalidade ativa' : 'Clique para selecionar'}
+                              </span>
+                              <button
+                                id={`btn-preview-${item.id}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTestPersonality(item.id);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                                  isPlaying
+                                    ? 'bg-zeno text-white'
+                                    : 'bg-neutral-800/50 hover:bg-zeno/20 text-neutral-300 hover:text-zeno'
+                                }`}
+                                title={isPlaying ? t.settings.voicePreviewStop : t.settings.voicePreview}
+                              >
+                                {isPlaying ? (
+                                  <>
+                                    <Square className="w-2.5 h-2.5 fill-current" />
+                                    <span>{t.settings.voicePreviewStop}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-2.5 h-2.5 fill-current" />
+                                    <span>{t.settings.voicePreview}</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Velocidade da Síntese de Voz */}
+                  <div id="setting-voice-speed-section" className="space-y-3 pt-4 border-t border-[#2C2C2E]/60">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="voice-speed-slider" className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                        {t.settings.voiceSpeed}
+                      </label>
+                      <span className="text-xs font-mono font-medium text-zeno">
+                        {safeSettings.voiceSpeed ? `${safeSettings.voiceSpeed.toFixed(2)}x` : '1.00x'}
+                      </span>
+                    </div>
+
+                    <input
+                      id="voice-speed-slider"
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.05"
+                      value={safeSettings.voiceSpeed ?? 1.0}
+                      onChange={(e) => onUpdateSettings({ voiceSpeed: parseFloat(e.target.value) })}
+                      className="w-full h-1.5 bg-[#2C2C2E] rounded-lg appearance-none cursor-pointer accent-[#0084DF]"
+                    />
+
+                    <div className="flex items-center justify-between gap-1.5 pt-1">
+                      {[0.8, 1.0, 1.25, 1.5].map((speed) => (
+                        <button
+                          key={speed}
+                          type="button"
+                          onClick={() => onUpdateSettings({ voiceSpeed: speed })}
+                          className={`flex-1 py-1 rounded-lg text-[10px] font-mono transition-colors border ${
+                            Math.abs((safeSettings.voiceSpeed ?? 1.0) - speed) < 0.05
+                              ? 'bg-zeno/15 border-zeno text-zeno font-semibold'
+                              : isDark
+                              ? 'bg-[#17171a] border-[#2C2C2E] text-neutral-400 hover:text-white'
+                              : 'bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black'
+                          }`}
+                        >
+                          {speed.toFixed(1)}x
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
