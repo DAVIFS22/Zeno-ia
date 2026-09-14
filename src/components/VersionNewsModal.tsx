@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { History, X, ChevronRight, Loader2 } from 'lucide-react';
 import { useVersion } from '../contexts/VersionContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { ZenoLogo } from './ZenoLogo';
 
 interface VersionNewsModalProps {
   isOpen: boolean;
@@ -95,7 +96,8 @@ export const VersionNewsModal: React.FC<VersionNewsModalProps> = ({
         <div className="flex items-start justify-between px-10 pt-10 pb-6">
           <div className="space-y-1.5">
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">Zeno IA</h2>
+              <ZenoLogo size={20} theme="dark" animateRotation={false} />
+              <h2 className="text-lg font-bold tracking-wider text-white uppercase whitespace-nowrap">ZENO</h2>
               <span className="text-sm font-medium text-neutral-400">v{currentEntry.version}</span>
               <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-white text-black tracking-wide">
                 {currentEntry.type}

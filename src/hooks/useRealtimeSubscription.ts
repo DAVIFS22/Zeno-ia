@@ -46,7 +46,11 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('[REALTIME FIRESTORE LISTENER ERROR]:', JSON.stringify(errInfo));
+  if (errInfo.error.includes('offline') || errInfo.error.includes('network-request-failed')) {
+    console.warn('[REALTIME FIRESTORE LISTENER OFFLINE]:', JSON.stringify(errInfo));
+  } else {
+    console.error('[REALTIME FIRESTORE LISTENER ERROR]:', JSON.stringify(errInfo));
+  }
 }
 
 export interface RealtimeSubscriptionData {

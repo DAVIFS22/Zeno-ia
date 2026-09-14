@@ -35,9 +35,14 @@ export const VersionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setRemoteHistory(data);
+        } else {
+          setRemoteHistory(ZENO_VERSION_HISTORY);
         }
       })
-      .catch(err => console.warn('Falha silenciosa ao carregar changelog remoto:', err));
+      .catch(err => {
+        console.warn('Falha silenciosa ao carregar changelog remoto:', err);
+        setRemoteHistory(ZENO_VERSION_HISTORY);
+      });
   }, []);
 
   const value = useMemo(() => {
@@ -45,18 +50,20 @@ export const VersionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const latestVersion = remoteHistory ? remoteHistory[0] : getLatestVersion();
 
     const checkNewVersion = () => {
-      const forceCheckVersion = "2.26.0";
+      if (remoteHistory === null) {
+        // Return false while remote history is still fetching to avoid opening the modal in a transient state.
+        return { isNew: false, version: latestVersion };
+      }
       const lastSeen = localStorage.getItem('zeno_last_seen_version');
       const latestVer = latestVersion.version;
-      const isNewCheck = lastSeen !== forceCheckVersion && lastSeen !== latestVer;
+      const isNew = lastSeen !== latestVer;
       const relevant = hasRelevantContent(latestVersion);
-      const finalIsNew = (isNewCheck || lastSeen !== latestVer) && relevant;
+      const finalIsNew = isNew && relevant;
 
       console.group('[Zeno Version Comparison Log]');
       console.log('localStorage ("zeno_last_seen_version"):', lastSeen);
       console.log('Latest Version in Config/Remote:', latestVer);
-      console.log('Force Check Version:', forceCheckVersion);
-      console.log('isNewCheck (lastSeen !== forceCheckVersion && lastSeen !== latestVer):', isNewCheck);
+      console.log('Is version new (lastSeen !== latestVer):', isNew);
       console.log('hasRelevantContent(latestVersion):', relevant);
       console.log('Final isNew Result:', finalIsNew);
       console.groupEnd();

@@ -14,15 +14,14 @@ import path from 'path';
  * environment variable to 'firestore' or 'postgres' and configure the connection pool.
  */
 
-export type DbType = 'local' | 'firestore' | 'postgres';
-
-export const DB_TYPE: DbType = (process.env.DB_TYPE as DbType) || 'local';
+type DbType = 'local' | 'firestore' | 'postgres';
+const DB_TYPE: DbType = (process.env.DB_TYPE as DbType) || 'local';
 
 // ==========================================
 // 1. DATABASE SCHEMA DEFINITIONS
 // ==========================================
 
-export interface UserUsage {
+interface UserUsage {
   userId: string;
   plan: 'ZENO Free' | 'ZENO Pro';
   date: string;
@@ -40,7 +39,7 @@ export interface UserUsage {
   device: string;
 }
 
-export interface AdminLimits {
+interface AdminLimits {
   messages: number;
   search: number;
   image: number;
@@ -48,7 +47,7 @@ export interface AdminLimits {
   vision: number;
 }
 
-export interface AdminConfig {
+interface AdminConfig {
   limits: AdminLimits;
   proFeatures: Record<string, boolean>;
   serverSettings: {
@@ -60,7 +59,7 @@ export interface AdminConfig {
   };
 }
 
-export interface AuditLog {
+interface AuditLog {
   id: string;
   userEmail: string;
   action: string;
@@ -72,7 +71,7 @@ export interface AuditLog {
   device: string;
 }
 
-export interface SystemLog {
+interface SystemLog {
   id: string;
   type: 'info' | 'error' | 'ia' | 'auth' | 'system';
   userEmail: string;
@@ -84,7 +83,7 @@ export interface SystemLog {
   device: string;
 }
 
-export interface SystemStats {
+interface SystemStats {
   totalMessagesSent: number;
   totalImagesGenerated: number;
   totalWebSearches: number;
@@ -120,7 +119,7 @@ export interface QueuedTask {
   retryCount: number;
 }
 
-export interface DatabaseSchema {
+interface DatabaseSchema {
   users: Record<string, UserUsage>;
   config: AdminConfig;
   auditLogs: AuditLog[];

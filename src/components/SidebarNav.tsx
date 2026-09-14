@@ -91,15 +91,17 @@ const SidebarSessionItem = React.memo<SidebarSessionItemProps>(({
         setShowMenu(false);
       }
     };
+    const handleClose = () => setShowMenu(false);
+
     if (showMenu) {
       document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('resize', () => setShowMenu(false));
-      window.addEventListener('scroll', () => setShowMenu(false), true);
+      window.addEventListener('resize', handleClose);
+      window.addEventListener('scroll', handleClose, true);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('resize', () => setShowMenu(false));
-      window.removeEventListener('scroll', () => setShowMenu(false), true);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
     };
   }, [showMenu]);
 

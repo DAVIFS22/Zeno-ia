@@ -65,8 +65,12 @@ export function useAppSettings(userId: string | null, profile: any) {
               localStorage.setItem(storageKey, JSON.stringify({ ...userSettings, ...data.settings }));
             }
           }
-        } catch (e) {
-          console.error('Error fetching settings from Firestore:', e);
+        } catch (e: any) {
+          if (e?.message?.includes('offline') || e?.code === 'unavailable') {
+            console.warn('Cannot fetch settings from Firestore, client is offline. Using local settings.');
+          } else {
+            console.error('Error fetching settings from Firestore:', e);
+          }
         }
       };
       fetchSettings();
@@ -115,8 +119,12 @@ export function useAppSettings(userId: string | null, profile: any) {
           settings: newSettings
         });
         console.log('[SETTINGS] Persisted to Firestore:', newSettings);
-      } catch (e) {
-        console.error('Error persisting settings to Firestore:', e);
+      } catch (e: any) {
+        if (e?.message?.includes('offline') || e?.code === 'unavailable') {
+          console.warn('Cannot persist settings to Firestore, client is offline. Saved locally.');
+        } else {
+          console.error('Error persisting settings to Firestore:', e);
+        }
       }
     }
   }, [userId, profile]);

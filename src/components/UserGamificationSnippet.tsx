@@ -50,6 +50,9 @@ export const UserGamificationSnippet = ({ userId, isDark }: { userId: string, is
       getUserGamificationProfile(userId).then(p => {
         setProfile(p);
         setLoading(false);
+      }).catch(err => {
+        console.warn('Failed to load gamification profile:', err);
+        setLoading(false);
       });
     } else {
       setProfile(null);

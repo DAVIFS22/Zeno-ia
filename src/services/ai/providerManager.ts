@@ -8,7 +8,7 @@ import { incrementAiStat } from './metrics';
 import { sanitizeResponseText } from '../../utils/imageSecurity';
 
 function getGeminiClient(userKey?: string) {
-  const envKey = process.env.GEMINI_API_KEY;
+  const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   const hasUserKey = userKey && userKey.trim().length > 10;
   
   // Se for chave do usuário, usamos ela. Se não, verificamos a do sistema.
@@ -210,19 +210,42 @@ export async function callProviderAdapter(
       const isXai = provider === 'xai' || provider === 'grok';
       const xaiKey = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
       
+      let effectiveModel = model;
       if (isXai) {
+        if (effectiveModel === 'grok-beta' || effectiveModel === 'grok' || effectiveModel === 'grok-2-latest' || effectiveModel === 'grok-4.6') {
+          effectiveModel = 'grok-4.6';
+        } else if (effectiveModel === 'grok-2') {
+          effectiveModel = 'grok-4.5';
+        }
+      } else if (provider === 'openrouter') {
+        if (effectiveModel === 'google/gemini-pro-1.5' || effectiveModel === 'google/gemini-1.5-pro') {
+          effectiveModel = 'google/gemini-2.5-pro';
+        } else if (effectiveModel === 'google/gemini-2.0-flash-001' || effectiveModel === 'google/gemini-1.5-flash' || effectiveModel === 'google/gemini-flash') {
+          effectiveModel = 'google/gemini-2.5-flash';
+        } else if (effectiveModel === 'x-ai/grok-beta' || effectiveModel === 'x-ai/grok-2' || effectiveModel === 'x-ai/grok-2-latest' || effectiveModel === 'x-ai/grok') {
+          effectiveModel = 'x-ai/grok-4.6';
+        } else if (effectiveModel === 'anthropic/claude-sonnet-5') {
+          effectiveModel = 'anthropic/claude-3.5-sonnet';
+        }
+      }
+
+      if (isXai) {
+        const targetOpenRouterModel = effectiveModel.includes('/') 
+          ? effectiveModel 
+          : (effectiveModel === 'grok-4.6' || effectiveModel === 'grok-2-latest' || effectiveModel === 'grok-2' || effectiveModel === 'grok-beta' || effectiveModel === 'grok' ? 'x-ai/grok-4.6' : `x-ai/${effectiveModel}`);
+
         if (xaiKey) {
-          console.log(`[xAI Grok Adapter] Attempting direct xAI API with model ${model}`);
+          console.log(`[xAI Grok Adapter] Attempting direct xAI API with model ${effectiveModel}`);
           try {
             const url = 'https://api.x.ai/v1/chat/completions';
             const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
             text = await callOpenAiCompatible(
               url,
               xaiKey,
-              model,
+              effectiveModel,
               messages,
               options.temperature || 0.7,
-              options.maxOutputTokens || 1024,
+              Math.min(options.maxOutputTokens || 1024, 2048),
               {},
               options.timeoutMs || 15000
             );
@@ -233,26 +256,26 @@ export async function callProviderAdapter(
                                        xaiMsg.toLowerCase().includes('credits') ||
                                        xaiMsg.toLowerCase().includes('license') ||
                                        xaiMsg.includes('401') ||
-                                       xaiMsg.includes('402');
+                                       xaiMsg.includes('402') ||
+                                       xaiMsg.includes('400');
 
             if (isCreditOrPermError) {
               setProviderQuotaExhausted('xai', xaiMsg);
-              recordCircuitFailure(`xai:${model}`, false, true);
+              recordCircuitFailure(`xai:${effectiveModel}`, false, true);
             }
 
-            if (isCreditOrPermError && process.env.OPENROUTER_API_KEY) {
-              console.warn(`[xAI Grok Adapter] Direct xAI API falhou (${xaiMsg.slice(0, 100)}). Redirecionando automaticamente para OpenRouter (x-ai/${model})...`);
+            if (process.env.OPENROUTER_API_KEY) {
+              console.warn(`[xAI Grok Adapter] Direct xAI API indisponível (${xaiMsg.slice(0, 80)}). Redirecionando para OpenRouter (${targetOpenRouterModel})...`);
               const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
-              const targetModel = model.includes('/') ? model : `x-ai/${model}`;
               const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
               try {
                 text = await callOpenAiCompatible(
                   openRouterUrl,
                   process.env.OPENROUTER_API_KEY,
-                  targetModel,
+                  targetOpenRouterModel,
                   messages,
                   options.temperature || 0.7,
-                  options.maxOutputTokens || 1024,
+                  Math.min(options.maxOutputTokens || 1024, 2048),
                   { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' },
                   options.timeoutMs || 25000
                 );
@@ -260,7 +283,7 @@ export async function callProviderAdapter(
                 const orMsg = orErr?.message || String(orErr);
                 if (orMsg.includes('402') || orMsg.toLowerCase().includes('credit') || orMsg.includes('403') || orMsg.includes('401')) {
                   setProviderQuotaExhausted('openrouter', orMsg);
-                  recordCircuitFailure(`openrouter:${targetModel}`, false, true);
+                  recordCircuitFailure(`openrouter:${targetOpenRouterModel}`, false, true);
                 }
                 throw orErr;
               }
@@ -269,18 +292,17 @@ export async function callProviderAdapter(
             }
           }
         } else if (process.env.OPENROUTER_API_KEY) {
-          console.log(`[xAI Grok Adapter] Routing via OpenRouter (x-ai/${model})`);
+          console.log(`[xAI Grok Adapter] Routing via OpenRouter (${targetOpenRouterModel})`);
           const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
-          const targetModel = model.includes('/') ? model : `x-ai/${model}`;
           const messages = prepareOpenAiMessages(options.contents, options.systemInstruction);
           try {
             text = await callOpenAiCompatible(
               openRouterUrl,
               process.env.OPENROUTER_API_KEY,
-              targetModel,
+              targetOpenRouterModel,
               messages,
               options.temperature || 0.7,
-              options.maxOutputTokens || 1024,
+              Math.min(options.maxOutputTokens || 1024, 2048),
               { 'HTTP-Referer': 'https://zeno.ai', 'X-Title': 'ZENO AI' },
               options.timeoutMs || 25000
             );
@@ -288,7 +310,7 @@ export async function callProviderAdapter(
             const orMsg = orErr?.message || String(orErr);
             if (orMsg.includes('402') || orMsg.toLowerCase().includes('credit') || orMsg.includes('403') || orMsg.includes('401')) {
               setProviderQuotaExhausted('openrouter', orMsg);
-              recordCircuitFailure(`openrouter:${targetModel}`, false, true);
+              recordCircuitFailure(`openrouter:${targetOpenRouterModel}`, false, true);
             }
             throw orErr;
           }
@@ -303,7 +325,7 @@ export async function callProviderAdapter(
         if (!apiKey) throw new Error(`API KEY faltando para o provedor ${provider}`);
 
         if (provider === 'groq') {
-          console.log(`[Groq Adapter] Successfully configured model ${model} using GROQ_API_KEY`);
+          console.log(`[Groq Adapter] Successfully configured model ${effectiveModel} using GROQ_API_KEY`);
         }
 
         const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
@@ -318,10 +340,10 @@ export async function callProviderAdapter(
         text = await callOpenAiCompatible(
           url, 
           apiKey, 
-          model, 
+          effectiveModel, 
           messages, 
           options.temperature || 0.7, 
-          options.maxOutputTokens || 1024, 
+          Math.min(options.maxOutputTokens || 1024, 2048), 
           extraHeaders,
           options.timeoutMs || 15000
         );
@@ -370,14 +392,13 @@ export async function callProviderAdapter(
       msg.toLowerCase().includes('license') ||
       msg.includes('402') || 
       msg.includes('401') ||
-      msg.includes('400') || // Bad Request/Invalid Key in some APIs
-      (provider === 'openrouter' && msg.includes('404')) || // No endpoints found usually means billing/policy or deprecated model
-      msg.toLowerCase().includes('insufficient_quota');
-    const isModelNotFound = msg.includes('404') || msg.toLowerCase().includes('model_not_found') || msg.toLowerCase().includes('no endpoints found');
+      msg.toLowerCase().includes('insufficient_quota') ||
+      msg.toLowerCase().includes('insufficient authentication scopes');
+    const isModelNotFound = msg.includes('404') || msg.toLowerCase().includes('model not found') || msg.toLowerCase().includes('model_not_found') || msg.toLowerCase().includes('no endpoints found');
     const isTimeout = msg.includes('timeout') || msg.includes('aborted');
 
-    recordCircuitFailure(key, is429 || isModelNotFound, isPermanentAuthOrBillingError);
-    if (isPermanentAuthOrBillingError) {
+    recordCircuitFailure(key, is429, isPermanentAuthOrBillingError || isModelNotFound);
+    if (isPermanentAuthOrBillingError || is429) {
       setProviderQuotaExhausted(provider, msg);
       if (msg.toLowerCase().includes('openrouter') || msg.toLowerCase().includes('openrouter_credits')) {
         setProviderQuotaExhausted('openrouter', msg);

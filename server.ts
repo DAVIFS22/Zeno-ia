@@ -1,13 +1,35 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
+import { GoogleGenAI, ThinkingLevel, Modality, LiveServerMessage } from "@google/genai";
+import { WebSocketServer } from "ws";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [
+      nodeProfilingIntegration(),
+    ],
+    tracesSampleRate: 1.0,
+  });
+}
+
 // DIAGNÓSTICO DE ERROS GLOBAIS
 process.on('uncaughtException', (err) => {
   console.error('❌ [SERVER FATAL] Uncaught Exception:', err.message);
-  console.error(err.stack);
+  Sentry.captureException(err);
 });
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ [SERVER FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+  Sentry.captureException(reason);
+});
+
+// Inicialização do Gemini
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
 });
 
 import express from "express";
@@ -16,7 +38,6 @@ import fs from "fs";
 import multer from "multer";
 import { uploadImageWithFallback } from "./src/server/storage/imageUploadManager";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import Stripe from "stripe";
 import { getProviderQuota } from './src/services/ai/quotaManager';
 import { SubscriptionService } from "./src/lib/subscriptionService";
@@ -57,6 +78,7 @@ import { getGlobalAiStats } from "./src/services/ai/metrics";
 import { sanitizeResponseText } from "./src/utils/imageSecurity";
 import { resetAllCircuits } from './src/services/ai/circuitBreaker';
 import { resetAllQuotas } from './src/services/ai/quotaManager';
+import { handleGeminiTTS } from "./src/api/tts";
 
 // Startup Firestore connection test removed to avoid listCollections dependency
 
@@ -67,51 +89,11 @@ if (!process.env.GEMINI_API_KEY) {
   console.warn('[WARNING] GEMINI_API_KEY não encontrada. Algumas funcionalidades podem não funcionar corretamente.');
 }
 
-// Intelligent Model Selection System
-let availableModelsCache: any[] = [];
-let lastModelFetch = 0;
-
-async function getAvailableModels() {
-  const now = Date.now();
-  // Cache for 5 minutes (reduced from 1 hour to stay fresh)
-  if (availableModelsCache.length > 0 && now - lastModelFetch < 300000) {
-    return availableModelsCache;
-  }
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'dummy_key') {
-      console.warn('[MODELS] Skipping model list: No valid API key configured.');
-      return [];
-    }
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.list();
-    const models = [];
-    // Pager is an async iterator
-    for await (const model of response) {
-      models.push(model);
-    }
-    availableModelsCache = models;
-    lastModelFetch = now;
-    console.log(`[MODELS] Discovered ${availableModelsCache.length} models from API.`);
-    return availableModelsCache;
-  } catch (err: any) {
-    if (err.message?.includes('API_KEY_INVALID') || err.message?.includes('400')) {
-       console.warn('[MODELS] Could not list models: Invalid API Key.');
-    } else {
-       console.error('[MODELS ERROR] Failed to list models:', err);
-    }
-    return [];
-  }
-}
-
-async function smartSelectModel(taskType: string, isPro: boolean = false) {
-  if (taskType === 'think' || taskType === 'code' || taskType === 'vision' || isPro) {
-    return 'gemini-3.1-pro-preview';
-  }
-  return 'gemini-3.7-flash';
-}
-
+import { getVerifiedUser, getVerifiedEmail, secureVerifyAdmin } from "./src/server/auth";
+import { getAvailableModels, smartSelectModel } from "./src/server/models";
+import { handleChat } from "./src/api/chatHandler";
+import { handleTranscribe } from "./src/api/transcribeHandler";
+import { handleImageAnalysis } from "./src/api/imageAnalysisHandler";
 import { supportTools } from "./src/lib/supportTools";
 
 async function startServer() {
@@ -155,6 +137,12 @@ async function startServer() {
 
   // Initialize task manager background loop & register image generator with turbo speed optimization support
   initFallbackQueueRunner();
+
+  const imageAnalysisUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
+
+  app.post("/api/transcribe", handleTranscribe);
+  app.post("/api/analyze-image", imageAnalysisUpload.single('image'), handleImageAnalysis);
+  app.post("/api/chat", handleChat);
   
   // Reset resilience states at startup to clear any temporary blocks from previous session
   try {
@@ -210,107 +198,27 @@ async function startServer() {
     }
   });
 
-async function getVerifiedUser(req: any): Promise<{ uid: string; email: string } | null> {
-  const authHeader = req.headers['authorization'];
-  let token = null;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split('Bearer ')[1];
-  }
-
-  if (token) {
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(token);
-      if (decodedToken && decodedToken.uid) {
-        return { uid: decodedToken.uid, email: decodedToken.email || '' };
-      }
-    } catch (error: any) {
-      // fallback to manual decode for preview environment
-    }
-
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-        const uid = payload.user_id || payload.uid || payload.sub;
-        if (uid) {
-          return { uid, email: payload.email || '' };
-        }
-      }
-    } catch (e) {}
-  }
-  return null;
-}
-
-/**
- * Securely verifies the Firebase ID Token and returns the decoded email.
- * This ensures the email is authenticated and not spoofed.
- */
-async function getVerifiedEmail(req: any): Promise<string | null> {
-  const authHeader = req.headers['authorization'];
-  let token = null;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split('Bearer ')[1];
-  }
-
-  if (token) {
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(token);
-      if (decodedToken && decodedToken.email) {
-        return decodedToken.email;
-      }
-    } catch (error: any) {
-      // Supress warning for AI Studio platform tokens in preview (aud mismatch is expected in some preview states)
-      if (!error.message.includes('gen-lang-client')) {
-         console.warn('[AUTH] Admin SDK verifyIdToken failed, attempting JWT payload decode fallback:', error.message);
-      }
-    }
-
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-        if (payload && payload.email) {
-          // Verify if it's a platform token or project token
-          const isPlatform = payload.aud === 'gen-lang-client-0742851387';
-          if (isPlatform) {
-             console.log("[AUTH] Valid platform token detected for:", payload.email);
-          }
-          return payload.email;
-        }
-      }
-    } catch (jwtErr) {
-      console.warn('[AUTH] JWT decode fallback failed:', jwtErr);
-    }
-  }
-
-  const headerEmail = req.headers['x-user-email'];
-  if (headerEmail && typeof headerEmail === 'string' && headerEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-    return headerEmail;
-  }
-
-  return null;
-}
-
-/**
- * Enhanced Admin Verification for API Routes.
- * Strictly checks against hardcoded ADMIN_EMAIL after verifying token.
- */
-async function secureVerifyAdmin(req: any, res: any): Promise<string | null> {
-  const email = await getVerifiedEmail(req);
-  
-  if (!email || email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-    res.status(403).json({ 
-      error: "403 - Acesso Negado", 
-      message: `Apenas o e-mail autorizado (${ADMIN_EMAIL}) possui o papel admin.`,
-      verifiedEmail: email
-    });
-    return null;
-  }
-  
-  return email;
-}
-
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Endpoint de Transcrição
+app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
+  try {
+    const audioBuffer = req.file?.buffer;
+    if (!audioBuffer) return res.status(400).json({ error: "No audio file" });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [
+        { text: "Transcribe the following audio:" },
+        { inlineData: { mimeType: "audio/wav", data: audioBuffer.toString("base64") } }
+      ]
+    });
+    res.json({ text: response.text });
+  } catch (err) {
+    Sentry.captureException(err);
+    res.status(500).json({ error: "Transcription failed" });
+  }
+});
 
 app.post("/api/upload-image", upload.single("image"), async (req: any, res: any) => {
   try {
@@ -350,48 +258,14 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     }
   });
 
-  app.post("/api/analyze-image", upload.single("image"), async (req: any, res: any) => {
-    try {
-      const file = req.file;
-      const prompt = req.body.prompt || "Analise esta imagem.";
-      const geminiApiKey = req.body.geminiApiKey;
 
-      if (!file) return res.status(400).json({ error: "Nenhuma imagem fornecida." });
-
-      const aiResult = await generateTextWithFallback({
-        contents: [
-          { 
-            role: "user", 
-            parts: [
-              { 
-                inlineData: { 
-                  mimeType: file.mimetype, 
-                  data: file.buffer.toString("base64") 
-                } 
-              }, 
-              { text: prompt }
-            ] 
-          }
-        ],
-        category: 'vision',
-        userGeminiApiKey: geminiApiKey,
-      });
-
-      res.json({ analysis: aiResult.text });
-    } catch (err: any) {
-      console.error("[ANALYZE IMAGE ERROR]:", err);
-      res.status(500).json({ error: err.message || "Erro na análise da imagem." });
-    }
-  });
-
-  // API Routes
   app.post("/api/generate-music", async (req, res) => {
     try {
       const { prompt, genre, keySig, tempo, mode, geminiApiKey } = req.body;
       if (!prompt) return res.status(400).json({ error: "Tema da música é obrigatório." });
 
       const modelName = mode === 'clip' ? 'lyria-3-clip-preview' : 'lyria-3-pro-preview';
-      const apiKey = geminiApiKey && geminiApiKey.trim().length > 10 ? geminiApiKey.trim() : process.env.GEMINI_API_KEY;
+      const apiKey = geminiApiKey && geminiApiKey.trim().length > 10 ? geminiApiKey.trim() : (process.env.GEMINI_API_KEY || process.env.API_KEY);
 
       if (!apiKey) {
         return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor." });
@@ -596,852 +470,6 @@ app.post("/api/upload-image", upload.single("image"), async (req: any, res: any)
     }
   });
 
-  const imageAnalysisUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
-
-  app.post("/api/analyze-image", imageAnalysisUpload.single('image'), async (req: any, res: any) => {
-    try {
-      let imageBuffer: Buffer | null = null;
-      let mimeType: string = "image/jpeg";
-
-      if (req.file) {
-        imageBuffer = req.file.buffer;
-        mimeType = req.file.mimetype || "image/jpeg";
-      } else if (req.body?.image) {
-        const rawImage = req.body.image;
-        if (typeof rawImage === 'string' && rawImage.startsWith('data:')) {
-          const match = rawImage.match(/^data:([^;]+);base64,(.+)$/);
-          if (match) {
-            mimeType = match[1];
-            imageBuffer = Buffer.from(match[2], 'base64');
-          } else {
-            const parts = rawImage.split(',');
-            imageBuffer = Buffer.from(parts[1] || parts[0], 'base64');
-          }
-        } else if (typeof rawImage === 'string') {
-          imageBuffer = Buffer.from(rawImage, 'base64');
-        }
-      } else if (req.body?.imageBase64) {
-        imageBuffer = Buffer.from(req.body.imageBase64, 'base64');
-        mimeType = req.body.mimeType || "image/jpeg";
-      }
-
-      if (!imageBuffer || imageBuffer.length === 0) {
-        return res.status(400).json({ error: "Nenhuma imagem válida foi enviada para análise." });
-      }
-
-      const mode: 'receipt' | 'menu' | 'chart' | 'ocr' | 'general' | 'custom' = req.body.mode || 'general';
-      const userPrompt = req.body.prompt || '';
-      const targetLanguage = req.body.targetLanguage || 'pt-BR';
-      const geminiApiKey = req.body.geminiApiKey;
-
-      let systemPrompt = "";
-      let taskPrompt = "";
-
-      if (mode === 'receipt') {
-        systemPrompt = `Você é o ZENO Vision Specialist em extração e auditoria de documentos fiscais, recibos, cupons e faturas.
-Sua missão é extrair com precisão cirúrgica todas as informações visíveis na imagem.
-
-ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
-### 🧾 Dados do Estabelecimento
-- **Nome / Razão Social:**
-- **CNPJ / Identificação:** (se visível)
-- **Endereço / Local:** (se visível)
-- **Data e Horário:**
-
-### 🛒 Itens e Serviços
-Crie uma tabela Markdown completa:
-| # | Item / Descrição | Qtd | Preço Unit. | Total |
-|---|---|---|---|---|
-
-### 💰 Resumo Financeiro
-- **Subtotal:**
-- **Descontos Aplicados:**
-- **Taxas / Impostos / Gorjeta:**
-- **TOTAL GERAL:** (Destaque em negrito com moeda original)
-- **Forma de Pagamento:** (Cartão de Crédito/Débito, Dinheiro, Pix, etc.)
-
-### 📌 Informações Adicionais & Auditoria
-- Número da Nota/Cupom, Código de Autorização, Troco, Observações relevantes.`;
-
-        taskPrompt = userPrompt 
-          ? `Analise este recibo/fatura e responda também à seguinte solicitação: "${userPrompt}". Siga a estrutura de extração de dados completa.`
-          : `Extraia detalhadamente todos os dados deste recibo, discriminando itens, valores unitários, impostos e total.`;
-
-      } else if (mode === 'menu') {
-        systemPrompt = `Você é o ZENO Gastronomy & Vision Expert, especialista em análise, tradução e consultoria de cardápios e menus internacionais.
-Sua missão é decifrar o cardápio, categorizar cada prato, traduzir com riqueza de detalhes para o idioma ${targetLanguage} e alertar sobre restrições alimentares.
-
-ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
-### 🍽️ Cardápio: [Nome do Estabelecimento / Culinária]
-
-Para cada categoria identificada (ex: Entradas / Appetizers, Pratos Principais / Mains, Sobremesas / Desserts, Bebidas / Drinks):
-#### [Nome da Categoria]
-- **[Nome Traduzido]** *(Nome Original)* — **[Preço]**
-  - **Descrição:** Descrição detalhada dos ingredientes e modo de preparo.
-  - **Alertas / Selos:** 🌱 Vegetariano | 🌿 Vegano | 🌾 Sem Glúten | ⚠️ Contém Lactose/Nozes/Frutos do Mar (se aplicável).
-
-### 🌟 Destaques & Recomendações do Chef
-Apresente as 2 a 3 melhores sugestões de pratos com base na imagem, explicando o porquê.`;
-
-        taskPrompt = userPrompt
-          ? `Analise e traduza este cardápio para ${targetLanguage}. Atenda também: "${userPrompt}".`
-          : `Traduza e estruture este cardápio para ${targetLanguage}, detalhando pratos, ingredientes, preços e alertas dietéticos.`;
-
-      } else if (mode === 'chart') {
-        systemPrompt = `Você é o ZENO Data Scientist & Senior Business Analyst, especialista em interpretação de gráficos, tabelas e infográficos.
-Sua missão é extrair dados quantitativos com exatidão e gerar insights acionáveis.
-
-ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
-### 📊 Visão Geral do Gráfico
-- **Tipo de Visualização:** (ex: Gráfico de Linhas, Barras, Pizza, Dispersão, Heatmap)
-- **Título / Tema Central:**
-- **Eixos e Unidades:** Eixo X (Horizontal) e Eixo Y (Vertical), Unidade de Medida, Intervalo de Tempo e Legendas.
-
-### 🔢 Dados Quantitativos Extraídos
-Tabela ou lista estruturada com os valores numéricos mais importantes identificados na imagem:
-| Categoria / Período | Métrica / Valor | Variação / % |
-|---|---|---|
-
-### 📈 Tendências, Padrões e Anomalias
-- **Tendência Principal:** (ex: Crescimento contínuo de X%, Queda no período Y)
-- **Pontos Extremos:** Ponto mais alto (pico) e ponto mais baixo (vale).
-- **Correlações ou Desvios:** Padrões sazonais ou anomalias notáveis.
-
-### 💡 Conclusões & Insights Estratégicos
-Forneça de 3 a 5 conclusões e recomendações práticas baseadas nos dados analisados.`;
-
-        taskPrompt = userPrompt
-          ? `Analise este gráfico em detalhes. Atenda também: "${userPrompt}".`
-          : `Extraia todas as métricas, eixos, tendências e conclusões estratégicas deste gráfico.`;
-
-      } else if (mode === 'ocr') {
-        systemPrompt = `Você é o ZENO OCR Specialist. Sua tarefa é transcrever todo o texto visível na imagem com exatidão absoluta e fornecer um resumo executivo.
-
-ESTRUTURA DE RESPOSTA OBRIGATÓRIA:
-### 📝 Transcrição Literal do Texto
-\`\`\`text
-[Texto transcrito na íntegra preservando quebras de linha e estrutura]
-\`\`\`
-
-### 📌 Resumo Executivo & Tópicos Principais
-- Resumo claro em tópicos dos pontos essenciais do documento.`;
-
-        taskPrompt = userPrompt
-          ? `Transcreva o texto deste documento e responda: "${userPrompt}".`
-          : `Transcreva todo o texto contido nesta imagem com precisão e resuma seus pontos principais.`;
-
-      } else {
-        systemPrompt = `Você é o ZENO Vision AI, um assistente multimodal de última geração.
-Analise a imagem com alta acuidade visual, descrevendo detalhes, respondendo perguntas com precisão e formatando a resposta com Markdown elegante.`;
-
-        taskPrompt = userPrompt || `Analise esta imagem detalhadamente, descrevendo seus elementos principais, contexto e informações relevantes.`;
-      }
-
-      const base64Str = imageBuffer.toString('base64');
-      const aiResult = await generateTextWithFallback({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                inlineData: {
-                  data: base64Str,
-                  mimeType: mimeType
-                }
-              },
-              { text: taskPrompt }
-            ]
-          }
-        ],
-        systemInstruction: systemPrompt,
-        category: 'vision',
-        userGeminiApiKey: geminiApiKey,
-        temperature: 0.2,
-        maxOutputTokens: 2500
-      });
-
-      const analysisText = aiResult.text;
-      const modelUsed = aiResult.modelUsed;
-
-      if (!analysisText) {
-        throw new Error("Não foi possível analisar a imagem.");
-      }
-
-      const lines = analysisText.split('\n').map(l => l.trim()).filter(l => l.length > 10 && !l.startsWith('#') && !l.startsWith('|'));
-      const extractedSummary = lines[0] || "Análise visual concluída com sucesso.";
-
-      return res.json({
-        analysis: analysisText,
-        extractedSummary,
-        mode,
-        modelUsed,
-        provider: 'gemini',
-        timestamp: Date.now()
-      });
-
-    } catch (err: any) {
-      console.error("[ANALYZE IMAGE ERROR]:", err);
-      return res.status(500).json({ error: err?.message || "Erro ao processar e analisar a imagem." });
-    }
-  });
-
-  app.post("/api/transcribe", async (req, res) => {
-    try {
-      const { audioBase64, userId } = req.body;
-      if (!audioBase64) {
-        return res.status(400).json({ error: "Áudio não fornecido." });
-      }
-
-      const verified = await getVerifiedUser(req);
-      if (!verified || !verified.uid) {
-        return res.status(401).json({ error: "Usuário não autenticado. Faça login para usar a transcrição de voz." });
-      }
-
-      const verifiedEmail = verified.email;
-      const verifiedUid = verified.uid;
-      const isAdmin = isAdminUser(verifiedEmail);
-
-      const subDetails = await SubscriptionService.validateAndGetDetails(verifiedUid);
-      const isPro = isAdmin || subDetails.isPro;
-
-      const userUsage = await getUserUsage(verifiedUid, verifiedEmail, req);
-      
-      if (!isPro) {
-        const config = await getAdminConfig();
-        if (userUsage.usage.voice >= config.limits.voice) {
-          return res.status(403).json({ error: "Limite de transcrição diário excedido." });
-        }
-      }
-
-      const apiKey = process.env.GROQ_API_KEY;
-      if (!apiKey) {
-        console.error("[TRANSCRIBE] GROQ_API_KEY não configurada no servidor.");
-        return res.status(500).json({ error: "GROQ_API_KEY não configurada no servidor." });
-      }
-
-      console.log(`[TRANSCRIBE] Iniciando transcrição com Groq Whisper para usuário ${verifiedUid}. Tamanho base64: ${audioBase64.length}`);
-
-      // Convert base64 to Buffer
-      const audioBuffer = Buffer.from(audioBase64, 'base64');
-      console.log(`[TRANSCRIBE] Buffer de áudio criado com ${audioBuffer.length} bytes.`);
-
-      if (audioBuffer.length === 0) {
-        return res.status(400).json({ error: "Arquivo de áudio está vazio." });
-      }
-
-      const blob = new Blob([audioBuffer], { type: 'audio/webm' });
-
-      const formData = new FormData();
-      formData.append('file', blob, 'audio.webm');
-      formData.append('model', 'whisper-large-v3');
-      formData.append('language', 'pt');
-      formData.append('response_format', 'json');
-
-      console.log("[TRANSCRIBE] Enviando requisição para Groq API (whisper-large-v3)...");
-      const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: formData
-      });
-
-      if (!groqResponse.ok) {
-        const errText = await groqResponse.text();
-        console.error("[TRANSCRIBE] Erro na API do Groq (Status " + groqResponse.status + "):", errText);
-        return res.status(500).json({ error: "Falha na transcrição do áudio pelo Groq: " + errText });
-      }
-
-      const data = await groqResponse.json();
-      console.log("[TRANSCRIBE SUCCESS] Texto retornado pelo Groq:", JSON.stringify(data));
-
-      if (!isAdmin) {
-        await updateUserUsage(verifiedUid, 'voice');
-      }
-
-      res.json({ text: data.text || '' });
-    } catch (error: any) {
-      console.error("[TRANSCRIBE ERROR]:", error.message || error);
-      res.status(500).json({ error: "Erro interno no servidor ao processar áudio: " + (error.message || error) });
-    }
-  });
-  app.post("/api/chat", async (req, res) => {
-    console.log("[API CHAT] REQUEST RECEIVED");
-    let currentUserId = req.body?.userId || '';
-    let currentIsSearch = false;
-
-    try {
-      const { message, history, speed, plan, userId, attachments, systemInstruction, isSmartMode, adaptiveProfile, geminiApiKey, isThinkingMode } = req.body;
-      if (userId) currentUserId = userId;
-      
-      if (!message || typeof message !== 'string') {
-        return res.status(400).json({ error: "Mensagem é obrigatória e deve ser texto." });
-      }
-
-      // Secure email verification - strictly verify against token for Admin access
-      const verifiedEmail = await getVerifiedEmail(req);
-      const userEmail = verifiedEmail || (req.body?.userEmail || req.headers['x-user-email'] || '') as string;
-      const isAdmin = isAdminUser(verifiedEmail) || isAdminUser(userEmail);
-
-      // Server-side access control check - Securely verify subscription
-      const subDetails = await SubscriptionService.validateAndGetDetails(userId);
-      const isPro = isAdmin || subDetails.isPro;
-
-      // Smart Model Selection Logic
-      let normSpeed = speed || 'zeno';
-      let apiModelName = 'gemini-1.5-flash';
-      let taskType = 'general';
-
-      const msgLower = message.toLowerCase();
-      const searchTriggers = [
-        'buscar', 'pesquisar', 'procurar', 'notícias sobre', 'noticias sobre',
-        'o que é', 'o que e', 'quem é', 'quem e', 'últimas notícias', 'ultimas noticias',
-        'pesquise', 'procure', 'busque', 'notícia de hoje', 'noticia de hoje',
-        'cotação', 'resultado do', 'placar', 'preço atual', 'notícias de',
-        'o que aconteceu', 'como está', 'qual é o', 'qual e o', 'quando foi',
-        'encontre informações', 'informações sobre', 'fale sobre', 'conteúdo sobre',
-        'agora', 'lançamento', 'estreia', 'filme', 'série', 'cripto', 'dólar', 'euro', 'bolsa', 'ações',
-        'qual o', 'como está', 'onde fica', 'porque está', 'motivo de', 'entenda o que', 'saiba mais sobre',
-        'hoje', 'ontem', '2024', '2025'
-      ];
-      const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-      const hasImages = hasAttachments && attachments.some(a => 
-        (a.mimeType || a.type || '').includes('image') || 
-        (a.url && a.url.startsWith('data:image/')) || 
-        !!a.name?.match(/\.(png|jpe?g|webp|gif|heic|bmp|svg)$/i)
-      );
-      console.log(`[DEBUG] hasAttachments: ${hasAttachments}, hasImages: ${hasImages}, msg: ${msgLower}`);
-
-      let isSearchIntent = (normSpeed === 'search' || searchTriggers.some(t => msgLower.includes(t))) && !hasImages;
-      console.log(`[DEBUG] isSearchIntent: ${isSearchIntent}`);
-      currentIsSearch = isSearchIntent;
-
-      if (hasImages) {
-        taskType = 'vision';
-        normSpeed = 'vision';
-        apiModelName = await smartSelectModel('vision', isPro);
-      } else if (isSearchIntent) {
-        taskType = 'search';
-        normSpeed = 'search';
-        apiModelName = await smartSelectModel('search', isPro);
-      } else if (isSmartMode !== false) { // Default to smart mode
-        taskType = 'general';
-        const msgLower = message.toLowerCase();
-        
-        if (Array.isArray(attachments) && attachments.length > 0) {
-          const mainFile = attachments[0];
-          const mime = mainFile.mimeType || mainFile.type || '';
-          if (mime.includes('pdf')) taskType = 'search'; // Documents often fall into search/context
-          else if (mime.includes('image')) taskType = 'vision';
-          else if (mime.includes('audio')) taskType = 'general';
-          else if (mime.includes('video')) taskType = 'general';
-        } else if (msgLower.includes('código') || msgLower.includes('programação') || msgLower.includes('react') || msgLower.includes('typescript')) {
-          taskType = 'code';
-        } else if (msgLower.includes('pense') || msgLower.includes('raciocínio') || msgLower.includes('matemática') || isThinkingMode) {
-          taskType = 'think';
-        } else if (msgLower.includes('pesquise') || msgLower.includes('busca') || msgLower.includes('notícias')) {
-          taskType = 'search';
-        }
-
-        apiModelName = await smartSelectModel(taskType, isPro);
-        
-        // Map back to display UI
-        if (taskType === 'code' || taskType === 'think') normSpeed = 'think';
-        else if (taskType === 'search') normSpeed = 'search';
-        else if (taskType === 'vision' || taskType === 'image') normSpeed = 'vision';
-        else normSpeed = 'zeno';
-      } else {
-        const modelCfg = getModelConfig(normSpeed);
-        apiModelName = modelCfg.apiModel;
-        // Map speed to category
-        if (normSpeed === 'think' || normSpeed === 'mega' || normSpeed === 'grok' || normSpeed === 'grok-4.6') taskType = 'think';
-        else if (normSpeed === 'code') taskType = 'code';
-        else if (normSpeed === 'search') taskType = 'search';
-        else if (normSpeed === 'fast') taskType = 'speed';
-        else if (normSpeed === 'image' || normSpeed === 'vision') taskType = 'image';
-        else taskType = 'general';
-      }
-
-      const modelCfg = getModelConfig(normSpeed);
-
-      if (modelCfg.requiredPlan === 'pro' && !isPro) {
-        return res.status(403).json({ 
-          error: `O modelo ${modelCfg.name} é exclusivo para assinantes do plano ZENO Pro.`, 
-          needsPro: true 
-        });
-      }
-
-      let modelSystemPrompt = `${systemInstruction}\n\n[Diretrizes do Modelo ${modelCfg.name}]: ${modelCfg.systemPrompt}`;
-
-      if (hasImages) {
-        modelSystemPrompt += `\n\n[DIRETRIZES DE VISÃO COMPUTACIONAL & ANÁLISE MULTIMODAL AVANÇADA]:
-Você possui capacidade avançada de visão computacional e OCR para analisar e extrair dados das imagens enviadas.
-- **Recibos, Cupons Fiscais e Faturas**: Extraia com exatidão o nome do estabelecimento/empresa, data e hora, lista de itens com quantidades e preços unitários formatados em uma tabela Markdown limpa, subtotal, impostos/taxas/gorjeta, descontos e o VALOR TOTAL em negrito destacado.
-- **Cardápios e Menus de Restaurantes**: Identifique as seções/categorias, nomes dos pratos, preços, ingredientes principais, traduza para o idioma de resposta quando relevante e alerte sobre potenciais alérgenos (glúten, lactose, nozes, frutos do mar).
-- **Gráficos e Infográficos**: Identifique o tipo de gráfico (barras, linhas, pizza, dispersão), leia com exatidão os rótulos e valores dos eixos X e Y, legendas, variações percentuais e forneça insights e conclusões analíticas claras.
-- **OCR e Documentos / Prints de Código**: Transcreva o texto ou código visível fielmente preservando formatação, indentação e estrutura lógica.
-- **Análise Geral de Imagens**: Descreva minuciosamente os elementos visuais, paleta de cores, composição espacial, objetos, pessoas e significado conceitual.`;
-      } else if (isSearchIntent) {
-        modelSystemPrompt += `\n\n[REGRA DE PESQUISA NA WEB OBRIGATÓRIA]: Você possui acesso em tempo real à internet através da ferramenta de pesquisa Google Search. SEMPRE utilize os resultados da pesquisa para responder com precisão e dados atualizados. NUNCA responda que não possui acesso à internet ou que não pode acessar a internet em tempo real. NUNCA gere imagens automaticamente durante pesquisas. NUNCA utilize serviços de geração de imagens como fonte ou referência. IMPORTANTE: NUNCA crie uma seção 'Fontes:', 'Referências:' nem liste domínios, URLs ou links soltos ao final da sua resposta. A interface do usuário já exibirá automaticamente os sites utilizados em um componente visual separado. Apenas forneça a resposta de forma direta e atualizada.`;
-      } else {
-        modelSystemPrompt += `\n\n[REGRA DE MÍDIA E IMAGENS]: Quando o usuário solicitar a geração de uma imagem (ex: "gere uma imagem de...", "desenhe...", "crie uma foto"), o sistema detecta a intenção e gera a imagem automaticamente na conversa.`;
-      }
-      
-      // Inject Adaptive Learning System Instruction Block
-      modelSystemPrompt += '\n\n' + buildAdaptiveSystemPrompt(adaptiveProfile || DEFAULT_ADAPTIVE_PROFILE);
-
-      // Multi-language support instructions
-      const uiLanguage = req.body.language || 'pt-BR';
-      modelSystemPrompt += `\n\n[IDIOMA OBRIGATÓRIO]: O idioma da interface e de resposta é ${uiLanguage}. A REGRA MAIS IMPORTANTE: VOCÊ DEVE RESPONDER ÚNICA E EXCLUSIVAMENTE NO IDIOMA ${uiLanguage}. Sob NENHUMA circunstância você deve gerar textos em chinês (mandarim, simplificado, tradicional), caracteres asiáticos, ou qualquer outro idioma que não seja o solicitado (${uiLanguage}). Se a pergunta estiver em outro idioma, você deve traduzir mentalmente, mas responder obrigatoriamente em ${uiLanguage}. NUNCA comece a resposta em um idioma e termine em outro. NUNCA utilize caracteres 'zh-CN' ou similares.`;
-
-      let modelTemperature = modelCfg.temperature;
-
-      // Retrieve long-term memory context if userId is available
-      let memoryContext = "";
-      if (userId) {
-        const relevantMemories = await retrieveRelevantMemories(userId, message, 3);
-        if (relevantMemories && relevantMemories.length > 0) {
-          memoryContext = "\n\n[HISTÓRICO RELEVANTE DE INTERAÇÕES ANTERIORES - Use apenas como contexto secundário se for diretamente útil para a pergunta atual. NUNCA responda a tópicos antigos do histórico em vez da pergunta atual do usuário!]:\n" + relevantMemories.map(m => `- ${m.content}`).join('\n');
-          modelSystemPrompt += memoryContext;
-        }
-      }
-
-      // Check if speed is 'image' or 'vision', or if message is explicitly asking to generate or show an image
-      const isImageMode = 
-        (normSpeed === "image" || 
-         normSpeed === "vision" || 
-         /^(gerar|crie|criar|desenhe|desenhar|faça|fazer|gere|mostre|me dá|me mostre)\s*(uma?|um)?\s*(imagem|foto|arte|ilustração|wallpaper|quadro|desenho|logotipo|logo|personagem|grafico|gráfico|infográfico|infografico|diagrama|wireframe|mockup|render|3d|pintura|avatar|ícone|icone)/i.test(message.trim()) ||
-         /(desenhe|gere uma imagem|crie uma arte|faça uma ilustração|faça um wallpaper|anime|manga|logotipo|personagem|foto realista|fotografia de|imagem de|image of|generate image|draw a|create an image|crie um mockup|faça um diagrama|crie um infográfico)/i.test(message.trim())) && 
-        !hasAttachments;
-
-      if (userId) {
-        await setUserPlan(userId, isPro ? 'ZENO Pro' : 'ZENO Free');
-        
-        // Pass userEmail and req to automatically update active metadata
-        const usage = await getUserUsage(userId, userEmail, req);
-        
-        if (!isPro) {
-          const config = await getAdminConfig();
-          let actionType = 'messages';
-          if (normSpeed === 'search' || normSpeed === 'mega' || normSpeed === 'pdf') actionType = 'search';
-          else if (normSpeed === 'vision' || normSpeed === 'image' || isImageMode) actionType = 'vision';
-          else if (attachments && attachments.length > 0) actionType = 'doc';
-          
-          if (usage.usage[actionType] >= config.limits[actionType]) {
-            // Log limit block
-            await addSystemLog('error', userEmail || 'Anônimo', 'Limite de Uso Atingido', `Usuário bloqueado: atingiu o limite de ${config.limits[actionType]} em ${actionType}`, req);
-            return res.status(429).json({ error: `Limite diário atingido. Você atingiu o limite de ${config.limits[actionType]} usos para ${actionType} hoje. Faça upgrade para o ZENO Pro para usar sem limites.`, isLimitReached: true, actionType: actionType });
-          }
-          
-          await updateUserUsage(userId, actionType as keyof typeof config.limits);
-        } else {
-          // If Pro user or Owner, let's still update dynamic system stats
-          let actionType = 'messages';
-          if (normSpeed === 'search' || normSpeed === 'mega' || normSpeed === 'pdf') actionType = 'search';
-          else if (normSpeed === 'vision' || normSpeed === 'image' || isImageMode) actionType = 'vision';
-          else if (attachments && attachments.length > 0) actionType = 'doc';
-          
-          if (actionType === 'messages') await incrementStatCounter('totalMessagesSent');
-          else if (actionType === 'search') await incrementStatCounter('totalWebSearches');
-          else if (actionType === 'image') await incrementStatCounter('totalImagesGenerated');
-          else if (actionType === 'doc') await incrementStatCounter('totalPdfsAnalyzed');
-          else if (actionType === 'vision') await incrementStatCounter('totalVisionUses');
-        }
-      }
-
-      // Store user message in vector memory
-      if (userId && message.length > 10) {
-        await storeMemory(userId, message, { type: "user_message", speed: normSpeed });
-      }
-
-      // If user is asking for image generation, automatically generate and stream image in chat
-      if (isImageMode) {
-        try {
-          const cleanPrompt = message.replace(/^(gerar|crie|criar|desenhe|desenhar|faça|fazer|gere|mostre|me dá|me mostre)\s*(uma?|um)?\s*(imagem|foto|arte|ilustração|wallpaper|quadro|desenho|logotipo|logo|personagem|grafico|gráfico|infográfico|infografico|diagrama|wireframe|mockup|render|3d|pintura|avatar|ícone|icone)/i, "").trim();
-
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-          });
-          res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: 'vision', isSearch: false, isSearching: false })}\n\n`);
-          res.write(`data: ${JSON.stringify({ text: `🎨 **Gerando imagem:** "${cleanPrompt || message}"...\n\nPor favor, aguarde enquanto o ZENO Vision cria sua imagem.` })}\n\n`);
-
-          const task = await createQueuedTask({
-            userId: userId || 'anon-user',
-            userEmail: userEmail || 'Anônimo',
-            plan: isPro ? 'ZENO Pro' : 'ZENO Free',
-            payload: {
-              prompt: cleanPrompt || message,
-              style: /anime/i.test(message) ? 'anime' : /cyberpunk/i.test(message) ? 'cyberpunk' : /3d|render/i.test(message) ? '3d-render' : /minimalista|minimal/i.test(message) ? 'minimalist' : 'photorealistic',
-              aspectRatio: /quadrado|1:1/i.test(message) ? '1:1' : /stories|9:16/i.test(message) ? '9:16' : /widescreen|16:9/i.test(message) ? '16:9' : '1:1',
-              enhance: true,
-              engine: "flux",
-              negativePrompt: ""
-            },
-            req
-          });
-
-          let lastPosition = -1;
-          while (true) {
-            const details = await getTaskStatusDetails(task.id);
-            if (!details.task) {
-              res.write(`data: ${JSON.stringify({ text: "❌ **Erro:** Tarefa não encontrada no servidor." })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              return res.end();
-            }
-
-            if (details.task.status === 'completed') {
-              const markdownOutput = `![${cleanPrompt || message}](${details.task.result.imageUrl})`;
-              res.write(`data: ${JSON.stringify({ text: `✨ **Imagem gerada com sucesso:**\n\n${markdownOutput}` })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              return res.end();
-            }
-
-            if (details.task.status === 'failed') {
-              res.write(`data: ${JSON.stringify({ text: `❌ **Falha ao gerar imagem:** ${details.task.error || 'Erro desconhecido.'}` })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              return res.end();
-            }
-
-            if (details.task.status === 'cancelled') {
-              res.write(`data: ${JSON.stringify({ text: `⚠️ **Geração cancelada.**` })}\n\n`);
-              res.write("data: [DONE]\n\n");
-              return res.end();
-            }
-
-            if (!isPro && details.position !== null && details.position !== lastPosition) {
-              lastPosition = details.position;
-              res.write(`data: ${JSON.stringify({ text: `⏳ **Sua solicitação está na fila gratuita do ZENO AI.**\nComo assinantes ZENO Pro possuem prioridade, estamos processando sua imagem.\n\n📊 **Posição atual na fila:** ${details.position}\n⏱️ **Tempo estimado:** ${details.estimatedTimeSeconds}s\n\n` })}\n\n`);
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } catch (err: any) {
-          console.error('[CHAT IMAGE ERROR] Erro na geração:', err?.message || err);
-          res.write(`data: ${JSON.stringify({ text: "❌ **Erro de processamento:** Não foi possível gerar a imagem neste momento." })}\n\n`);
-          res.write("data: [DONE]\n\n");
-          return res.end();
-        }
-      }
-
-      // Check for vague/incomplete search request (e.g. just "buscar" or "pesquisar" without a topic)
-      const cleanMsg = message.trim().toLowerCase().replace(/[.,!?]/g, '');
-      const vagueTerms = ['buscar', 'pesquisar', 'procurar', 'busca', 'pesquisa', 'noticias', 'notícias', 'fazer busca', 'fazer pesquisa'];
-      const isVagueSearch = vagueTerms.includes(cleanMsg) || /^(buscar|pesquisar|procurar|busca|pesquisa|notícias)\s*$/i.test(cleanMsg);
-
-      if (isVagueSearch) {
-        const recentUserMsgs = (history || []).filter((m: any) => m.role === 'user').slice(-2);
-        const contextTopic = recentUserMsgs.length > 0 ? recentUserMsgs[recentUserMsgs.length - 1].text.slice(0, 40) : null;
-        
-        let clarificationText = '';
-        if (contextTopic) {
-          clarificationText = `Você quis dizer buscar sobre **"${contextTopic}"**?\n\nOu você pode especificar, por exemplo:\n↳ Notícias e atualizações recentes sobre ${contextTopic}\n↳ Principais conceitos e resumo sobre ${contextTopic}\n↳ Fontes oficiais e cotações atuais`;
-        } else {
-          clarificationText = `Você quis dizer buscar sobre algum assunto específico da nossa conversa?\n\nOu você pode especificar, por exemplo:\n↳ Notícias de hoje sobre tecnologia e inteligência artificial\n↳ Resultados e cotações do mercado financeiro\n↳ O que é e como funciona determinado assunto`;
-        }
-
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        });
-        res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: 'search', isSearch: true, isSearching: false })}\n\n`);
-        res.write(`data: ${JSON.stringify({ text: clarificationText, isSearch: true, isSearching: false, sources: [] })}\n\n`);
-        res.write("data: [DONE]\n\n");
-        return res.end();
-      }
-
-      // Convert history to the format expected by GenAI SDK - Ensuring strict alternating roles
-      const contents: any[] = [];
-      if (history && Array.isArray(history)) {
-        let lastRole: string | null = null;
-        history.forEach((msg) => {
-          const currentRole = msg.role === "user" ? "user" : "model";
-          
-          // Skip consecutive messages with the same role to prevent Gemini API errors
-          if (currentRole === lastRole) return;
-          
-          let historyText = msg.text || "";
-          historyText = historyText.replace(/!\[.*?\]\(data:.*?\)/g, "[Imagem Anexada]");
-          contents.push({
-            role: currentRole,
-            parts: [{ text: historyText }],
-          });
-          lastRole = currentRole;
-        });
-      }
-      let finalMessageText = message;
-      let userParts: any[] = [];
-      
-      if (attachments && Array.isArray(attachments)) {
-        finalMessageText = finalMessageText.replace(/!\[.*?\]\(data:.*?\)/g, "[Imagem Anexada]");
-        
-        for (const att of attachments) {
-           if (att.url && att.url.startsWith("data:")) {
-              const base64Data = att.url.split(",")[1];
-              let mimeType = att.url.split(";")[0].split(":")[1];
-              if (att.type === "document") {
-                 mimeType = "application/pdf";
-              }
-              userParts.push({
-                 inlineData: { data: base64Data, mimeType: mimeType }
-              });
-           }
-        }
-      }
-
-      // Ensure that if the last history message was a "user" message, we don't cause a conflict
-      // But usually, the last message in history is the model response.
-      // If history is empty, the first message is "user".
-      userParts.push({ text: finalMessageText });
-
-      contents.push({
-        role: "user",
-        parts: userParts,
-      });
-
-      const tools: any[] = [];
-      if (isSearchIntent) {
-        tools.push({ googleSearch: {} });
-      }
-      tools.push({ functionDeclarations: supportTools });
-
-      const aiResult = await generateTextWithFallback({
-        contents,
-        systemInstruction: modelSystemPrompt,
-        temperature: modelTemperature,
-        maxOutputTokens: 2048,
-        tools: tools.length > 0 ? tools : undefined,
-        isSearchIntent,
-        hasImages,
-        category: taskType as any,
-        userGeminiApiKey: geminiApiKey,
-        isThinkingMode,
-        userRequestedModel: apiModelName
-      });
-
-      if (aiResult.functionCalls && aiResult.functionCalls.length > 0) {
-        const call = aiResult.functionCalls[0];
-        if (call.name === 'createSupportTicket') {
-          const { title, aiSummary } = call.args;
-          const ticketRef = await adminDb.collection('supportTickets').add({
-            userId: userId || 'anonymous',
-            userEmail: userEmail || '',
-            status: 'pending_human',
-            title: title || 'Atendimento via Chat Principal',
-            aiSummary: aiSummary || 'Solicitação iniciada no chat principal.',
-            createdAt: Date.now(),
-            lastMessageAt: Date.now()
-          });
-
-          // Add history to ticket
-          if (Array.isArray(history)) {
-            for (const m of history.slice(-5)) {
-              await ticketRef.collection('messages').add({
-                sender: m.role === 'assistant' ? 'ai' : 'user',
-                text: m.text,
-                timestamp: Date.now()
-              });
-            }
-          }
-          await ticketRef.collection('messages').add({
-            sender: 'user',
-            text: message,
-            timestamp: Date.now()
-          });
-
-          if (!res.headersSent) {
-            res.writeHead(200, {
-              "Content-Type": "text/event-stream",
-              "Cache-Control": "no-cache",
-              Connection: "keep-alive",
-            });
-          }
-          
-          res.write(`data: ${JSON.stringify({ 
-            toolCall: { name: 'createSupportTicket', args: call.args },
-            text: "Entendido. Estou abrindo um ticket de suporte para você falar com um especialista humano agora mesmo. Um momento..." 
-          })}\n\n`);
-          res.write("data: [DONE]\n\n");
-          return res.end();
-        }
-      }
-
-      let searchSources: Array<{ title: string; url: string; domain: string; snippet?: string; publishedDate?: string; updatedDate?: string }> = aiResult.sources || [];
-
-      if (!res.headersSent) {
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        });
-      }
-
-      // Send model info & search flag at start
-      res.write(`data: ${JSON.stringify({ activeModel: modelCfg.name, modelId: isSearchIntent ? 'search' : normSpeed, isSearch: isSearchIntent })}\n\n`);
-      
-      // LOG GROUNDING FOR DEBUGGING IN AI STUDIO CONSOLE
-      if (aiResult.groundingMetadata) {
-        console.log(`[BACKEND GROUNDING LOG] Query: ${message}`);
-        console.log(`[BACKEND GROUNDING LOG] Metadata: ${JSON.stringify(aiResult.groundingMetadata, null, 2)}`);
-      } else if (isSearchIntent) {
-        console.log(`[BACKEND GROUNDING LOG] WARNING: No grounding metadata returned for search query: ${message}`);
-      }
-
-      function safetyCleanup(text: string, sources: any[]) {
-        if (!isSearchIntent || sources.length > 0) return text;
-        
-        const patterns = [
-          /segundo o site (?:da |do )?([^,.\n]+)/gi,
-          /de acordo com o (?:site |portal |jornal )?([^,.\n]+)/gi,
-          /o site ([^,.\n]+) informa que/gi,
-          /conforme relatado pelo ([^,.\n]+)/gi,
-          /citando o ([^,.\n]+)/gi,
-          /com informações d[aeo] ([^,.\n]+)/gi,
-          /\(Fonte: [^)]+\)/gi,
-          /\[Fonte: [^\]]+\]/gi,
-          /segundo o ([^,.\n]+)/gi
-        ];
-
-        let cleaned = text;
-        const commonSites = ['cnn', 'g1', 'estadao', 'folha', 'uol', 'bbc', 'reuters', 'globo', 'veja', 'exame', 'metrópoles', 'antagonista'];
-        
-        for (const pattern of patterns) {
-          cleaned = cleaned.replace(pattern, (match, siteName) => {
-            if (siteName && commonSites.some(s => siteName.toLowerCase().includes(s))) {
-              return "segundo as informações mais recentes";
-            }
-            return match;
-          });
-        }
-        return cleaned;
-      }
-
-      function injectCitations(text: string, groundingMetadata: any, sources: any[]) {
-        if (!groundingMetadata || !groundingMetadata.groundingSupports || !sources.length) {
-          return safetyCleanup(text, sources);
-        }
-
-        // Sort segments in reverse order to not break offsets
-        const supports = [...groundingMetadata.groundingSupports].sort((a, b) => {
-          const aEnd = a.segment?.endIndex || 0;
-          const bEnd = b.segment?.endIndex || 0;
-          return bEnd - aEnd;
-        });
-
-        let result = text;
-        for (const support of supports) {
-          const { endIndex } = support.segment || {};
-          if (endIndex === undefined) continue;
-          
-          const chunkIndices = support.groundingChunkIndices || [];
-          if (chunkIndices.length > 0) {
-            // We'll use a unique tag that the frontend will parse: [[cite:INDEX]]
-            const labels = chunkIndices.map((idx: number) => `[[cite:${idx}]]`).join('');
-            result = result.slice(0, endIndex) + labels + result.slice(endIndex);
-          }
-        }
-        return result;
-      }
-
-      const rawResponseText = isSearchIntent ? injectCitations(aiResult.text || "", aiResult.groundingMetadata, searchSources) : (aiResult.text || "");
-      const fullResponseText = sanitizeResponseText(rawResponseText, taskType === 'image');
-
-      // We removed the linkRegex fallback because it was picking up model hallucinations.
-      // Only sources from groundingMetadata (Google Search tool) are now considered valid.
-
-      if (isSearchIntent && searchSources.length === 0) {
-        console.warn(`[ZENO SEARCH WARNING] A ferramenta de pesquisa não retornou nenhuma fonte real para a consulta: "${message}".`);
-      }
-
-      if (isSearchIntent && searchSources.length > 0) {
-        // Simulate real-time discovery of sources
-        for (let i = 0; i < searchSources.length; i++) {
-          res.write(`data: ${JSON.stringify({ isSearch: true, isSearching: true, sources: searchSources.slice(0, i + 1) })}\n\n`);
-          await new Promise(r => setTimeout(r, 200));
-        }
-        // Small pause before sending text
-        await new Promise(r => setTimeout(r, 300));
-      }
-
-      res.write(`data: ${JSON.stringify({ text: fullResponseText, thought: aiResult.thought, isSearch: isSearchIntent, sources: searchSources, isSearching: false, groundingMetadata: aiResult.groundingMetadata })}\n\n`);
-
-      res.write("data: [DONE]\n\n");
-      res.end();
-
-      // Vector Memory Storage
-      if (userId && fullResponseText.length > 10) {
-        storeMemory(userId, fullResponseText, { type: "ai_response", model: apiModelName }).catch(err => {
-          console.warn('[Memory] Background storeMemory error:', err);
-        });
-      }
-    } catch (error: any) {
-      let errStr = String(error?.message || error || "");
-      let cleanError = errStr;
-      
-      const jsonMatch = errStr.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.error && parsed.error.message) {
-            cleanError = String(parsed.error.message);
-          }
-        } catch(e) {}
-      }
-
-      const lowerError = cleanError.toLowerCase();
-      const lowerErrStr = errStr.toLowerCase();
-
-      const isRateLimit = 
-        lowerError.includes("exceeded") ||
-        lowerError.includes("quota") ||
-        lowerError.includes("rate limit") ||
-        lowerError.includes("credits") ||
-        lowerError.includes("resource_exhausted") ||
-        lowerError.includes("resource exhausted") ||
-        lowerError.includes("tokens_per_model") ||
-        lowerErrStr.includes("429") ||
-        error?.status === 429 ||
-        error?.code === 429 ||
-        (error?.name === "ApiError" && error?.status === 429);
-
-      if (!isRateLimit) {
-        console.error("Chat Error:", error);
-      } else {
-        console.log("Chat Error (Rate Limit/Quota):", cleanError);
-      }
-
-      if (!res.headersSent) {
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        });
-      }
-
-      if (isRateLimit) {
-        const fallbackText = `*(Aviso ZENO AI: A cota temporária de requisições por minuto nos provedores de IA foi atingida. Isso ocorre quando muitos usuários estão ativos simultaneamente ou o limite gratuito do modelo foi alcançado. A cota é renovada automaticamente em instantes.)*\n\nRecebi sua mensagem: "${req.body?.message || ''}". Por favor, aguarde cerca de 30 a 60 segundos e envie novamente!`;
-        res.write(`data: ${JSON.stringify({ text: fallbackText })}\n\n`);
-        res.write("data: [DONE]\n\n");
-        res.end();
-        return;
-      }
-      res.write(`data: ${JSON.stringify({ text: `⚠️ **Aviso ZENO AI:** Ocorreu uma oscilação temporária na conexão com a IA (${cleanError || 'conexão instável'}). Por favor, clique em **Tentar novamente** ou reenvie sua mensagem.` })}\n\n`);
-      res.write("data: [DONE]\n\n");
-      res.end();
-    } finally {
-      // NON-BLOCKING BACKGROUND ZP GAMIFICATION
-      // Executed strictly in background after response stream is closed
-      if (currentUserId && currentUserId !== 'anonymous' && !currentUserId.startsWith('anon_')) {
-        awardUserPointsServer(currentUserId, currentIsSearch ? 'search' : 'message', 'conversationsCount').catch(err => {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log('[ZP Server] Background ZP award handled with in-memory store:', err?.message || err);
-          }
-        });
-      }
-    }
-  });
 
   // POST Chat Suggestions
   app.post("/api/suggestions", async (req, res) => {
@@ -3825,6 +2853,10 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
   }
 });
 
+// Gemini TTS Endpoints
+app.post("/api/voice/tts", handleGeminiTTS);
+app.post("/api/tts", handleGeminiTTS);
+
   // Vite/Prod middleware
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
@@ -3835,7 +2867,7 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     // Startup logs for API key presence
     console.log("[STARTUP] Checking AI Provider Keys:");
@@ -3843,6 +2875,88 @@ Responda sempre em Português do Brasil de forma profissional e prestativa.`;
     console.log(`- GROQ: ${process.env.GROQ_API_KEY ? 'Configured' : 'MISSING'}`);
     console.log(`- XAI: ${process.env.XAI_API_KEY ? 'Configured' : 'MISSING'}`);
     console.log(`- OPENROUTER: ${process.env.OPENROUTER_API_KEY ? 'Configured' : 'MISSING'}`);
+  });
+
+  const wss = new WebSocketServer({ server: httpServer });
+
+  wss.on("connection", async (clientWs) => {
+    const session = await ai.live.connect({
+      model: "gemini-3.1-flash-live-preview",
+      callbacks: {
+        onmessage: (message: any) => {
+          const audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+          if (audio) clientWs.send(JSON.stringify({ audio }));
+          if (message.serverContent?.interrupted)
+            clientWs.send(JSON.stringify({ interrupted: true }));
+        },
+      },
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+        },
+        systemInstruction: "You are a helpful assistant.",
+      },
+    });
+
+    clientWs.on("message", (data) => {
+      try {
+        const { audio } = JSON.parse(data.toString());
+        if (audio) {
+            session.sendRealtimeInput({
+              audio: { data: audio, mimeType: "audio/pcm;rate=16000" },
+            });
+        }
+      } catch (e) {
+        console.error("WebSocket message error:", e);
+      }
+    });
+  });
+
+  
+
+  wss.on("connection", async (clientWs, req) => {
+    if (req.url !== "/api/live") return;
+
+    console.log("[LIVE API] Connection established.");
+
+    try {
+      const session = await ai.live.connect({
+        model: "gemini-3.1-flash-live-preview",
+        callbacks: {
+          onmessage: (message: LiveServerMessage) => {
+            const audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+            if (audio) clientWs.send(JSON.stringify({ audio }));
+            if (message.serverContent?.interrupted)
+              clientWs.send(JSON.stringify({ interrupted: true }));
+          },
+        },
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+          },
+          systemInstruction: "You are a helpful assistant.",
+        },
+      });
+
+      clientWs.on("message", (data: any) => {
+        const { audio } = JSON.parse(data.toString());
+        if (audio) {
+            session.sendRealtimeInput({
+            audio: { data: audio, mimeType: "audio/pcm;rate=16000" },
+            });
+        }
+      });
+      
+      clientWs.on("close", () => {
+        session.close();
+      });
+
+    } catch (err) {
+      console.error("[LIVE API ERROR]", err);
+      clientWs.close();
+    }
   });
 }
 

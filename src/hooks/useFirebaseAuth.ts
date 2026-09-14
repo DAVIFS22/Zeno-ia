@@ -11,7 +11,7 @@ import {
   setPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../lib/firebase';
+import { auth, googleProvider, db, extractDisplayNameFromEmail } from '../lib/firebase';
 import { syncUserProfile } from '../lib/firebase';
 import { ConnectedAccount, MultiAccountSession } from '../types';
 import { getUserRole, isAdminUser, ADMIN_EMAIL } from '../config/admin';
@@ -75,8 +75,12 @@ export function useFirebaseAuth() {
               createdAt: serverTimestamp()
             }, { merge: true });
           }
-        } catch (e) {
-          console.error('Error checking admin doc:', e);
+        } catch (e: any) {
+          if (e?.message?.includes('offline') || e?.code === 'unavailable') {
+             console.warn('Cannot check admin doc, client is offline.');
+          } else {
+             console.error('Error checking admin doc:', e);
+          }
         }
 
         if (isAdmin) {
@@ -86,7 +90,7 @@ export function useFirebaseAuth() {
         const newAccount: ConnectedAccount = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
-          displayName: firebaseUser.displayName || '',
+          displayName: firebaseUser.displayName || (firebaseUser.email ? extractDisplayNameFromEmail(firebaseUser.email) : 'Usuário ZENO'),
           photoURL: firebaseUser.photoURL || '',
           accessToken: token, // Using ID token as access token for Firebase
           expiresAt: Date.now() + 3600 * 1000, // Firebase tokens roughly 1h

@@ -6,6 +6,7 @@ import { useSubscription } from '../contexts/SubscriptionContext';
 import { ZENO_MODELS, getModelDef } from '../lib/subscription';
 import { useTranslation } from '../i18n';
 import { isAdminUser } from '../config/admin';
+import { useDataReconciliation } from '../hooks/useDataReconciliation';
 
 interface AppHeaderProps {
   theme: 'dark' | 'light';
@@ -69,6 +70,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   const { t } = useTranslation('AppHeader');
   const isDark = theme === 'dark';
   const { isPro } = useSubscription();
+  const { isOnline, isSyncing } = useDataReconciliation({ userId: user?.uid });
 
   const pillClasses = "h-10 min-h-[40px] max-h-[40px] px-[14px] inline-flex items-center justify-center rounded-xl backdrop-blur-md transition-all cursor-pointer text-[15px] leading-none box-border text-center whitespace-nowrap outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-zeno focus-visible:ring-offset-2";
   const pillDark = `${pillClasses} bg-[#1a1a1a]/65 text-neutral-200 hover:bg-[#1a1a1a]/80 border border-white/5`;
@@ -162,7 +164,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
                       onClick={() => handleModelClick(m.id, m.isPro)}
                       className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between group cursor-pointer ${
                         isSelected
-                          ? isDark ? 'bg-zeno/15 text-zeno font-medium border border-zeno/30' : 'bg-blue-50 text-zeno font-medium border border-zeno/30'
+                          ? isDark ? 'bg-zeno/15 text-zeno font-medium border border-zeno/30' : 'bg-zeno/10 text-zeno font-medium border border-zeno/25'
                           : isDark ? 'hover:bg-[#232326] text-neutral-300' : 'hover:bg-neutral-50 text-neutral-700'
                       }`}
                     >

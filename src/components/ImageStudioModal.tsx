@@ -448,7 +448,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                         : 'bg-neutral-100 border-neutral-200 hover:border-neutral-300 text-neutral-600'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <Sparkles className="w-4 h-4 text-zeno" />
                   <span>Alta Qualidade</span>
                 </button>
               </div>

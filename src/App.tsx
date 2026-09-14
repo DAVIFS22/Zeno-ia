@@ -3,16 +3,18 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { getOrCreateUserId } from './lib/userId';
-import { Sparkles, AlertCircle, ChevronDown } from 'lucide-react';
+import { Sparkles, AlertCircle, ChevronDown, Mic, MessageSquare } from 'lucide-react';
 import { Message, ChatSession, FileAttachment, UserSettings, ModelType, DailyUsage, AdaptiveLearningProfile } from './types';
 import { DEFAULT_ADAPTIVE_PROFILE } from './lib/adaptiveLearning';
 import { groupSessionsByDate, generateTitleFromMessage } from './utils/date';
 import { CodeBlock } from './components/CodeBlock';
 import { ImageWithLoader } from './components/ImageWithLoader';
 import { syncLibraryWithBackend, scanAndSaveImagesFromText } from './lib/imageLibraryStorage';
+import { VoiceTranscriptionControls } from './components/VoiceTranscriptionControls';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { PlanUsageCard } from './components/PlanUsageCard';
 import { ComposerInput } from './components/ComposerInput';
+import { VoiceModeModal } from './components/VoiceModeModal';
 import { SidebarNav } from './components/SidebarNav';
 import { YouTubeProcessor } from './components/YouTubeProcessor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -33,6 +35,7 @@ import { useAppSettings } from './hooks/useAppSettings';
 import { useUsage } from './hooks/useUsage';
 import { useSessions } from './hooks/useSessions';
 import { useChat } from './hooks/useChat';
+import { useAppInitialization } from './hooks/useAppInitialization';
 import { detectIntent } from './utils/intent';
 import { LanguageProvider, useTranslation } from './i18n';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
@@ -96,8 +99,11 @@ function MainAppInner() {
     clearHistory 
   } = useSessions(userId);
 
+  const { adaptiveProfile, setAdaptiveProfile, handleSendAdaptiveFeedback } = useAppInitialization(userId, user, profile, authLoading, fetchLimits, setUserSettings);
+
   const [speed, setSpeed] = useState<ModelType>('smart');
   const [showUsageCard, setShowUsageCard] = useState(true);
+  const [isVoiceModeOpen, setIsVoiceModeOpen] = useState(false);
 
   const { checkNewVersion, markSeen, latestVersion } = useVersion();
 
@@ -119,157 +125,6 @@ function MainAppInner() {
       }
     }
   }, [isPro, profile, userSettings.userEmail]);
-
-  // Adaptive Learning Profile State & Effects
-  const [adaptiveProfile, setAdaptiveProfile] = useState<AdaptiveLearningProfile>(DEFAULT_ADAPTIVE_PROFILE);
-
-  useEffect(() => {
-    if (userId) {
-      const fetchProfile = async () => {
-        try {
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-          if (user) {
-            try {
-              const token = await user.getIdToken();
-              headers['Authorization'] = `Bearer ${token}`;
-            } catch (tokenErr) {
-              console.warn('Could not get auth token for adaptive profile:', tokenErr);
-            }
-          }
-          const res = await fetch(`/api/adaptive/profile?userId=${encodeURIComponent(userId)}`, { 
-            headers,
-            cache: 'no-store'
-          });
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const data = await res.json();
-            if (data && data.profile) {
-              setAdaptiveProfile(data.profile);
-            }
-          }
-        } catch (err) {
-          console.warn('Falha silenciosa ao carregar perfil adaptativo:', err);
-        }
-      };
-      fetchProfile();
-    }
-  }, [userId, user]);
-
-  const handleSendAdaptiveFeedback = useCallback(async (msgId: string, type: 'up' | 'down', tags: string[], comment?: string) => {
-    try {
-      const res = await fetch('/api/adaptive/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          feedback: {
-            messageId: msgId,
-            type,
-            tags,
-            userComment: comment,
-            timestamp: Date.now()
-          }
-        })
-      });
-      const data = await res.json();
-      if (data.profile) {
-        setAdaptiveProfile(data.profile);
-      }
-    } catch (err) {
-      console.error('Erro ao enviar feedback adaptativo:', err);
-    }
-  }, [userId]);
-
-  // Switch context reset & server init when userId changes
-  const prevUserIdRef = useRef<string>(userId);
-
-  useEffect(() => {
-    console.log('[DEBUG] useEffect Account Isolation Triggered:', { authLoading, userId, prevUserId: prevUserIdRef.current });
-    if (authLoading) return; // Wait for auth to be determined
-
-    if (prevUserIdRef.current !== userId) {
-      prevUserIdRef.current = userId;
-      console.log('[ACCOUNT ISOLATION] Alternando contexto para o UID:', userId);
-
-      // Defensive check: If we have a profile UID but Firebase Auth isn't matching it yet, wait
-      // This avoids "Missing or insufficient permissions" during the split-second of auth transition
-      if (profile && user && user.uid !== userId) {
-        console.warn('[ACCOUNT ISOLATION] UID mismatch during transition. Skipping init:', { userUid: user.uid, profileUid: profile.uid, userId });
-        return;
-      }
-
-      // 1. Initialize account via backend API (Admin SDK) to bypass client permission issues
-      const initAccountOnServer = async () => {
-        console.log('[DEBUG] initAccountOnServer called with userId:', userId, 'profile:', !!profile);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        try {
-          const res = await fetch('/api/account/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId,
-              email: profile?.email || '',
-              name: profile?.displayName || 'Usuário ZENO',
-              photoURL: profile?.photoURL || ''
-            }),
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          console.log('[ACCOUNT ISOLATION] Account initialized on server status:', res.status);
-        } catch(e: any) {
-          clearTimeout(timeoutId);
-          if (e?.name === 'AbortError') {
-            console.warn("Account initialization request timed out (15s)");
-          } else {
-            console.error("Failed to initialize user on server:", e);
-          }
-        }
-      };
-      
-      initAccountOnServer();
-
-      // 2. Load user settings for new UID
-      try {
-        const savedSettings = localStorage.getItem(`${STORAGE_KEY_SETTINGS}_${userId}`);
-        if (savedSettings) {
-          setUserSettings(JSON.parse(savedSettings));
-        } else {
-          setUserSettings({
-            userName: profile?.displayName || 'Usuário ZENO',
-            userEmail: profile?.email || '',
-            userAvatar: profile?.photoURL || '',
-            plan: 'ZENO Free',
-            theme: 'dark',
-      showHomeSuggestions: false,
-            logoVariant: 'monochrome',
-            fontSize: 'normal',
-            defaultSpeed: 'smart',
-            temperature: 0.7,
-            systemInstruction: '',
-            autoRead: false,
-            voiceSpeed: 1.0,
-            voicePersonality: 'friendly',
-            speechLanguage: 'pt-BR',
-            customInstructions: '',
-            memoryEnabled: true,
-            saveHistory: true,
-            anonymousMode: false,
-            rememberDevice: true,
-            language: 'pt-BR',
-            isSmartMode: true,
-            soundEnabled: true,
-            notificationsEnabled: true,
-          });
-        }
-      } catch (e) {
-        console.error('Erro ao carregar configurações isoladas:', e);
-      }
-
-      // 5. Fetch limits for new UID
-      fetchLimits();
-    }
-  }, [userId, profile]);
 
   useEffect(() => {
     const reconcileAndCheckSubscription = async () => {
@@ -327,7 +182,8 @@ function MainAppInner() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [userId, ui]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const handleOpenSubscriptionModal = useCallback((reasonMessage?: string) => {
     if (!user && !user?.isAnonymous) {
@@ -378,8 +234,14 @@ function MainAppInner() {
       ui.openModal('auth', { data: { message: "Faça login para salvar seu progresso e acessar todos os recursos." } });
       return;
     }
+
+    shouldAutoScrollRef.current = true;
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+
     setIsNewChat(false);
-    await handleSubmit(e, overrideText, extraContext);
+    return await handleSubmit(e, overrideText, extraContext);
   }, [handleSubmit, user, ui]);
 
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() => {
@@ -596,15 +458,7 @@ function MainAppInner() {
 
   const messages = activeSession?.messages || [];
 
-  useEffect(() => {
-    console.log('[DEBUG - App.tsx] Messages state updated:', {
-      count: messages.length,
-      sessionID: currentSessionId,
-      lastMessage: messages.length > 0 ? messages[messages.length - 1].text.substring(0, 30) : 'NONE'
-    });
-  }, [messages, currentSessionId]);
-
-  // Sync model speed when active session changes
+    // Sync model speed when active session changes
   useEffect(() => {
     if (activeSession?.speed) {
       setSpeed(activeSession.speed);
@@ -612,12 +466,15 @@ function MainAppInner() {
   }, [currentSessionId, activeSession?.speed]);
 
   // Scan active chat messages for generated images to populate library automatically
+  const scannedMessagesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     try {
       if (messages && messages.length > 0 && currentSessionId) {
         messages.forEach(msg => {
-          if (msg.role === 'model' && msg.text && msg.text.includes('![')) {
+          if (msg.role === 'model' && msg.text && msg.text.includes('![') && !msg.isStreaming && !scannedMessagesRef.current.has(msg.id)) {
             scanAndSaveImagesFromText(msg.text, currentSessionId, activeSession?.title || 'Conversa', speed, userId);
+            scannedMessagesRef.current.add(msg.id);
           }
         });
       }
@@ -690,17 +547,28 @@ function MainAppInner() {
     }
   }, [messages, userSettings.autoScrollToBottom]);
 
-  // New Chat Handler
+  // Draft Input handler
+  const handleSetInput = useCallback((newInput: string | ((prev: string) => string)) => {
+    setInput(prev => {
+      const nextValue = typeof newInput === 'function' ? newInput(prev) : newInput;
+      if (nextValue) {
+        localStorage.setItem('zeno_draft_input', nextValue);
+      } else {
+        localStorage.removeItem('zeno_draft_input');
+      }
+      return nextValue;
+    });
+  }, [setInput]);
   const handleNewChat = useCallback(() => {
     if (isLoading) {
       abortChat();
     }
     setIsNewChat(true);
     setCurrentSessionId(null);
-    setInput('');
+    handleSetInput('');
     setAttachments([]);
     ui.setSidebarOpen(false);
-  }, [isLoading, ui, abortChat, setCurrentSessionId, setInput, setAttachments]);
+  }, [isLoading, ui, abortChat, setCurrentSessionId, handleSetInput, setAttachments]);
 
   const originalInputRef = useRef<string>('');
   const sessionFinalRef = useRef<string>('');
@@ -728,8 +596,9 @@ function MainAppInner() {
   }, [abortChat]);
 
   const handleShareChat = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('Link da conversa copiado para a área de transferência!');
+    performCopyToClipboard(window.location.href).then(() => {
+      alert('Link da conversa copiado para a área de transferência!');
+    }).catch(() => {});
   }, []);
 
   const handleViewFiles = useCallback(() => {
@@ -820,7 +689,7 @@ function MainAppInner() {
       case 'traduzir': prompt = `Traduza os principais pontos do vídeo "${videoTitle}" para o português, mantendo o contexto original.`; break;
       case 'topicos': prompt = `Organize os principais temas e tópicos abordados no vídeo "${videoTitle}" em uma lista estruturada.`; break;
       case 'pontos': prompt = `Destaque os insights e pontos mais importantes discutidos no vídeo "${videoTitle}".`; break;
-      case 'perguntar': prompt = `O que você gostaria de saber sobre o vídeo "${videoTitle}"?`; setInput(prompt); return;
+      case 'perguntar': prompt = `O que você gostaria de saber sobre o vídeo "${videoTitle}"?`; handleSetInput(prompt); return;
       case 'corrigir': prompt = `Corrija a pontuação e gramática da transcrição do vídeo "${videoTitle}" e apresente-a de forma legível.`; break;
       default: return;
     }
@@ -1202,7 +1071,7 @@ function MainAppInner() {
                 theme={theme}
                 logoVariant={logoVariant}
                 userName={userSettings.userName}
-                onSelectPrompt={(prompt) => setInput(prompt)}
+                onSelectPrompt={(prompt) => handleSetInput(prompt)}
                 onOpenMusicStudio={() => ui.openModal('musicStudio')}
                 onSelectSpeed={handleSelectSpeed}
                 user={profile}
@@ -1239,6 +1108,7 @@ function MainAppInner() {
                 userToken={session?.access_token || null}
                 onYouTubeAction={handleYouTubeAction}
                 onSendAdaptiveFeedback={handleSendAdaptiveFeedback}
+                chatId={currentSessionId || 'default'}
               />
             </ErrorBoundary>
           </div>
@@ -1246,9 +1116,10 @@ function MainAppInner() {
 
         {/* Composer Input Area */}
         <div className="flex-shrink-0 w-full flex flex-col">
+          <VoiceTranscriptionControls />
           <ComposerInput
             input={input}
-            setInput={setInput}
+            setInput={handleSetInput}
             isLoading={isLoading}
             attachments={attachments}
             onAddAttachment={handleAddAttachment}
@@ -1267,10 +1138,32 @@ function MainAppInner() {
             cloudDraftPrompt={cloudDraftPrompt}
             onAcceptCloudDraft={acceptCloudDraft}
             onDismissCloudDraft={dismissCloudDraft}
+            onOpenVoiceMode={() => {
+              try {
+                if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                  window.speechSynthesis.resume();
+                  const u = new SpeechSynthesisUtterance(' ');
+                  u.volume = 0.001;
+                  u.rate = 10;
+                  window.speechSynthesis.speak(u);
+                }
+              } catch (e) {}
+              setIsVoiceModeOpen(true);
+            }}
           />
         </div>
       </main>
     </ErrorBoundary>
+
+      <VoiceModeModal
+        isOpen={isVoiceModeOpen}
+        onClose={() => setIsVoiceModeOpen(false)}
+        onSendMessage={(text) => handleChatSubmit(undefined, text)}
+        isLoading={isLoading}
+        latestMessage={sessions.find(s => s.id === currentSessionId)?.messages?.slice(-1)[0] || sessions[0]?.messages?.slice(-1)[0] || null}
+        theme={theme}
+        userSettings={userSettings}
+      />
 
       {/* Global App Modals */}
       <AppModals
@@ -1346,14 +1239,16 @@ const AuthWrapper = () => {
 export default function App() {
   console.log('[DEBUG] App Root render');
   return (
-    <AuthProvider>
-      <LanguageProvider>
-        <UIProvider>
-          <VersionProvider>
-            <AuthWrapper />
-          </VersionProvider>
-        </UIProvider>
-      </LanguageProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <LanguageProvider>
+          <UIProvider>
+            <VersionProvider>
+              <AuthWrapper />
+            </VersionProvider>
+          </UIProvider>
+        </LanguageProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

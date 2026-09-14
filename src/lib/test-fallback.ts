@@ -26,8 +26,8 @@ async function runTests() {
   // Try to use models that might be valid
   await testProvider('gemini', 'gemini-1.5-flash');
   await testProvider('openai', 'gpt-4o');
-  await testProvider('groq', 'llama-3.1-70b-versatile');
-  await testProvider('openrouter', 'google/gemini-pro-1.5');
+  await testProvider('groq', 'groq/compound');
+  await testProvider('openrouter', 'google/gemini-2.0-flash-001');
 }
 
 runTests().catch(console.error);

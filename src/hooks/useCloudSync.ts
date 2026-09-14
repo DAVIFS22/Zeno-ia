@@ -149,12 +149,14 @@ export function useCloudSync(
       if (isSubscribed) {
         isInitialSync.current = false;
       }
+    }).catch(err => {
+      console.warn('[CLOUD SYNC] Initial pullAndReconcile error:', err);
     });
 
     // Reconnection listener to automatically reconcile offline saves when online status is restored
     const handleOnline = () => {
       console.log('[NETWORK] Conexão reestabelecida. Iniciando reconciliação automática de mensagens offline...');
-      pullAndReconcile();
+      pullAndReconcile().catch(err => console.warn('[CLOUD SYNC] Reconnect pullAndReconcile error:', err));
     };
 
     window.addEventListener('online', handleOnline);

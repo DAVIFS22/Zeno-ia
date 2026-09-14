@@ -350,16 +350,6 @@ export async function getAdminConfig(): Promise<FullAdminConfig> {
   return db.config;
 }
 
-export async function updateAdminConfig(newConfig: FullAdminConfig) {
-  try {
-    await adminDb.collection(COLL_CONFIG).doc('admin_settings').set(newConfig);
-  } catch (err: any) {
-    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped updateAdminConfig', err?.message);
-  }
-  if (cachedDb) cachedDb.config = newConfig;
-  return newConfig;
-}
-
 export async function getAdminStats(): Promise<any> {
   const db = await readDb();
   const today = getTodayString();
@@ -401,36 +391,6 @@ export async function getAdminStats(): Promise<any> {
   };
 }
 
-export async function addAuditLog(adminEmail: string, action: string, oldValue: any, newValue: any, req?: any) {
-  const now = new Date();
-  const timestamp = Date.now();
-  const ip = req ? (req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '127.0.0.1') : '127.0.0.1';
-  const cleanIp = typeof ip === 'string' ? ip.split(',')[0].trim() : '127.0.0.1';
-  const uaInfo = req ? parseUserAgent(req.headers['user-agent']) : { browser: 'Chrome', device: 'Desktop' };
-  
-  const log: AuditLog = {
-    id: `audit-${timestamp}-${Math.floor(Math.random() * 10000)}`,
-    adminEmail,
-    timestamp,
-    date: getTodayString(),
-    time: now.toLocaleTimeString('pt-BR'),
-    ip: cleanIp,
-    device: uaInfo.device,
-    browser: uaInfo.browser,
-    action,
-    oldValue: typeof oldValue === 'object' ? JSON.stringify(oldValue) : String(oldValue),
-    newValue: typeof newValue === 'object' ? JSON.stringify(newValue) : String(newValue),
-    details: 'Configuração atualizada via Admin'
-  };
-  
-  try {
-    await adminDb.collection(COLL_AUDIT).doc(log.id).set(log);
-  } catch (err: any) {
-    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped addAuditLog', err?.message);
-  }
-  return log;
-}
-
 export async function addSystemLog(type: 'info' | 'error' | 'auth' | 'ia' | 'payment', userEmail: string, action: string, details: string, req?: any) {
   const now = new Date();
   const timestamp = Date.now();
@@ -469,21 +429,6 @@ export async function incrementStatCounter(field: string, amount = 1) {
     }
   } catch (err: any) {
     if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped incrementStatCounter', err?.message);
-  }
-}
-
-export async function incrementModelCounter(modelName: string) {
-  try {
-    const statsRef = adminDb.collection('stats').doc(DOC_STATS);
-    const statsDoc = await statsRef.get();
-    if (statsDoc.exists) {
-      const data = statsDoc.data();
-      const modelUsage = data?.modelUsage || {};
-      modelUsage[modelName] = (modelUsage[modelName] || 0) + 1;
-      await statsRef.update({ modelUsage });
-    }
-  } catch (err: any) {
-    if (process.env.NODE_ENV !== 'production') console.warn('Dev: Skipped incrementModelCounter', err?.message);
   }
 }
 

@@ -1,25 +1,26 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { useUIState, useModal } from '../hooks/useUIState';
-import { UserSettings, ChatSession } from '../types';
-import { EditProfileModal } from './EditProfileModal';
-import { SubscriptionManager } from './SubscriptionManager';
-import { PlansModal } from './PlansModal';
-import { SettingsModal } from './SettingsModal';
-import { ImageStudioModal } from './ImageStudioModal';
-import { ImageLibraryModal } from './ImageLibraryModal';
-import { ProjectsModal } from './ProjectsModal';
-import { PluginsModal } from './PluginsModal';
-import { MoreModal } from './MoreModal';
-import { ProFeatureModal } from './ProFeatureModal';
-import { AuthModal } from './AuthModal';
-import { MusicStudioModal } from './MusicStudioModal';
-import { AdaptiveLearningModal } from './AdaptiveLearningModal';
-import { PythonLearningModule } from './PythonLearningModule';
-import { GamificationModal } from './GamificationModal';
-import { VersionNewsModal } from './VersionNewsModal';
-import { ImageAnalysisModal } from './ImageAnalysisModal';
-import { AdaptiveLearningProfile } from '../types';
+import { UserSettings, ChatSession, AdaptiveLearningProfile } from '../types';
+
+// Lazy load all modal content components to significantly reduce initial bundle size
+const EditProfileModal = lazy(() => import('./EditProfileModal').then(m => ({ default: m.EditProfileModal })));
+const SubscriptionManager = lazy(() => import('./SubscriptionManager').then(m => ({ default: m.SubscriptionManager })));
+const PlansModal = lazy(() => import('./PlansModal').then(m => ({ default: m.PlansModal })));
+const SettingsModal = lazy(() => import('./SettingsModal').then(m => ({ default: m.SettingsModal })));
+const ImageStudioModal = lazy(() => import('./ImageStudioModal').then(m => ({ default: m.ImageStudioModal })));
+const ImageLibraryModal = lazy(() => import('./ImageLibraryModal').then(m => ({ default: m.ImageLibraryModal })));
+const ProjectsModal = lazy(() => import('./ProjectsModal').then(m => ({ default: m.ProjectsModal })));
+const PluginsModal = lazy(() => import('./PluginsModal').then(m => ({ default: m.PluginsModal })));
+const MoreModal = lazy(() => import('./MoreModal').then(m => ({ default: m.MoreModal })));
+const ProFeatureModal = lazy(() => import('./ProFeatureModal').then(m => ({ default: m.ProFeatureModal })));
+const AuthModal = lazy(() => import('./AuthModal').then(m => ({ default: m.AuthModal })));
+const MusicStudioModal = lazy(() => import('./MusicStudioModal').then(m => ({ default: m.MusicStudioModal })));
+const AdaptiveLearningModal = lazy(() => import('./AdaptiveLearningModal').then(m => ({ default: m.AdaptiveLearningModal })));
+const PythonLearningModule = lazy(() => import('./PythonLearningModule').then(m => ({ default: m.PythonLearningModule })));
+const GamificationModal = lazy(() => import('./GamificationModal').then(m => ({ default: m.GamificationModal })));
+const VersionNewsModal = lazy(() => import('./VersionNewsModal').then(m => ({ default: m.VersionNewsModal })));
+const ImageAnalysisModal = lazy(() => import('./ImageAnalysisModal').then(m => ({ default: m.ImageAnalysisModal })));
 
 interface AppModalsProps {
   theme: 'dark' | 'light';
@@ -46,6 +47,13 @@ interface AppModalsProps {
   dailyUsage: any;
   onUpdateUsage: (newUsage: any) => void;
 }
+
+// Minimal fallback for lazy loading
+const ModalLoadingFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="w-6 h-6 border-2 border-zeno border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 export const AppModals: React.FC<AppModalsProps> = React.memo(({
   theme,
@@ -99,7 +107,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
   const deletingSessionId = deleteSessionModal.data?.sessionId;
 
   return (
-    <>
+    <Suspense fallback={null}>
       {musicStudioModal.isOpen && (
         <MusicStudioModal
           isOpen={musicStudioModal.isOpen}
@@ -111,7 +119,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           geminiApiKey={userSettings.geminiApiKey}
         />
       )}
-      {/* Pro Feature Modal */}
+      {/* Auth Modal */}
       {authModal.isOpen && (
         <AuthModal
           isOpen={authModal.isOpen}
@@ -135,9 +143,9 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
         />
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (Static for speed as it's small) */}
       {deleteSessionModal.isOpen && deletingSessionId && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn">
           <div className={`rounded-2xl p-6 max-w-sm w-full border shadow-2xl ${
             theme === 'dark' ? 'bg-[#1e1e24] border-[#2C2C2E] text-neutral-100' : 'bg-white border-neutral-200 text-neutral-900'
           }`}>
@@ -222,33 +230,35 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
 
             {/* Modal Body */}
             <div className="p-6 sm:p-8 max-h-[82vh] overflow-y-auto scrollbar-custom">
-              <SubscriptionManager
-                userId={userId}
-                settings={userSettings}
-                onUpdateSettings={onUpdateSettings}
-                onOpenCheckout={async (plan) => {
-                  try {
-                    const res = await fetch('/api/create-checkout-session', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        plan: plan || 'monthly', 
-                        email: userSettings.userEmail, 
-                        hasUsedFreeTrial: userSettings.hasUsedFreeTrial,
-                        userId
-                      })
-                    });
-                    const data = await res.json();
-                    if (data.url) {
-                      window.open(data.url, '_blank');
-                    } else {
-                      alert(data.error || 'Erro ao iniciar o checkout.');
+              <Suspense fallback={<ModalLoadingFallback />}>
+                <SubscriptionManager
+                  userId={userId}
+                  settings={userSettings}
+                  onUpdateSettings={onUpdateSettings}
+                  onOpenCheckout={async (plan) => {
+                    try {
+                      const res = await fetch('/api/create-checkout-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          plan: plan || 'monthly', 
+                          email: userSettings.userEmail, 
+                          hasUsedFreeTrial: userSettings.hasUsedFreeTrial,
+                          userId
+                        })
+                      });
+                      const data = await res.json();
+                      if (data.url) {
+                        window.open(data.url, '_blank');
+                      } else {
+                        alert(data.error || 'Erro ao iniciar o checkout.');
+                      }
+                    } catch (err) {
+                      alert('Erro ao iniciar o checkout.');
                     }
-                  } catch (err) {
-                    alert('Erro ao iniciar o checkout.');
-                  }
-                }}
-              />
+                  }}
+                />
+              </Suspense>
             </div>
           </div>
         </div>
@@ -531,7 +541,7 @@ export const AppModals: React.FC<AppModalsProps> = React.memo(({
           geminiApiKey={userSettings.geminiApiKey}
         />
       )}
-    </>
+    </Suspense>
   );
 });
 

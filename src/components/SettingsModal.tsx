@@ -11,7 +11,7 @@ import { configureUtterance, getPersonalityPreviewText } from '../utils/voiceSyn
 import { SupportChatTab } from "./SupportChatTab";
 import { LifeBuoy } from "lucide-react";
 import { ZenoLogo } from './ZenoLogo';
-import { MySubscriptions } from './MySubscriptions';
+import { SubscriptionManager } from './SubscriptionManager';
 import { isAdminUser, hasPremiumAccess, maskEmail } from '../config/admin';
 import { ProtectedAdminPanel } from './AdminPanel';
 import { AuthProfile } from '../contexts/AuthContext';
@@ -341,7 +341,7 @@ export function SettingsModal({
               {/* 2. ASSINATURA */}
               {activeCategory === 'subscription' && (
                 <div className="space-y-6 animate-fadeIn">
-                  <MySubscriptions
+                  <SubscriptionManager
                     userId={userId}
                     settings={safeSettings}
                     onUpdateSettings={onUpdateSettings}

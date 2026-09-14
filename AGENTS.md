@@ -31,3 +31,7 @@ Other colors may be used ONLY for the following non-identity purposes:
 - Third-party components requiring their own branding
 
 **CRITICAL RULE:** All new components must adhere to this system. The entire interface must feel cohesive and exclusively use `Zeno Blue` and `Zeno White` for brand identity.
+
+## Agent Operations (Permanent Rule)
+
+**CRITICAL INCIDENT RULE:** Nenhuma ação relatada pelo agente deve ser considerada concluída sem evidência visual (print, log ou output de comando). O agente não deve assumir sucesso de operações (como reescritas ou restaurações) por padrão. O agente deve sempre confirmar visualmente as mudanças lendo os arquivos no projeto (usando `view_file` ou equivalente) ou verificando output de logs antes de prosseguir com afirmações de que a tarefa foi concluída ou que o código foi restaurado.

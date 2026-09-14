@@ -21,10 +21,27 @@ service cloud.firestore {
       );
     }
 
+    function isValidFeedback(data) {
+      return data.userId == request.auth.uid &&
+             data.messageId is string && data.messageId.size() > 0 &&
+             data.chatId is string && data.chatId.size() > 0 &&
+             data.utility is int && data.utility >= 1 && data.utility <= 5 &&
+             data.clarity is int && data.clarity >= 1 && data.clarity <= 5 &&
+             data.creativity is int && data.creativity >= 1 && data.creativity <= 5 &&
+             (data.comments == null || (data.comments is string && data.comments.size() <= 1000)) &&
+             data.timestamp is string;
+    }
+
     // Admins collection: key is email. 
     match /admins/{email} {
       allow read: if isAuthenticated() && getUserEmail() == email.lower();
       allow write: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidFeedback(request.resource.data);
+      allow update, delete: if isAdmin();
     }
 
     // Users: Keyed by UID. Block client-side modification of isPro, isAdmin, unlimited, adminOverride.

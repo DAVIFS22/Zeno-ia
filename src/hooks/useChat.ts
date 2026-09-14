@@ -26,7 +26,13 @@ export function useChat(
 ) {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedInput = localStorage.getItem('zeno_draft_input');
+      return savedInput || '';
+    }
+    return '';
+  });
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isThinkingMode, setIsThinkingMode] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -85,6 +91,7 @@ export function useChat(
 
     if (overrideText === undefined) {
       setInput('');
+      localStorage.removeItem('zeno_draft_input');
       setAttachments([]);
     }
 
@@ -274,8 +281,28 @@ export function useChat(
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Falha na conexão com o servidor (${response.status})`);
+        let errorMsg = `Falha na conexão com o servidor (${response.status})`;
+        try {
+          const rawText = await response.text();
+          if (rawText && rawText.trim().length > 0) {
+            const lowerText = rawText.toLowerCase();
+            if (lowerText.includes('rate exceeded') || lowerText.includes('rate limit') || response.status === 429) {
+              errorMsg = "⚠️ **Limite de requisições excedido**: O servidor de desenvolvimento atingiu a capacidade temporária de tráfego de rede do AI Studio. Por favor, aguarde alguns instantes e envie sua mensagem novamente.";
+            } else {
+              try {
+                const parsed = JSON.parse(rawText);
+                if (parsed.error) {
+                  errorMsg = parsed.error;
+                }
+              } catch {
+                errorMsg = rawText.length > 200 ? rawText.slice(0, 200) + '...' : rawText;
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMsg);
       }
 
       // Mark user message as sent
@@ -378,6 +405,7 @@ export function useChat(
           } : s)
         );
       }
+      return accumulatedText;
     } catch (err: any) {
       const isAbort = err.name === 'AbortError';
       const isWatchdogAbort = isAbort && abortControllerRef.current?.signal.aborted;

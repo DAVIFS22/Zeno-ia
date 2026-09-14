@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { 
-  getAuth, 
   onAuthStateChanged, 
   signInWithPopup,
   signInWithRedirect,
   GoogleAuthProvider, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
+  updateProfile,
   signOut as firebaseSignOut,
   signInAnonymously,
   User,
@@ -16,10 +16,9 @@ import {
   browserSessionPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { app, db } from '../lib/firebase';
+import { app, db, auth, extractDisplayNameFromEmail } from '../lib/firebase';
 import { isAdminUser } from '../config/admin';
 
-const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 export interface AuthProfile {
@@ -67,7 +66,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     addLog('AuthProvider: Setting up authentication');
+    
+    // Safety fallback: Ensure app renders after 5 seconds max if auth is hanging
+    const fallbackTimer = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          addLog('AuthProvider: Auth initialization fallback timeout reached. Unblocking loading.');
+          return false;
+        }
+        return false;
+      });
+    }, 5000);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      clearTimeout(fallbackTimer);
       addLog(`AuthProvider: onAuthStateChanged triggered. User: ${currentUser ? (currentUser.isAnonymous ? 'Anonymous' : currentUser.email) : 'null'}`);
       
       if (currentUser) {
@@ -81,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isAdmin = isAdminUser(currentUser.email);
         setProfile({
           uid: currentUser.uid,
-          displayName: currentUser.displayName || (currentUser.isAnonymous ? 'Convidado' : null),
+          displayName: currentUser.displayName || (currentUser.isAnonymous ? 'Convidado' : (currentUser.email ? extractDisplayNameFromEmail(currentUser.email) : 'Usuário ZENO')),
           email: currentUser.email,
           photoURL: currentUser.photoURL,
           isAdmin: isAdmin,
@@ -96,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       } else {
         addLog('AuthProvider: No user detected, clearing local auth state');
-        // CRITICAL FIX: Clear state immediately before signing in anonymously
         setUser(null);
         setProfile(null);
         
@@ -110,7 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   const migrateAnonymousData = async (anonId: string, realUid: string) => {
@@ -162,32 +176,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   const signInWithEmail = (e: string, p: string) => signInWithEmailAndPassword(auth, e, p);
-  const signUpWithEmail = (e: string, p: string) => createUserWithEmailAndPassword(auth, e, p);
+  const signUpWithEmail = async (e: string, p: string) => {
+    addLog(`AuthContext: Registering user with email: ${e}`);
+    const userCredential = await createUserWithEmailAndPassword(auth, e, p);
+    const extractedName = extractDisplayNameFromEmail(e);
+    addLog(`AuthContext: Extracted name: ${extractedName}. Updating profile...`);
+    try {
+      await updateProfile(userCredential.user, { displayName: extractedName });
+      addLog(`AuthContext: Profile updated successfully.`);
+    } catch (profileErr) {
+      console.error('Error updating profile during signup:', profileErr);
+    }
+    return userCredential;
+  };
   const signOut = () => firebaseSignOut(auth);
 
+  const contextValue = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+    login: signInWithGoogle,
+    logout: signOut,
+    session: { 
+      accounts: user ? [{
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || profile?.displayName || 'Usuário ZENO',
+        photoURL: user.photoURL || profile?.photoURL
+      }] : [], 
+      activeUid: user?.uid 
+    },
+    switchAccount: (uid: string) => {},
+    authLogs
+  }), [user, profile, loading, authLogs]);
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      profile, 
-      loading, 
-      signInWithGoogle, 
-      signInWithEmail, 
-      signUpWithEmail, 
-      signOut,
-      login: signInWithGoogle,
-      logout: signOut,
-      session: { 
-        accounts: user ? [{
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || profile?.displayName || 'Usuário ZENO',
-          photoURL: user.photoURL || profile?.photoURL
-        }] : [], 
-        activeUid: user?.uid 
-      },
-      switchAccount: (uid: string) => {},
-      authLogs
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

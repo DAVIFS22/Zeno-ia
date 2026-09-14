@@ -432,3 +432,16 @@ button:active:not(:disabled), [role="button"]:active:not(:disabled) {
   transform: scale(0.96) translateZ(0);
 }
 
+@keyframes zeno-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-zeno-spin-slow {
+  animation: zeno-spin 2.5s linear infinite;
+}
+

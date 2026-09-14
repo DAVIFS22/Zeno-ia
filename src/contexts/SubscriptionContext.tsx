@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 
 export interface SubscriptionData {
@@ -121,16 +121,16 @@ export const SubscriptionProvider: React.FC<{
     };
   }, [refreshSubscription]);
 
+  const contextValue = useMemo(() => ({
+    subscription,
+    isPro: subscription.isPro,
+    loading,
+    error,
+    refreshSubscription,
+  }), [subscription, loading, error, refreshSubscription]);
+
   return (
-    <SubscriptionContext.Provider
-      value={{
-        subscription,
-        isPro: subscription.isPro,
-        loading,
-        error,
-        refreshSubscription,
-      }}
-    >
+    <SubscriptionContext.Provider value={contextValue}>
       {children}
     </SubscriptionContext.Provider>
   );

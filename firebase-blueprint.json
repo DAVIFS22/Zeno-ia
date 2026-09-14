@@ -60,9 +60,30 @@
         "metadata": { "type": "object" },
         "embedding": { "type": "array" }
       }
+    },
+    "Feedback": {
+      "title": "User Feedback",
+      "description": "User evaluation of AI responses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "messageId": { "type": "string" },
+        "chatId": { "type": "string" },
+        "utility": { "type": "integer" },
+        "clarity": { "type": "integer" },
+        "creativity": { "type": "integer" },
+        "comments": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "messageId", "chatId", "utility", "clarity", "creativity", "timestamp"]
     }
   },
   "firestore": {
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedback on AI responses"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles and settings"

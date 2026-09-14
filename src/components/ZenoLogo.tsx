@@ -6,13 +6,15 @@ interface ZenoLogoProps {
   theme?: 'dark' | 'light' | 'auto';
   variant?: 'monochrome' | 'gradient';
   showBackground?: boolean;
+  animateRotation?: boolean;
 }
 
 export const ZenoLogo: React.FC<ZenoLogoProps> = ({
   size = 'md',
   className = '',
   theme = 'dark',
-  showBackground = true,
+  showBackground = false,
+  animateRotation = false,
 }) => {
   const uniqueId = useId().replace(/:/g, '');
 
@@ -64,10 +66,21 @@ export const ZenoLogo: React.FC<ZenoLogoProps> = ({
       height={pxSize}
       viewBox="0 0 1024 1024"
       xmlns="http://www.w3.org/2000/svg"
-      className={`inline-block flex-shrink-0 select-none ${className}`}
-      style={{ width: pxSize, height: pxSize }}
+      className={`inline-block flex-shrink-0 select-none ${className} ${animateRotation ? 'animate-spin-slow' : ''}`}
+      style={{
+        width: pxSize,
+        height: pxSize,
+        transformOrigin: 'center',
+        ...(animateRotation ? { animation: 'spin 8s linear infinite' } : {})
+      }}
     >
       <defs>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
         {isDark ? (
           <>
             <linearGradient id={bgGradId} x1="0%" y1="0%" x2="100%" y2="100%">

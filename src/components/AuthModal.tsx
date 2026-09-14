@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { X, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Eye, EyeOff, AlertCircle, Smartphone, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { motion, AnimatePresence } from 'motion/react';
-import { ZenoLogo } from './ZenoLogo';
 import { GoogleLogo } from './GoogleLogo';
+import { ZenoLogo } from './ZenoLogo';
 import { useTranslation } from '../i18n';
+import { signInWithPhoneNumber, RecaptchaVerifier, ConfirmationResult, signInAnonymously } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { isValidPhoneNumber } from 'libphonenumber-js';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,240 +23,228 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, message }
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+  
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  
+  const [authMode, setAuthMode] = useState<'default' | 'phone' | 'phone_verify'>('default');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [showSuccessLogo, setShowSuccessLogo] = useState(false);
 
-  const validateEmail = (email: string) => {
-    return email.includes('@') && email.includes('.');
+  useEffect(() => {
+    if (isOpen && authMode === 'phone') {
+      try {
+        if (!(window as any).recaptchaVerifier) {
+          (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            'size': 'invisible',
+          });
+        }
+      } catch (err) {
+        console.error("Error setting up reCAPTCHA", err);
+      }
+    }
+  }, [isOpen, authMode]);
+
+  const onAuthSuccess = () => {
+    setShowSuccessLogo(true);
+    setTimeout(() => {
+      setShowSuccessLogo(false);
+      onClose();
+    }, 1200);
+  };
+
+  const handleAnonymousSignIn = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await signInAnonymously(auth);
+      onAuthSuccess();
+    } catch (err: any) {
+      console.error("Anonymous Auth Error:", err);
+      setError("Erro ao entrar como visitante. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length === 0) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhoneNumber(formatPhoneNumber(e.target.value));
+  };
+
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    
+    const rawNumber = phoneNumber.replace(/\D/g, '');
+    if (rawNumber.length !== 10 && rawNumber.length !== 11) {
+      setError("O número deve conter DDD e telefone (10 ou 11 dígitos, ex: 11999999999).");
+      setIsLoading(false);
+      return;
+    }
+    
+    const e164Number = `+55${rawNumber}`;
+
+    try {
+      const verifier = (window as any).recaptchaVerifier;
+      const confirmation = await signInWithPhoneNumber(auth, e164Number, verifier);
+      setConfirmationResult(confirmation);
+      setAuthMode('phone_verify');
+    } catch (err: any) {
+      console.error("Phone Auth Error:", err);
+      let errorMessage = "Erro ao enviar código. Tente novamente mais tarde.";
+      
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/invalid-phone-number':
+            errorMessage = "Número de telefone inválido no Firebase.";
+            break;
+          case 'auth/too-many-requests':
+          case 'auth/quota-exceeded':
+            errorMessage = "Cota de SMS excedida ou muitas tentativas. Tente novamente mais tarde.";
+            break;
+          case 'auth/unauthorized-domain':
+            errorMessage = "Domínio não autorizado. Adicione este domínio nas Configurações de Autenticação do Firebase.";
+            break;
+          default:
+            errorMessage = `Erro Firebase (${err.code}). Consulte o console para mais detalhes.`;
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (confirmationResult) {
+        await confirmationResult.confirm(verificationCode);
+        onAuthSuccess();
+      }
+    } catch (err: any) {
+      console.error("Verification Error:", err);
+      setError("Código inválido. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    setErrorCode(null);
-
-    if (!validateEmail(email)) {
-      setError(t.auth.invalidEmail || "Esse e-mail não parece válido. Confira e tente novamente.");
-      setErrorCode('auth/invalid-email');
-      setIsLoading(false);
-      return;
-    }
-
     try {
       if (isLogin) {
         await signInWithEmail(email, password);
       } else {
         await signUpWithEmail(email, password);
       }
-      onClose();
+      onAuthSuccess();
     } catch (err: any) {
       console.error("Auth Error:", err);
-      setErrorCode(err.code);
-      if (err.code === 'auth/email-already-in-use') {
-        setError(t.auth.emailAlreadyInUse || "Este e-mail já está cadastrado. Que tal entrar na sua conta?");
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError(t.auth.invalidCredentials || "E-mail ou senha incorretos. Tente novamente.");
-      } else if (err.code === 'auth/weak-password') {
-        setError(t.auth.weakPassword || "Sua senha precisa ter pelo menos 6 caracteres.");
-      } else if (err.code === 'auth/invalid-email') {
-        setError(t.auth.invalidEmail || "Esse e-mail não parece válido. Confira e tente novamente.");
-      } else if (err.code === 'auth/too-many-requests') {
-        setError(t.auth.tooManyRequests || "Muitas tentativas. Aguarde um momento e tente novamente.");
-      } else if (err.code === 'auth/unauthorized-domain') {
-        setError(t.auth.unauthorizedDomain || "Este domínio não está autorizado para autenticação no Firebase.");
-      } else {
-        setError(t.auth.genericError || "Algo deu errado. Tente novamente em instantes.");
-      }
+      setError(err.message || "Algo deu errado. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setErrorCode(null);
-    try {
-      await signInWithGoogle();
-      onClose();
-    } catch (err: any) {
-      console.error("Google Auth Error:", err);
-      setErrorCode(err.code);
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/web-storage-unsupported') {
-        setError(t.auth.googlePopupError || "O login pelo Google pode ser bloqueado pelo navegador dentro da janela de preview (iframe). Para fazer login, abra o app em uma nova aba e tente novamente.");
-      } else {
-        setError(err.message || t.common.error);
-      }
-    }
-  };
+  if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+      
+      <div className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[360px] border border-[#2C2C2E]/50 z-10 p-6 sm:p-8 overflow-hidden">
+        {showSuccessLogo ? (
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-md"
-            onClick={onClose}
-          />
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-            className="relative bg-[#111111] rounded-[24px] shadow-2xl w-full max-w-[360px] border border-[#2C2C2E]/50 max-h-[90vh] overflow-y-auto z-10"
-            onClick={e => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center justify-center h-full min-h-[300px]"
           >
-            <button 
-              onClick={onClose} 
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-[#232326] text-neutral-500 transition-colors z-20"
-            >
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}>
+              <ZenoLogo className="w-24 h-24 text-zeno" />
+            </motion.div>
+          </motion.div>
+        ) : (
+          <>
+            <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-[#232326] text-neutral-500 transition-colors z-20">
               <X className="w-5 h-5" />
             </button>
+
+            <h2 className="text-[22px] font-bold text-white mb-6 text-center">Entre ou cadastre-se</h2>
             
-            <div className="p-5 sm:p-8">
-              <div className="flex flex-col items-center text-center mb-6">
-                <div className="mb-3">
-                  <ZenoLogo size={32} variant="monochrome" theme="dark" />
-                </div>
-                
-                <h2 className="text-[22px] font-bold tracking-tight text-white mb-2">
-                  Entre ou cadastre-se
-                </h2>
-                
-                <p className="text-[13px] text-neutral-400 leading-relaxed max-w-[280px]">
-                  Você vai poder aproveitar respostas inteligentes e, além disso, carregar imagens, arquivos e muito mais.
-                </p>
-              </div>
+            {error && <div className="mb-4 p-3 rounded-[12px] bg-red-950/30 text-red-400 text-[12px]">{error}</div>}
 
-              {error && (
-                <div className="mb-5 p-3 rounded-[12px] bg-[#1C1C1E] border border-[#2C2C2E] flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="text-neutral-500 mt-0.5">
-                    <AlertCircle className="w-4 h-4" />
+            <div id="recaptcha-container"></div>
+
+            <AnimatePresence mode='wait'>
+              <motion.div
+                key={authMode}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                {authMode === 'default' && (
+                  <div className="space-y-3">
+                    <button onClick={async () => { try { await signInWithGoogle(); onAuthSuccess(); } catch (e) { setError("Erro ao conectar com Google"); } }} className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all text-[14px]">
+                      <GoogleLogo className="w-5 h-5" /> Continuar com Google
+                    </button>
+                    <button onClick={() => setAuthMode('phone')} className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all text-[14px]">
+                      <Smartphone className="w-5 h-5" /> Continuar com telefone
+                    </button>
+                    <button onClick={handleAnonymousSignIn} className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full bg-[#1C1C1E] text-white hover:bg-[#2C2C2E] transition-all text-[14px]">
+                      <UserIcon className="w-5 h-5" /> Continuar sem conta
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[12px] text-neutral-300 leading-snug">{error}</p>
-                    {errorCode === 'auth/email-already-in-use' && !isLogin && (
-                      <button 
-                        onClick={() => {
-                          setIsLogin(true);
-                          setError(null);
-                          setErrorCode(null);
-                        }}
-                        className="mt-2 text-white text-[12px] font-bold hover:underline block"
-                      >
-                        {t.auth.signInInstead || "Entrar na sua conta"}
-                      </button>
-                    )}
-                    {errorCode === 'auth/weak-password' && (
-                      <p className="mt-1 text-[11px] text-neutral-500">
-                        Sugestão: Use uma combinação de letras, números e símbolos para maior segurança.
-                      </p>
-                    )}
-                    {(errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password') && isLogin && (
-                      <button 
-                        type="button"
-                        className="mt-2 text-white text-[12px] font-bold hover:underline block"
-                      >
-                        {t.auth.forgotPassword || "Esqueci minha senha"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+                )}
 
-              <div className="space-y-3">
-                <button 
-                  onClick={handleGoogleSignIn} 
-                  className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[14px]"
-                >
-                  <GoogleLogo className="w-5 h-5 flex-shrink-0" />
-                  Continuar com o Google
-                </button>
-
-                <button 
-                  onClick={() => setError("O login por telefone requer configuração de SMS no Firebase. Em breve!")} 
-                  className="w-full h-[46px] flex items-center justify-center gap-3 rounded-full border border-[#2C2C2E] bg-transparent text-white hover:bg-[#1C1C1E] transition-all font-medium text-[14px]"
-                >
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  Continuar com um telefone
-                </button>
-
-                <div className="flex items-center gap-4 py-1.5">
-                  <div className="flex-1 h-[1px] bg-[#2C2C2E]"></div>
-                  <span className="text-[11px] text-neutral-500 font-medium tracking-widest uppercase">OU</span>
-                  <div className="flex-1 h-[1px] bg-[#2C2C2E]"></div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <div className="space-y-2">
-                    <input 
-                      type="email" 
-                      placeholder="Endereço de e-mail" 
-                      value={email} 
-                      onChange={e => setEmail(e.target.value)} 
-                      className="w-full px-5 h-[46px] rounded-full bg-black text-white border-none focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-all text-[14px] placeholder:text-neutral-500"
-                    />
-                    
-                    <div className="relative">
+                {authMode === 'phone' && (
+                  <form onSubmit={handleSendCode} className="space-y-4">
+                    <div className="relative flex items-center w-full h-[46px] rounded-full bg-black border border-[#2C2C2E] overflow-hidden focus-within:ring-2 focus-within:ring-zeno focus-within:border-transparent transition-all">
+                      <div className="flex items-center justify-center px-4 h-full bg-[#1C1C1E] text-neutral-400 text-[14px] font-medium border-r border-[#2C2C2E]">
+                        +55
+                      </div>
                       <input 
-                        type={showPassword ? "text" : "password"} 
-                        placeholder={t.auth.password} 
-                        value={password} 
-                        onChange={e => setPassword(e.target.value)} 
-                        className="w-full px-5 h-[46px] pr-12 rounded-full bg-black text-white border-none focus:outline-none focus:ring-2 focus:ring-neutral-600 transition-all text-[14px] placeholder:text-neutral-500"
+                        type="tel" 
+                        placeholder="(11) 99999-9999" 
+                        value={phoneNumber} 
+                        onChange={handlePhoneChange} 
+                        className="flex-1 px-4 h-full bg-transparent text-white border-none focus:ring-0 text-[14px] outline-none" 
+                        maxLength={15}
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
                     </div>
-                  </div>
+                    <button type="submit" disabled={isLoading} className="w-full h-[46px] rounded-full bg-zeno text-white font-medium">Enviar código</button>
+                    <button type="button" onClick={() => setAuthMode('default')} className="w-full text-[13px] text-neutral-500">Voltar</button>
+                  </form>
+                )}
 
-                  {isLogin && (
-                    <div className="flex justify-end px-2">
-                      <button type="button" className="text-[12px] text-neutral-500 hover:text-white transition-colors">
-                        {t.auth.forgotPassword}
-                      </button>
-                    </div>
-                  )}
-
-                  <button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className="w-full h-[48px] rounded-full bg-white text-black hover:bg-neutral-200 font-medium transition-all text-[15px] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? t.common.loading : "Continuar"}
-                  </button>
-                </form>
-              </div>
-
-              <div className="mt-6 text-center">
-                <p className="text-[13px] text-neutral-500">
-                  {isLogin ? "Não tem uma conta?" : "Já tem uma conta?"}
-                  <button 
-                    type="button"
-                    onClick={() => setIsLogin(!isLogin)}
-                    className="ml-2 text-white hover:underline focus:outline-none"
-                  >
-                    {isLogin ? "Cadastre-se" : "Entrar"}
-                  </button>
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+                {authMode === 'phone_verify' && (
+                  <form onSubmit={handleVerifyCode} className="space-y-4">
+                    <input type="text" placeholder="Código de 6 dígitos" value={verificationCode} onChange={e => setVerificationCode(e.target.value)} className="w-full px-5 h-[46px] rounded-full bg-black text-white border-none focus:ring-2 focus:ring-zeno text-[14px] text-center" maxLength={6} />
+                    <button type="submit" disabled={isLoading} className="w-full h-[46px] rounded-full bg-zeno text-white font-medium">Verificar</button>
+                    <button type="button" onClick={() => setAuthMode('phone')} className="w-full text-[13px] text-neutral-500">Voltar</button>
+                  </form>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </>
+        )}
+      </div>
+    </div>
   );
 };
-

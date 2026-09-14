@@ -7,10 +7,10 @@ const providerMetricsStore: Record<string, ProviderMetrics> = {};
 const defaultModels = [
   'gemini:gemini-1.5-flash',
   'openai:gpt-4o',
-  'groq:llama-3.3-70b-versatile',
-  'xai:grok-4.6',
-  'openrouter:x-ai/grok-4.6',
-  'openrouter:anthropic/claude-sonnet-5'
+  'groq:groq/compound',
+  'xai:grok-2-latest',
+  'openrouter:x-ai/grok-2',
+  'openrouter:anthropic/claude-3.5-sonnet'
 ];
 
 export function getProviderMetrics(key: string): ProviderMetrics {

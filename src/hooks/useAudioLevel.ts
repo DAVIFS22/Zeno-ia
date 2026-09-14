@@ -49,7 +49,7 @@ export async function startAudioLevelMeter(existingStream?: MediaStream) {
     updateLevel();
     return true;
   } catch (err) {
-    console.error("Failed to start audio level meter:", err);
+    console.warn("Failed to start audio level meter:", err);
     return false;
   }
 }
@@ -69,7 +69,7 @@ export function stopAudioLevelMeter() {
   if (source) { source.disconnect(); source = null; }
   if (analyser) { analyser.disconnect(); analyser = null; }
   if (audioContext && audioContext.state !== 'closed') {
-    audioContext.close().catch(console.error);
+    audioContext.close().catch(() => {});
     audioContext = null;
   }
   if (mediaStream) {

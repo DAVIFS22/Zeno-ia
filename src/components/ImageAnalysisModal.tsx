@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { copyToClipboard } from '../utils/clipboard';
+import { ZenoLogo } from './ZenoLogo';
 
 interface ImageAnalysisModalProps {
   isOpen: boolean;
@@ -308,9 +310,10 @@ export const ImageAnalysisModal: React.FC<ImageAnalysisModalProps> = ({
 
   const handleCopy = () => {
     if (!analysisResult) return;
-    navigator.clipboard.writeText(analysisResult);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(analysisResult).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
   };
 
   const handleDownload = () => {
@@ -354,7 +357,7 @@ export const ImageAnalysisModal: React.FC<ImageAnalysisModalProps> = ({
         }`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-zeno flex items-center justify-center text-white shadow-md shadow-zeno/20">
-              <Sparkles className="w-5 h-5" />
+              <ZenoLogo size={20} theme="dark" showBackground={false} animateRotation={false} />
             </div>
             <div>
               <div className="flex items-center gap-2">

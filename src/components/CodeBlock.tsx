@@ -321,18 +321,24 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
             <button
               type="button"
               onClick={handleCopy}
-              className={`p-1 rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                 copied
-                  ? 'text-zeno'
-                  : 'text-neutral-400 hover:text-white'
+                  ? 'bg-zeno/20 text-zeno border border-zeno/30'
+                  : 'bg-[#232326] text-neutral-300 border border-[#2C2C2E] hover:bg-neutral-700 hover:text-white'
               }`}
               title="Copiar código"
               aria-label="Copiar código para área de transferência"
             >
               {copied ? (
-                <Check className="w-[18px] h-[18px]" />
+                <>
+                  <Check className="w-3.5 h-3.5 text-zeno" />
+                  <span className="font-semibold">Copiado!</span>
+                </>
               ) : (
-                <Copy className="w-[18px] h-[18px]" />
+                <>
+                  <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Copiar</span>
+                </>
               )}
             </button>
 
@@ -527,14 +533,24 @@ export const CodeBlock: React.FC<CodeBlockProps> = React.memo(({
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className={`p-1.5 rounded-md transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                     copied
-                      ? 'text-zeno'
-                      : 'text-neutral-400 hover:text-white hover:bg-[#232326]'
+                      ? 'bg-zeno/20 text-zeno border border-zeno/30'
+                      : 'bg-[#232326] text-neutral-300 border border-[#2C2C2E] hover:bg-neutral-700 hover:text-white'
                   }`}
                   title="Copiar código"
                 >
-                  {copied ? <CheckCircle2 className="w-[18px] h-[18px] text-zeno" /> : <Copy className="w-[18px] h-[18px]" />}
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-zeno" />
+                      <span className="font-semibold">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>Copiar</span>
+                    </>
+                  )}
                 </button>
 
                 {/* Close Fullscreen Modal */}

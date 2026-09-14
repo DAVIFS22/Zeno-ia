@@ -6,9 +6,9 @@
 
 export const ADMIN_EMAIL = 'davifernandes0024509@gmail.com';
 
-export type UserRole = 'admin' | 'user';
+type UserRole = 'admin' | 'user';
 
-export interface FreePlanLimits {
+interface FreePlanLimits {
   messages: number;
   search: number;
   image: number;
@@ -17,7 +17,7 @@ export interface FreePlanLimits {
   voice: number;
 }
 
-export interface ProPlanFeatures {
+interface ProPlanFeatures {
   limitMultiplier: number;
   priorityQueue: boolean;
   unlimitedImageGen: boolean;
@@ -25,7 +25,7 @@ export interface ProPlanFeatures {
   exclusiveModelsAccess: boolean;
 }
 
-export interface ServerSettings {
+interface ServerSettings {
   maintenanceMode: boolean;
   defaultModel: string;
   maxContextLength: number;
@@ -35,7 +35,7 @@ export interface ServerSettings {
   enforceImageQueue?: boolean;
 }
 
-export interface ModelConfigSetting {
+interface ModelConfigSetting {
   id: string;
   name: string;
   enabled: boolean;

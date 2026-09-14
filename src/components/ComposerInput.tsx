@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud, Image as ImageIcon, Eye, Brain, Plus, Camera
+  ArrowUp, Square, Mic, MicOff, Paperclip, X, FileText, Code, AlertCircle, Wand2, ChevronDown, Sparkles, Lock, Cloud, Image as ImageIcon, Eye, Brain, Plus, Camera, AudioLines
 } from 'lucide-react';
 import { FileAttachment, UserPlan, ModelType, DailyUsage } from '../types';
 import { ZENO_MODELS, getModelDef, FREE_LIMITS } from '../lib/subscription';
@@ -43,6 +43,7 @@ interface ComposerInputProps {
   cloudDraftPrompt?: { text: string; timestamp: number } | null;
   onAcceptCloudDraft?: () => void;
   onDismissCloudDraft?: () => void;
+  onOpenVoiceMode?: () => void;
 }
 
 export const ComposerInput = React.memo<ComposerInputProps>(({
@@ -66,6 +67,7 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
   cloudDraftPrompt,
   onAcceptCloudDraft,
   onDismissCloudDraft,
+  onOpenVoiceMode,
 }) => {
   const { t } = useTranslation('ComposerInput');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,12 +239,14 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
       setIsListening(true);
       console.log('[Groq Whisper Stage 1 Success] MediaRecorder iniciado e gravando.');
     } catch (err: any) {
-      console.error('[Groq Whisper Stage 1 Error]', err);
       const errMsg = (err.message || err.toString() || '').toLowerCase();
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || errMsg.includes('permission denied')) {
-        setSpeechError('Permissão do microfone negada. Permita o acesso ao microfone no navegador.');
+      const isPermissionDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || errMsg.includes('permission denied') || errMsg.includes('notallowed');
+      if (isPermissionDenied) {
+        console.warn('[Microphone Permission Denied] Permissão de microfone não concedida pelo navegador.');
+        setSpeechError('Permissão do microfone negada. Clique no ícone de cadeado/permissões do navegador para permitir o microfone.');
       } else {
-        setSpeechError(`Erro ao acessar o microfone: ${err.message || err.name}`);
+        console.warn('[Microphone Init Warning]', err.message || err.name || err);
+        setSpeechError(`Não foi possível acessar o microfone: ${err.message || err.name || 'Dispositivo indisponível'}`);
       }
       setIsListening(false);
       stopAudioLevelMeter();
@@ -599,228 +603,267 @@ export const ComposerInput = React.memo<ComposerInputProps>(({
             </div>
           )}
 
-          {/* Input Controls Row */}
-          <div className="flex items-center gap-1.5 w-full px-2 relative">
+          {/* Two-Line ChatGPT Style Layout - Compact */}
+          <div className="flex flex-col w-full px-3 pt-1 pb-1 relative gap-1">
             
-            <div ref={attachMenuRef} className="relative flex-shrink-0">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                type="button"
-                onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
-                disabled={isLoading || isListening || isTranscribing}
-                className={`p-2 rounded-full transition-all duration-200 cursor-pointer ${
-                  isAttachMenuOpen ? 'rotate-45' : 'rotate-0'
-                } ${
-                  isAttachMenuOpen || attachments.length > 0 || isThinkingMode
-                    ? 'text-zeno bg-zeno/10 hover:bg-zeno/20'
-                    : isDark
-                      ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
-                      : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
-                }`}
-              >
-                <Plus className="w-5 h-5" />
-              </motion.button>
-
-              <AnimatePresence>
-                {isAttachMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className={`absolute bottom-full left-0 mb-3 w-48 rounded-xl shadow-xl border overflow-hidden ${
-                      isDark ? 'bg-[#1C1C1E] border-[#2C2C2E]' : 'bg-white border-neutral-200'
-                    }`}
-                  >
-                    <div className="flex flex-col py-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAttachMenuOpen(false);
-                          cameraInputRef.current?.click();
-                        }}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
-                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
-                        }`}
-                      >
-                        <Camera className="w-4 h-4 text-neutral-500" />
-                        <span className="font-medium">Câmera</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAttachMenuOpen(false);
-                          imageInputRef.current?.click();
-                        }}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
-                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
-                        }`}
-                      >
-                        <ImageIcon className="w-4 h-4 text-neutral-500" />
-                        <span className="font-medium">Fotos</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAttachMenuOpen(false);
-                          fileInputRef.current?.click();
-                        }}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
-                          isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
-                        }`}
-                      >
-                        <Paperclip className="w-4 h-4 text-neutral-500" />
-                        <span className="font-medium">Arquivos</span>
-                      </button>
-                      <div className={`h-px w-full my-1 ${isDark ? 'bg-[#2C2C2E]' : 'bg-neutral-100'}`} />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAttachMenuOpen(false);
-                          setIsThinkingMode(!isThinkingMode);
-                        }}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
-                          isDark ? 'hover:bg-[#2C2C2E]' : 'hover:bg-neutral-50'
-                        } ${isThinkingMode ? 'text-zeno' : isDark ? 'text-neutral-200' : 'text-neutral-700'}`}
-                      >
-                        <Brain className={`w-4 h-4 ${isThinkingMode ? 'text-zeno' : 'text-neutral-500'}`} />
-                        <span className="font-medium">Pense bem</span>
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            {/* LINE 1: Text Area / Voice Recording / Transcribing */}
+            <div className="w-full">
+              {isListening ? (
+                <div className="flex items-center gap-2 py-1 px-1 min-w-0">
+                  <VoiceBlob className="w-4 h-4 text-zeno shrink-0" />
+                  <span className="text-sm font-medium text-zeno animate-pulse truncate">
+                    Ouvindo... fale agora
+                  </span>
+                </div>
+              ) : isTranscribing ? (
+                <div className="flex items-center gap-2 py-1 px-1 min-w-0">
+                  <div className="w-4 h-4 border-2 border-zeno border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-sm font-medium text-zeno truncate">
+                    Transcrevendo áudio...
+                  </span>
+                </div>
+              ) : (
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onPaste={handlePaste}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (hasContent && !isLoading) {
+                        onSubmit(e);
+                      }
+                    }
+                  }}
+                  placeholder={
+                    isDragging 
+                      ? (t.composer.uploadDoc || "Solte a imagem ou arquivo aqui") 
+                      : attachments.some(a => a.type === 'image') 
+                        ? "Pergunte algo sobre a imagem..." 
+                        : "Pergunte qualquer coisa"
+                  }
+                  disabled={isLoading}
+                  rows={1}
+                  className={`w-full bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-base py-0.5 font-normal ${
+                    isDark 
+                      ? 'text-white placeholder-neutral-500' 
+                      : 'text-neutral-900 placeholder-neutral-400'
+                  }`}
+                />
+              )}
             </div>
 
-            <input
-              type="file"
-              ref={cameraInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="image/*"
-              capture="environment"
-            />
-            <input
-              type="file"
-              ref={imageInputRef}
-              onChange={handleFileChange}
-              multiple
-              className="hidden"
-              accept="image/*"
-            />
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              multiple
-              className="hidden"
-              accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
-            />
+            {/* LINE 2: Plus Button on Left, Voice/Send Buttons on Right */}
+            <div className="flex items-center justify-between w-full">
+              
+              {/* Left: Plus Attach Button */}
+              <div ref={attachMenuRef} className="relative flex-shrink-0">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  type="button"
+                  onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                  disabled={isLoading || isListening || isTranscribing}
+                  className={`w-9 h-9 rounded-full transition-all duration-200 flex items-center justify-center cursor-pointer ${
+                    isAttachMenuOpen ? 'rotate-45' : 'rotate-0'
+                  } ${
+                    isAttachMenuOpen || attachments.length > 0 || isThinkingMode
+                      ? 'text-zeno bg-zeno/20 hover:bg-zeno/30'
+                      : isDark
+                        ? 'bg-[#29292D] text-neutral-300 hover:text-white hover:bg-[#343438] disabled:opacity-40'
+                        : 'bg-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-300 disabled:opacity-40'
+                  }`}
+                >
+                  <Plus className="w-4 h-4 stroke-[2.2]" />
+                </motion.button>
 
-            {/* Text Area or Inline Voice Recording Indicator */}
-            {isListening ? (
-              <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-                <VoiceBlob className="w-4 h-4 text-zeno shrink-0" />
-                <span className="text-sm font-medium text-zeno animate-pulse truncate">
-                  Ouvindo... fale agora
-                </span>
+                <AnimatePresence>
+                  {isAttachMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className={`absolute bottom-full left-0 mb-3 w-48 rounded-xl shadow-xl border overflow-hidden z-20 ${
+                        isDark ? 'bg-[#1C1C1E] border-[#2C2C2E]' : 'bg-white border-neutral-200'
+                      }`}
+                    >
+                      <div className="flex flex-col py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAttachMenuOpen(false);
+                            cameraInputRef.current?.click();
+                          }}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                            isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                          }`}
+                        >
+                          <Camera className="w-4 h-4 text-neutral-500" />
+                          <span className="font-medium">Câmera</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAttachMenuOpen(false);
+                            imageInputRef.current?.click();
+                          }}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                            isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                          }`}
+                        >
+                          <ImageIcon className="w-4 h-4 text-neutral-500" />
+                          <span className="font-medium">Fotos</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAttachMenuOpen(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                            isDark ? 'hover:bg-[#2C2C2E] text-neutral-200' : 'hover:bg-neutral-50 text-neutral-700'
+                          }`}
+                        >
+                          <Paperclip className="w-4 h-4 text-neutral-500" />
+                          <span className="font-medium">Arquivos</span>
+                        </button>
+                        <div className={`h-px w-full my-1 ${isDark ? 'bg-[#2C2C2E]' : 'bg-neutral-100'}`} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAttachMenuOpen(false);
+                            setIsThinkingMode(!isThinkingMode);
+                          }}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors cursor-pointer ${
+                            isDark ? 'hover:bg-[#2C2C2E]' : 'hover:bg-neutral-50'
+                          } ${isThinkingMode ? 'text-zeno' : isDark ? 'text-neutral-200' : 'text-neutral-700'}`}
+                        >
+                          <Brain className={`w-4 h-4 ${isThinkingMode ? 'text-zeno' : 'text-neutral-500'}`} />
+                          <span className="font-medium">Pense bem</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            ) : isTranscribing ? (
-              <div className="flex-1 flex items-center gap-2 py-1.5 px-1 min-w-0">
-                <div className="w-4 h-4 border-2 border-zeno border-t-transparent rounded-full animate-spin shrink-0" />
-                <span className="text-sm font-medium text-zeno truncate">
-                  Transcrevendo áudio...
-                </span>
+
+              <input
+                type="file"
+                ref={cameraInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/*"
+                capture="environment"
+              />
+              <input
+                type="file"
+                ref={imageInputRef}
+                onChange={handleFileChange}
+                multiple
+                className="hidden"
+                accept="image/*"
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                multiple
+                className="hidden"
+                accept="image/*,.txt,.ts,.tsx,.js,.jsx,.py,.json,.md,.css,.html,.pdf"
+              />
+
+              {/* Right: Action Buttons with Smooth Fade Transition (ChatGPT style) */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <AnimatePresence mode="popLayout">
+                  {isListening ? (
+                    <motion.button
+                      key="finish-btn"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      type="button"
+                      onClick={onToggleListening}
+                      className="px-3.5 py-1.5 rounded-full bg-zeno hover:bg-zeno/90 text-white font-medium text-xs transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
+                    >
+                      <span>Finalizar</span>
+                    </motion.button>
+                  ) : !hasContent ? (
+                    <motion.div
+                      key="empty-actions"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center gap-1.5"
+                    >
+                      {/* Mic Button */}
+                      <button
+                        type="button"
+                        onClick={onToggleListening}
+                        disabled={isLoading || isTranscribing}
+                        title={isTranscribing ? "Transcrevendo..." : t.composer.voiceSearch}
+                        className={`w-9 h-9 rounded-full transition-all duration-300 flex items-center justify-center flex-shrink-0 cursor-pointer ${
+                          isDark
+                            ? 'bg-[#29292D] text-neutral-300 hover:text-white hover:bg-[#343438] disabled:opacity-40'
+                            : 'bg-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-300 disabled:opacity-40'
+                        }`}
+                      >
+                        <Mic className="w-4 h-4" />
+                      </button>
+
+                      {/* Voice Mode Button */}
+                      {onOpenVoiceMode && (
+                        <button
+                          type="button"
+                          onClick={onOpenVoiceMode}
+                          title="Modo de Voz"
+                          className="w-9 h-9 rounded-full transition-all duration-300 flex items-center justify-center flex-shrink-0 cursor-pointer bg-zeno hover:bg-zeno/90 text-white shadow-md shadow-zeno/30"
+                        >
+                          <AudioLines className="w-4 h-4 text-white" />
+                        </button>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="submit-actions"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center"
+                    >
+                      {isLoading ? (
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          type="button"
+                          onClick={onStopGeneration}
+                          title={t.common.stop}
+                          className="w-9 h-9 rounded-full bg-zeno hover:bg-zeno/90 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          type="submit"
+                          title={t.common.send}
+                          className="w-9 h-9 rounded-full bg-zeno hover:bg-zeno/90 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
+                        >
+                          <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            ) : (
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onPaste={handlePaste}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (hasContent && !isLoading) {
-                      onSubmit(e);
-                    }
-                  }
-                }}
-                placeholder={
-                  isDragging 
-                    ? (t.composer.uploadDoc || "Solte a imagem ou arquivo aqui") 
-                    : attachments.some(a => a.type === 'image') 
-                      ? "Pergunte algo sobre a imagem..." 
-                      : "Pergunte ao ZENO..."
-                }
-              disabled={isLoading}
-              rows={1}
-              className={`flex-1 bg-transparent border-none focus:outline-none resize-none overflow-y-auto scrollbar-custom max-h-[140px] text-sm py-1.5 font-normal ${
-                isDark 
-                  ? 'text-white placeholder-neutral-500' 
-                  : 'text-neutral-900 placeholder-neutral-400'
-              }`}
-            />
-          )}
 
-          {/* Voice Input / Finish Button */}
-          {isListening ? (
-            <button
-              type="button"
-              onClick={onToggleListening}
-              className="px-3 py-1.5 rounded-full bg-zeno hover:bg-zeno/90 text-white font-medium text-xs transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
-            >
-              <span>Finalizar</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onToggleListening}
-              disabled={isLoading || isTranscribing}
-              title={isTranscribing ? "Transcrevendo..." : t.composer.voiceSearch}
-              className={`relative p-2 rounded-full transition-all duration-300 flex items-center justify-center gap-1.5 flex-shrink-0 cursor-pointer overflow-hidden ${
-                isDark
-                  ? 'text-neutral-400 hover:text-white hover:bg-[#232326] disabled:opacity-40'
-                  : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 disabled:opacity-40'
-              }`}
-            >
-              <Mic className="w-4 h-4" />
-            </button>
-          )}
+            </div>
 
-          {/* Submit / Stop Button */}
-          {!isListening && (
-            isLoading ? (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                type="button"
-                onClick={onStopGeneration}
-                title={t.common.stop}
-                className="w-9 h-9 rounded-full bg-zeno hover:bg-zeno/90 text-white transition-all flex items-center justify-center flex-shrink-0 cursor-pointer shadow-xs shadow-zeno/20"
-              >
-                <Square className="w-3.5 h-3.5 fill-current" />
-              </motion.button>
-            ) : (
-              <motion.button
-                whileHover={hasContent ? { scale: 1.05 } : {}}
-                whileTap={hasContent ? { scale: 0.95 } : {}}
-                type="submit"
-                disabled={!hasContent}
-                title={t.common.send}
-                className={`w-9 h-9 rounded-full transition-all flex items-center justify-center flex-shrink-0 ${
-                  hasContent
-                    ? 'bg-zeno hover:bg-zeno/90 text-white cursor-pointer shadow-xs shadow-zeno/20'
-                    : isDark
-                      ? 'bg-[#232326] text-neutral-600 cursor-not-allowed'
-                      : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
-                }`}
-              >
-                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-              </motion.button>
-            )
-          )}
           </div>
         </form>
 

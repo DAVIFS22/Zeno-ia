@@ -125,7 +125,6 @@ export function recordQuotaUsage(provider: string, tokens = 1000) {
 
 export function setProviderQuotaExhausted(provider: string, reason?: string) {
   const quota = getProviderQuota(provider);
-  quota.remainingPercentage = 0;
   const isBilling = reason?.includes('402') || 
                     reason?.includes('403') || 
                     reason?.toLowerCase().includes('credit') || 
@@ -134,7 +133,17 @@ export function setProviderQuotaExhausted(provider: string, reason?: string) {
                     reason?.toLowerCase().includes('insufficient_quota');
   const isRateLimit = reason?.includes('429') || reason?.toLowerCase().includes('rate limit');
   
-  quota.status = isBilling ? 'billing_error' : isRateLimit ? 'rate_limited' : 'exhausted';
+  if (isBilling) {
+    quota.remainingPercentage = 0;
+    quota.status = 'billing_error';
+  } else if (isRateLimit) {
+    quota.remainingPercentage = 25;
+    quota.status = 'rate_limited';
+  } else {
+    quota.remainingPercentage = 0;
+    quota.status = 'exhausted';
+  }
+
   quota.lastError = reason;
   quota.errorTimestamp = Date.now();
   console.warn(`[QUOTA MANAGER] Provedor ${provider} marcado como ${quota.status} devido a: ${reason?.slice(0, 120)}`);

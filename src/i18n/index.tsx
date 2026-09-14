@@ -41,11 +41,11 @@ export function LanguageProvider({
     return pt; // STRICTLY bind to Portuguese translations
   }, [resolvedLanguage]);
 
-  const value = {
+  const value = useMemo(() => ({
     language: 'pt-BR' as Language,
     t,
     resolvedLanguage: 'pt-BR'
-  };
+  }), [t]);
 
   return (
     <LanguageContext.Provider value={value}>

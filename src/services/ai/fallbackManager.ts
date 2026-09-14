@@ -11,7 +11,7 @@ export async function generateTextWithResilience(
 ): Promise<AIResponseResult> {
   const category = options.category || 'general';
   const requestId = Math.random().toString(36).substring(2, 9);
-  const models = getSortedModelsForCategory(category, options.isSearchIntent, options.hasImages, options.userRequestedModel);
+  const models = getSortedModelsForCategory(category, options.isSearchIntent, options.hasImages, options.userRequestedModel, options.userGeminiApiKey);
 
   if (models.length === 0) {
     return { text: "⚠️ **Sistema Temporariamente Indisponível**: Todos os provedores de IA configurados falharam ou atingiram o limite de cota/circuit breaker. Por favor, tente novamente em alguns instantes.", provider: "gemini", modelUsed: "fallback-error", isAlternative: true, latencyMs: 0, attempts: 0, fallbackUsed: true };
@@ -24,10 +24,9 @@ export async function generateTextWithResilience(
     for (let i = 0; i < models.length; i++) {
       const item = models[i];
       
-      // Skip if this provider's quota was exhausted or in billing error (unless it's a free model)
+      // Skip if this provider's quota was exhausted, in billing error, or rate limited
       const currentQuota = (await import('./quotaManager')).getProviderQuota(item.provider);
-      const isFree = item.model.includes(':free') || item.model.includes('/free');
-      if ((currentQuota.status === 'exhausted' || currentQuota.status === 'billing_error') && !isFree) {
+      if (currentQuota.status === 'exhausted' || currentQuota.status === 'billing_error' || currentQuota.status === 'rate_limited') {
         continue;
       }
 
@@ -69,7 +68,8 @@ export async function generateTextWithResilience(
     } catch (err: any) {
       lastError = err;
       const msg = err?.message || String(err);
-      const isRateLimit = msg.includes('429') || msg.toLowerCase().includes('rate limit');
+      const lowerMsg = msg.toLowerCase();
+      const isRateLimit = lowerMsg.includes('429') || lowerMsg.includes('rate limit') || lowerMsg.includes('resource_exhausted') || lowerMsg.includes('quota');
       const isCreditOrAuth = msg.includes('402') || 
                              msg.includes('403') || 
                              msg.includes('401') || 
@@ -136,7 +136,7 @@ export async function generateImageWithResilience(
     const item = models[i];
     
     const currentQuota = (await import('./quotaManager')).getProviderQuota(item.provider);
-    if (currentQuota.status === 'exhausted' || currentQuota.status === 'billing_error') continue;
+    if (currentQuota.status === 'exhausted' || currentQuota.status === 'billing_error' || currentQuota.status === 'rate_limited') continue;
 
     if (i > 0) {
       incrementAiStat('fallbacksToday', 1);
