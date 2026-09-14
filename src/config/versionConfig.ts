@@ -30,11 +30,30 @@ export interface VersionEntry {
   architecture?: string[];
 }
 
-export const CURRENT_ZENO_VERSION = "2.26.0";
-export const RELEASE_DATE = "2026-08-10";
-export const GIT_TAG = "v2.26.0";
+export const CURRENT_ZENO_VERSION = "2.27.0";
+export const RELEASE_DATE = "2026-09-14";
+export const GIT_TAG = "v2.27.0";
 
 export const ZENO_VERSION_HISTORY: VersionEntry[] = [
+  {
+    "version": "2.27.0",
+    "major": 2,
+    "minor": 27,
+    "patch": 0,
+    "date": "2026-09-14",
+    "type": "MINOR",
+    "changes": {
+      "novidades": [
+        "add image processing, server-side auth, and UI styling"
+      ],
+      "arquitetura": [
+        "modularize components and update protocols"
+      ],
+      "security": [
+        "Atualização de segurança e validação de tokens"
+      ]
+    }
+  },
   {
     "version": "2.26.0",
     "major": 2,
@@ -269,7 +288,6 @@ export function checkAndGetNewVersion(): { isNew: boolean; version: VersionEntry
   const latest = getLatestVersion();
   const lastSeen = localStorage.getItem('zeno_last_seen_version');
   const isNew = lastSeen !== latest.version;
-  console.log('[versionConfig checkAndGetNewVersion]', { lastSeen, latestVersion: latest.version, isNew });
   return { isNew, version: latest };
 }
 
